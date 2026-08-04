@@ -1,37 +1,23 @@
 package com.gpuv2.config;
 
 /**
- * One-click starting points that write the individual settings underneath.
+ * Quality presets.
  *
- * <p>Selecting one overwrites those settings; the dropdown does not track later manual
- * edits, so it reads as "what was last applied" rather than "what is currently set".
+ * <p>Everything except {@link #CUSTOM} is a placeholder for now - selecting one changes
+ * nothing until its settings are filled in. That is deliberate: an earlier version wrote
+ * a shared baseline before applying each preset, which silently discarded settings the
+ * preset was not really trying to control (the sky mode in particular). Presets should
+ * only write what they actually mean to set.
  */
 public enum GraphicsPreset
 {
 	/**
-	 * Applies nothing - the settings below are whatever you last chose.
+	 * Whatever the user has configured. Never writes anything.
 	 */
 	CUSTOM("Custom"),
-	/**
-	 * Stock renderer look: no sky, no grading, no lighting.
-	 */
-	VANILLA("Vanilla"),
-	/**
-	 * Time-of-day sky with gentle grading and lighting.
-	 */
-	NATURAL("Natural"),
-	/**
-	 * Heavier grade, deeper fog, stronger light.
-	 */
-	CINEMATIC("Cinematic"),
-	/**
-	 * Old-school: flat colours, reduced palette, vanilla vertex snapping.
-	 */
-	RETRO("Retro"),
-	/**
-	 * Cheapest settings that still render correctly.
-	 */
-	PERFORMANCE("Performance");
+	PERFORMANCE("Performance (not yet configured)"),
+	MID("Mid (not yet configured)"),
+	LOW("Low (not yet configured)");
 
 	private final String name;
 

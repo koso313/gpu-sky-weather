@@ -47,8 +47,8 @@ public interface GpuPluginConfig extends Config
 	@ConfigItem(
 		keyName = "preset",
 		name = "Preset",
-		description = "Applies a set of the settings below in one go. Changing settings "
-			+ "afterwards does not change this back to Custom.",
+		description = "Quality presets. Only Custom is implemented - the others are "
+			+ "placeholders and currently change nothing.",
 		position = 0
 	)
 	default GraphicsPreset preset()

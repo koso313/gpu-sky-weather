@@ -147,9 +147,6 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 	@Inject
 	private RenderCallbackManager renderCallbackManager;
 
-	@Inject
-	private ConfigManager configManager;
-
 	private Canvas canvas;
 	private AWTContext awtContext;
 	private Callback debugCallback;
@@ -1560,102 +1557,20 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 	}
 
 	/**
-	 * Writes the individual settings a preset stands for. CUSTOM writes nothing, so it can
-	 * be selected without clobbering a hand-tuned setup.
+	 * Presets are placeholders for now and write nothing.
+	 *
+	 * <p>The previous version wrote a shared baseline before each preset, which meant
+	 * selecting any of them silently reset settings the preset had no real opinion about -
+	 * the sky mode among them, which is how a preset could turn a time-of-day sky grey.
+	 * When these are filled in, each should write only the settings it actually means to
+	 * control.
 	 */
 	private void applyPreset(GraphicsPreset preset)
 	{
-		if (preset == GraphicsPreset.CUSTOM)
+		if (preset != GraphicsPreset.CUSTOM)
 		{
-			return;
+			log.debug("Preset {} selected; no settings defined for it yet", preset);
 		}
-
-		// Shared baseline, then each preset overrides what it cares about. Keeps presets
-		// from inheriting stray values left over from whatever was set before.
-		set("fogDepth", 0);
-		set("skyMode", SkyMode.GAME);
-		set("gradeGamma", 100);
-		set("gradeContrast", 100);
-		set("gradeSaturation", 100);
-		set("gradeTemperature", 0);
-		set("lightStrength", 0);
-		set("retroNoTextures", false);
-		set("retroPosterize", 0);
-		set("removeVertexSnapping", true);
-		set("waterEnabled", false);
-		set("cloudAmount", 45);
-		set("nightSky", true);
-		set("showSun", true);
-
-		switch (preset)
-		{
-			case VANILLA:
-				set("drawDistance", 50);
-				set("antiAliasingMode", AntiAliasingMode.MSAA_2);
-				set("anisotropicFilteringLevel", 1);
-				break;
-
-			case NATURAL:
-				set("drawDistance", 70);
-				set("antiAliasingMode", AntiAliasingMode.MSAA_4);
-				set("anisotropicFilteringLevel", 4);
-				set("fogDepth", 25);
-				set("skyMode", SkyMode.TIME_OF_DAY);
-				set("gradeSaturation", 108);
-				set("lightStrength", 35);
-				set("lightAmbientStrength", 75);
-				set("lightSunStrength", 45);
-				set("waterEnabled", true);
-				break;
-
-			case CINEMATIC:
-				set("drawDistance", 90);
-				set("antiAliasingMode", AntiAliasingMode.MSAA_8);
-				set("anisotropicFilteringLevel", 8);
-				set("fogDepth", 45);
-				set("skyMode", SkyMode.TIME_OF_DAY);
-				set("gradeGamma", 96);
-				set("gradeContrast", 118);
-				set("gradeSaturation", 118);
-				set("gradeTemperature", 12);
-				set("lightStrength", 60);
-				set("lightAmbientStrength", 70);
-				set("lightSunStrength", 70);
-				set("cloudAmount", 60);
-				set("waterEnabled", true);
-				break;
-
-			case RETRO:
-				set("drawDistance", 40);
-				set("antiAliasingMode", AntiAliasingMode.DISABLED);
-				set("anisotropicFilteringLevel", 0);
-				set("retroNoTextures", true);
-				set("retroPosterize", 8);
-				// Vanilla kept integer vertex snapping; leaving it on is the retro look.
-				set("removeVertexSnapping", false);
-				set("gradeSaturation", 115);
-				break;
-
-			case PERFORMANCE:
-				set("drawDistance", 30);
-				set("antiAliasingMode", AntiAliasingMode.DISABLED);
-				set("anisotropicFilteringLevel", 0);
-				set("retroNoTextures", true);
-				set("nightSky", false);
-				set("showSun", false);
-				set("cloudAmount", 0);
-				break;
-
-			default:
-				break;
-		}
-
-		log.debug("Applied preset {}", preset);
-	}
-
-	private void set(String key, Object value)
-	{
-		configManager.setConfiguration(GpuPluginConfig.GROUP, key, value);
 	}
 
 	/**
