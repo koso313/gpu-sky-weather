@@ -272,6 +272,14 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 	/** Reused per-frame scratch for {@link #computeSunDirection}. */
 	private final float[] sunDir = new float[3];
 
+	/**
+	 * Reference point for {@link #skySeconds}. Cloud drift is measured as elapsed time
+	 * from here rather than read off the clock each frame, so it advances smoothly and
+	 * never wraps mid-session.
+	 */
+	private long skyClockStartNanos = System.nanoTime();
+	private float skyClockStartSeconds;
+
 	/** How far either side of the view a bolt can land, in radians (~55 degrees). */
 	private static final float BOLT_SPREAD = 0.95f;
 
@@ -452,6 +460,12 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 	@Override
 	protected void startUp()
 	{
+		// Anchor the cloud clock to where the real clock is now; it advances from here.
+		skyClockStartNanos = System.nanoTime();
+		LocalTime now = LocalTime.now();
+		skyClockStartSeconds = now.getHour() * 3600f + now.getMinute() * 60f
+			+ now.getSecond() + now.getNano() / 1e9f;
+
 		root = new SceneContext(NUM_ZONES, NUM_ZONES);
 		subs = new SceneContext[MAX_WORLDVIEWS];
 		int numThreads = config.numThreads();
@@ -1908,14 +1922,14 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 	 */
 	private float skySeconds()
 	{
+		float elapsed = (System.nanoTime() - skyClockStartNanos) / 1e9f;
 		int preview = config.previewHour();
-		if (preview < 0)
-		{
-			LocalTime now = LocalTime.now();
-			return now.getHour() * 3600f + now.getMinute() * 60f + now.getSecond()
-				+ now.getNano() / 1e9f;
-		}
-		return (preview % 24) * 3600f + (System.nanoTime() % 1_000_000_000_000L) / 1e9f;
+
+		// Anchor: the hour being previewed, or where the real clock was when we started.
+		// Adding elapsed to it keeps the value strictly increasing, so it neither steps at
+		// hour boundaries nor jumps at midnight the way seconds-of-day would.
+		float base = preview < 0 ? skyClockStartSeconds : (preview % 24) * 3600f;
+		return base + elapsed;
 	}
 
 	private void drawSkybox(Scene scene, int sky, float cameraX, float cameraY, float cameraZ,
