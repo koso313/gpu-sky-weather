@@ -74,7 +74,6 @@ import net.runelite.api.Tile;
 import net.runelite.api.coords.LocalPoint;
 import net.runelite.api.events.CommandExecuted;
 import net.runelite.api.events.GameStateChanged;
-import net.runelite.api.events.GameTick;
 import net.runelite.api.events.PostClientTick;
 import net.runelite.api.hooks.DrawCallbacks;
 import net.runelite.client.callback.ClientThread;
@@ -244,9 +243,6 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 	/** Reused per-frame scratch for {@link #computeSunDirection}. */
 	private final float[] sunDir = new float[3];
 
-	/** Model-based weather, used instead of the screen-space pass when enabled. */
-	private ModelWeather modelWeather;
-
 	private int interfaceTexture;
 	private int interfacePbo;
 
@@ -379,6 +375,8 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 	private int uniLightAmbient;
 	private int uniLightSunColor;
 	private int uniLightSunDir;
+	private int uniGroundSnow;
+	private int uniGroundWet;
 	private int uniWaterFlags;
 	private int uniWaterStrength;
 	private int uniWaterChoppiness;
@@ -666,12 +664,6 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 	{
 		clientThread.invoke(() ->
 		{
-			if (modelWeather != null)
-			{
-				modelWeather.clear();
-				modelWeather = null;
-			}
-
 			// Only tear down client renderer state if we actually own it. If we bailed out
 			// because another renderer was active, clearing these would break that renderer.
 			if (client.getDrawCallbacks() == this)
@@ -898,6 +890,8 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 		uniLightAmbient = glGetUniformLocation(glProgram, "lightAmbient");
 		uniLightSunColor = glGetUniformLocation(glProgram, "lightSunColor");
 		uniLightSunDir = glGetUniformLocation(glProgram, "lightSunDir");
+		uniGroundSnow = glGetUniformLocation(glProgram, "groundSnow");
+		uniGroundWet = glGetUniformLocation(glProgram, "groundWet");
 		uniWaterFlags = glGetUniformLocation(glProgram, "waterFlags");
 		uniWaterStrength = glGetUniformLocation(glProgram, "waterStrength");
 		uniWaterChoppiness = glGetUniformLocation(glProgram, "waterChoppiness");
@@ -1384,6 +1378,7 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 		glUniform1f(uniRetroPosterize, config.retroPosterize());
 		setupLightingUniforms();
 		setupWaterUniforms(cameraX, cameraY, cameraZ);
+		setupGroundWeatherUniforms();
 
 		// Brightness happens to also be stored in the texture provider, so we use that
 		TextureProvider textureProvider = client.getTextureProvider();
@@ -1631,10 +1626,29 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 	}
 
 	/**
+	 * Snow settling and wet ground, driven by whichever weather is running. Both are 0
+	 * unless the matching precipitation is active, so clear weather leaves surfaces alone.
+	 */
+	private void setupGroundWeatherUniforms()
+	{
+		WeatherMode weather = config.weather();
+		float amount = config.weatherAmount() / 100f;
+
+		boolean snowing = weather == WeatherMode.SNOW || weather == WeatherMode.BLIZZARD;
+		boolean raining = weather == WeatherMode.RAIN || weather == WeatherMode.STORM;
+
+		glUniform1f(uniGroundSnow, snowing ? config.groundSnow() / 100f * amount : 0f);
+		glUniform1f(uniGroundWet, raining ? config.groundWet() / 100f * amount : 0f);
+	}
+
+	/**
 	 * Uploads the water surface uniforms for this frame.
 	 */
 	private void setupWaterUniforms(float cameraX, float cameraY, float cameraZ)
 	{
+		// Uploaded unconditionally - puddles need it too, and they run without water on.
+		glUniform3f(uniCameraPos, cameraX, cameraY, cameraZ);
+
 		float strength = config.waterEnabled() ? config.waterStrength() / 100f : 0f;
 		glUniform1f(uniWaterStrength, strength);
 		if (strength < 0.001f)
@@ -1651,7 +1665,6 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 
 		glUniform1f(uniWaterChoppiness, config.waterChoppiness() / 100f);
 		glUniform1f(uniWaterTime, (System.nanoTime() % 1_000_000_000_000L) / 1e9f);
-		glUniform3f(uniCameraPos, cameraX, cameraY, cameraZ);
 
 		Color tint = config.waterTint();
 		glUniform3f(uniWaterTint,
@@ -2070,8 +2083,7 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 
 		// After the scene is on the default framebuffer but before the UI is composited,
 		// so precipitation falls in front of the world and behind the interface.
-		// Skipped when 3D weather is on - that draws in the scene itself.
-		if (config.weather() != WeatherMode.OFF && !config.weatherUseModels() && glWeatherProgram != 0)
+		if (config.weather() != WeatherMode.OFF && glWeatherProgram != 0)
 		{
 			drawWeather(defaultFbo, width, height);
 		}
@@ -3170,25 +3182,6 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 
 			log.debug("glGetError:", new Exception(errStr));
 		}
-	}
-
-	@Subscribe
-	public void onGameTick(GameTick tick)
-	{
-		if (!config.weatherUseModels() || config.weather() == WeatherMode.OFF)
-		{
-			if (modelWeather != null)
-			{
-				modelWeather.clear();
-			}
-			return;
-		}
-
-		if (modelWeather == null)
-		{
-			modelWeather = new ModelWeather(client);
-		}
-		modelWeather.update(config.weather(), config.weatherModelRadius());
 	}
 
 	@Subscribe

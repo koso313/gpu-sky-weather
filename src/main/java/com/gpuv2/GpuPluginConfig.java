@@ -178,34 +178,36 @@ public interface GpuPluginConfig extends Config
 		return 55;
 	}
 
+	@Range(
+		max = 100
+	)
 	@ConfigItem(
-		keyName = "weatherUseModels",
-		name = "3D weather",
-		description = "Use the game's own animated rain and snow models in the world "
-			+ "instead of the flat screen-space effect.",
+		keyName = "groundSnow",
+		name = "Snow on the ground",
+		description = "Settles snow on upward-facing surfaces while it is snowing. "
+			+ "0 disables.",
 		position = 209,
 		section = weatherSection
 	)
-	default boolean weatherUseModels()
+	default int groundSnow()
 	{
-		return false;
+		return 70;
 	}
 
 	@Range(
-		min = 1,
-		max = 6
+		max = 100
 	)
 	@ConfigItem(
-		keyName = "weatherModelRadius",
-		name = "3D weather range",
-		description = "How far around you 3D weather is placed. Higher covers more of the "
-			+ "view but costs more.",
+		keyName = "groundWet",
+		name = "Wet ground and puddles",
+		description = "Darkens the ground and pools reflective puddles while it is "
+			+ "raining. 0 disables.",
 		position = 210,
 		section = weatherSection
 	)
-	default int weatherModelRadius()
+	default int groundWet()
 	{
-		return 3;
+		return 70;
 	}
 
 	@ConfigItem(

@@ -55,6 +55,10 @@ uniform float waterTime;
 uniform vec3 waterTint;
 uniform vec3 cameraPos;
 
+// Ground weather. Both 0 leaves surfaces untouched.
+uniform float groundSnow;
+uniform float groundWet;
+
 // Ambient + directional lighting. lightStrength 0 makes applyLighting a no-op.
 uniform float lightStrength;
 uniform vec3 lightAmbient;
@@ -88,6 +92,88 @@ out vec4 FragColor;
  * The client bakes its own lighting into vertex colours, so this modulates rather than
  * replaces: the light term is centred on 1.0 so neutral settings leave the image alone.
  */
+float gHash12(vec2 p)
+{
+  vec3 p3 = fract(vec3(p.xyx) * 0.1031);
+  p3 += dot(p3, p3.yzx + 33.33);
+  return fract((p3.x + p3.y) * p3.z);
+}
+
+float gNoise(vec2 p)
+{
+  vec2 i = floor(p);
+  vec2 f = fract(p);
+  vec2 u = f * f * (3.0 - 2.0 * f);
+  return mix(mix(gHash12(i), gHash12(i + vec2(1.0, 0.0)), u.x),
+             mix(gHash12(i + vec2(0.0, 1.0)), gHash12(i + vec2(1.0, 1.0)), u.x), u.y);
+}
+
+/*
+ * Face normal from the screen-space derivatives of world position. The vertex format
+ * carries no normals, so this is reconstructed per fragment; it is a true per-face
+ * (flat) normal. Returns zero for degenerate slivers.
+ */
+vec3 faceNormal()
+{
+  vec3 n = cross(dFdx(fWorldPos), dFdy(fWorldPos));
+  float len = length(n);
+  return len < 1e-6 ? vec3(0.0) : n / len;
+}
+
+/*
+ * Snow settling on upward-facing surfaces, broken up by noise so it looks drifted rather
+ * than painted on. World Y is negative-up, hence -n.y for "faces the sky".
+ */
+vec3 applySnowCover(vec3 c, vec3 n)
+{
+  float up = clamp(-n.y, 0.0, 1.0);
+  // Steep faces shed snow; the power sharpens the cutoff between flat and sloped.
+  float flat_ = pow(up, 3.0);
+  if (flat_ < 0.01)
+  {
+    return c;
+  }
+
+  float drift = gNoise(fWorldPos.xz * 0.02) * 0.6 + gNoise(fWorldPos.xz * 0.06) * 0.4;
+  float cover = smoothstep(0.35, 0.75, drift) * flat_ * groundSnow;
+
+  return mix(c, vec3(0.92, 0.94, 0.98), clamp(cover, 0.0, 1.0));
+}
+
+/*
+ * Wet ground: darkens flat surfaces, then pools brighter reflective puddles in the low
+ * patches of a noise field, with a sun glint off them.
+ */
+vec3 applyWetGround(vec3 c, vec3 n)
+{
+  float up = clamp(-n.y, 0.0, 1.0);
+  float flat_ = pow(up, 4.0);
+  if (flat_ < 0.01)
+  {
+    return c;
+  }
+
+  // Wet surfaces are darker and slightly less saturated.
+  vec3 wet = mix(c * 0.66, c, 0.25);
+  c = mix(c, wet, flat_ * groundWet * 0.85);
+
+  float pool = gNoise(fWorldPos.xz * 0.015) * 0.65 + gNoise(fWorldPos.xz * 0.05) * 0.35;
+  float puddle = smoothstep(0.62, 0.78, pool) * flat_ * groundWet;
+  if (puddle < 0.001)
+  {
+    return c;
+  }
+
+  vec3 v = normalize(cameraPos - fWorldPos);
+  float fresnel = 0.04 + 0.96 * pow(1.0 - clamp(dot(n, v), 0.0, 1.0), 5.0);
+  vec3 surface = mix(c * 0.55, fogColor.rgb, clamp(fresnel, 0.0, 0.75));
+
+  vec3 h = normalize(normalize(lightSunDir) + v);
+  surface += vec3(1.0, 0.98, 0.92) * pow(clamp(dot(n, h), 0.0, 1.0), 48.0) * 0.4;
+
+  return mix(c, surface, clamp(puddle, 0.0, 1.0));
+}
+
 /*
  * Water surface: animated ripple normal, sky reflection weighted by Fresnel, and a
  * specular glint from the sun.
@@ -142,24 +228,13 @@ vec3 applyWater(vec3 c)
   return mix(c, surface, waterStrength);
 }
 
-vec3 applyLighting(vec3 c)
+vec3 applyLighting(vec3 c, vec3 n)
 {
-  if (lightStrength < 0.001)
-  {
-    return c;
-  }
-
-  vec3 dx = dFdx(fWorldPos);
-  vec3 dy = dFdy(fWorldPos);
-  vec3 n = cross(dx, dy);
-
   // Degenerate on slivers and perfectly edge-on faces; leave those unlit.
-  float len = length(n);
-  if (len < 1e-6)
+  if (lightStrength < 0.001 || n == vec3(0.0))
   {
     return c;
   }
-  n /= len;
 
   float diffuse = max(dot(n, normalize(lightSunDir)), 0.0);
   vec3 light = lightAmbient + lightSunColor * diffuse;
@@ -244,13 +319,28 @@ void main() {
 #endif
 
   vec3 shaded = c.rgb;
-  if (waterStrength > 0.001 && fTextureId > 0 && waterFlags[fTextureId - 1] > 0.5) {
+  bool isWater = waterStrength > 0.001 && fTextureId > 0 && waterFlags[fTextureId - 1] > 0.5;
+  if (isWater) {
     shaded = applyWater(shaded);
+  }
+
+  // Reconstructed once and shared by lighting and the ground weather below.
+  vec3 n = faceNormal();
+
+  // Ground weather doesn't apply to water - snow doesn't settle on a river and it is
+  // already wet.
+  if (!isWater && n != vec3(0.0)) {
+    if (groundSnow > 0.001) {
+      shaded = applySnowCover(shaded, n);
+    }
+    if (groundWet > 0.001) {
+      shaded = applyWetGround(shaded, n);
+    }
   }
 
   // Light before fog, so fogged distance blends toward the sky colour rather than
   // having the light term applied on top of it.
-  vec3 mixedColor = mix(applyLighting(shaded), fogColor.rgb, fFogAmount);
+  vec3 mixedColor = mix(applyLighting(shaded, n), fogColor.rgb, fFogAmount);
   FragColor = vec4(applyGrade(mixedColor), c.a);
 
 #ifdef FRAG_UVS

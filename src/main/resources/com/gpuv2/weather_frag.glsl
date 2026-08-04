@@ -91,13 +91,26 @@ float snow(vec2 uv, float t)
 
 		// Jitter within the cell so flakes don't sit on a visible lattice.
 		vec2 jitter = vec2(hash12(cell + 5.1), hash12(cell + 9.7)) - 0.5;
-		float d = length(fract(p) - 0.5 - jitter * 0.55);
+		vec2 q = fract(p) - 0.5 - jitter * 0.55;
+		float d = length(q);
 
 		// Vary flake size; the smaller ones read as further away.
-		float radius = mix(0.10, 0.26, hash12(cell + 3.3));
+		float radius = mix(0.14, 0.34, hash12(cell + 3.3));
 
-		total += (1.0 - smoothstep(radius * 0.35, radius, d)) * (0.45 + 0.55 * h)
-			/ (1.0 + fl * 0.5);
+		/*
+		 * Six-point silhouette: modulating the radius by cos(6*theta) pulls the outline
+		 * into arms. Each flake gets its own rotation so they aren't all aligned, and the
+		 * nearest layer gets the most pronounced arms - distant flakes are too small for
+		 * the shape to survive, so they stay round.
+		 */
+		float theta = atan(q.y, q.x) + hash12(cell + 12.9) * 6.2831;
+		float arms = mix(0.30, 0.0, min(fl, 1.0));
+		float shaped = radius * (1.0 - arms + arms * abs(cos(theta * 3.0)));
+
+		// Solid core with a soft edge, so flakes read as opaque rather than smoky.
+		float flake = 1.0 - smoothstep(shaped * 0.55, shaped, d);
+
+		total += flake * (0.7 + 0.3 * h) / (1.0 + fl * 0.35);
 	}
 
 	return total;
@@ -118,8 +131,10 @@ void main()
 	}
 	else
 	{
-		amount = snow(uv, t) * weatherAmount;
-		color = vec3(0.97, 0.98, 1.0);
+		// Snow is scaled less by the amount slider than rain: thinning snowfall should
+		// mean fewer flakes, not translucent grey ones.
+		amount = snow(uv, t) * (0.55 + 0.45 * weatherAmount);
+		color = vec3(1.0, 1.0, 1.0);
 	}
 
 	amount = clamp(amount, 0.0, 1.0);
