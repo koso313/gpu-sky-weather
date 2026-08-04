@@ -88,39 +88,28 @@ class TextureManager
 	}
 
 	/**
-	 * Sets both filters and the anisotropy level together.
+	 * Sets the minification filter and anisotropy level.
 	 *
-	 * <p>They have to be set as one: minification is what you actually see at normal
-	 * camera distance, since the game's 128px textures are nearly always drawn smaller
-	 * than their native size. Setting only the magnification filter changes almost
-	 * nothing, because magnification barely happens.
-	 *
-	 * @param level  0 = no mipmaps or anisotropy, 1 = mipmaps only, higher = anisotropy
-	 * @param smooth blend texels instead of showing hard pixel edges
+	 * @param level 0 = no mipmaps or anisotropy, 1 = mipmaps only, higher = anisotropy
 	 */
-	void setTextureFiltering(int textureArrayId, int level, boolean smooth)
+	void setTextureFiltering(int textureArrayId, int level)
 	{
 		glBindTexture(GL_TEXTURE_2D_ARRAY, textureArrayId);
 
-		int minFilter;
+		//level = 0 means no mipmaps and no anisotropic filtering
 		if (level == 0)
 		{
-			// No mipmaps.
-			minFilter = smooth ? GL_LINEAR : GL_NEAREST;
+			glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
 		}
+		//level = 1 means with mipmaps but without anisotropic filtering GL_MAX_TEXTURE_MAX_ANISOTROPY_EXT defaults to 1.0 which is off
+		//level > 1 enables anisotropic filtering. It's up to the vendor what the values mean
+		//Even if anisotropic filtering isn't supported, mipmaps will be enabled with any level >= 1
 		else
 		{
-			/*
-			 * With mipmaps. Nearest between texels but linear between mip levels is the
-			 * stock choice: it keeps the pixel art crisp up close while still resolving
-			 * aliasing in the distance. Smooth blends texels as well.
-			 */
-			minFilter = smooth ? GL_LINEAR_MIPMAP_LINEAR : GL_NEAREST_MIPMAP_LINEAR;
+			// Set on GL_NEAREST_MIPMAP_LINEAR (bilinear filtering with mipmaps) since the pixel nature of the game means that nearest filtering
+			// looks best for objects up close but allows linear filtering to resolve possible aliasing and noise with mipmaps from far away objects.
+			glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MIN_FILTER, GL_NEAREST_MIPMAP_LINEAR);
 		}
-
-		glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MIN_FILTER, minFilter);
-		glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MAG_FILTER,
-			smooth ? GL_LINEAR : GL_NEAREST);
 
 		if (GL.getCapabilities().GL_EXT_texture_filter_anisotropic)
 		{

@@ -365,8 +365,6 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 	private int lastStretchedCanvasHeight;
 	private AntiAliasingMode lastAntiAliasingMode;
 	private int lastAnisotropicFilteringLevel = -1;
-	/** -1 until first applied, then 0 or 1. */
-	private int lastSmoothTextures = -1;
 	/** Texture array the current filter settings were applied to. */
 	private int lastFilterArrayId = -1;
 
@@ -565,7 +563,6 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 			{
 				fboScene = -1;
 				lastAnisotropicFilteringLevel = -1;
-				lastSmoothTextures = -1;
 
 				AWTContext.loadNatives();
 
@@ -651,9 +648,7 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 				lastAntiAliasingMode = null;
 
 				textureArrayId = -1;
-				// Rebuilding the array resets its filters, so force them to reapply.
 				lastAnisotropicFilteringLevel = -1;
-				lastSmoothTextures = -1;
 
 				if (client.getGameState() == GameState.LOGGED_IN)
 				{
@@ -1494,25 +1489,21 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 		 * applied together - applying them separately would mean whichever ran last won.
 		 */
 		final int anisotropicFilteringLevel = config.anisotropicFilteringLevel();
-		final int smoothTextures = config.smoothTextures() ? 1 : 0;
 
 		/*
-		 * The array id is part of the check, not just the settings. Rebuilding the texture
-		 * array resets its filters to the defaults, and tracking only the settings meant
-		 * the cache still claimed they were applied - so they never went back on and the
-		 * whole thing silently reverted. Keying off the array itself makes that
-		 * self-correcting rather than depending on every teardown path remembering.
+		 * The array id is part of the check, not just the level. Rebuilding the texture
+		 * array resets its filters to the defaults, and tracking only the level meant the
+		 * cache still claimed it was applied - so anisotropic filtering silently reverted
+		 * after any rebuild. Keying off the array itself makes that self-correcting rather
+		 * than depending on every teardown path remembering to clear the cache.
 		 */
 		if (textureArrayId != -1
 			&& (lastFilterArrayId != textureArrayId
-				|| lastAnisotropicFilteringLevel != anisotropicFilteringLevel
-				|| lastSmoothTextures != smoothTextures))
+				|| lastAnisotropicFilteringLevel != anisotropicFilteringLevel))
 		{
-			textureManager.setTextureFiltering(textureArrayId, anisotropicFilteringLevel,
-				smoothTextures == 1);
+			textureManager.setTextureFiltering(textureArrayId, anisotropicFilteringLevel);
 			lastFilterArrayId = textureArrayId;
 			lastAnisotropicFilteringLevel = anisotropicFilteringLevel;
-			lastSmoothTextures = smoothTextures;
 		}
 
 		// Setup viewport
@@ -3306,7 +3297,6 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 			}
 			textureArrayId = -1;
 			lastAnisotropicFilteringLevel = -1;
-			lastSmoothTextures = -1;
 		}
 	}
 

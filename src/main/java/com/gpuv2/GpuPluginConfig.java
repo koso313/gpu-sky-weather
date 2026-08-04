@@ -187,20 +187,6 @@ public interface GpuPluginConfig extends Config
 	}
 
 	@ConfigItem(
-		keyName = "smoothTextures",
-		name = "Smooth textures",
-		description = "Blend texture pixels instead of showing hard edges. Softens the "
-			+ "game's pixel art - taste rather than quality. Most visible on large flat "
-			+ "surfaces like floors and walls.",
-		position = 154,
-		section = displaySection
-	)
-	default boolean smoothTextures()
-	{
-		return false;
-	}
-
-	@ConfigItem(
 		keyName = "uiScalingMode",
 		name = "UI scaling mode",
 		description = "Sampling function to use for the UI in stretched mode.",
