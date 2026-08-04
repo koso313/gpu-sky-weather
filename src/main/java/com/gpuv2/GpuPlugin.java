@@ -62,6 +62,10 @@ import java.awt.Color;
 import java.time.LocalTime;
 import com.gpuv2.config.SkyMode;
 import net.runelite.api.ChatMessageType;
+import net.runelite.api.Player;
+import net.runelite.api.SceneTilePaint;
+import net.runelite.api.Tile;
+import net.runelite.api.coords.LocalPoint;
 import net.runelite.api.events.CommandExecuted;
 import net.runelite.api.events.GameStateChanged;
 import net.runelite.api.events.PostClientTick;
@@ -326,6 +330,18 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 	private int uniLightAmbient;
 	private int uniLightSunColor;
 	private int uniLightSunDir;
+	private int uniWaterFlags;
+	private int uniWaterStrength;
+	private int uniWaterChoppiness;
+	private int uniWaterTime;
+	private int uniWaterTint;
+	private int uniCameraPos;
+
+	/**
+	 * Per-texture-id water lookup, rebuilt from config rather than parsed every frame.
+	 * Null means it needs rebuilding.
+	 */
+	private float[] waterFlags;
 	static int uniBase;
 
 	static final float[] IDENTITY = Mat4.identity();
@@ -676,6 +692,11 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 					}
 				});
 			}
+			else if (configChanged.getKey().equals("waterTextureIds"))
+			{
+				// Rebuilt lazily on the next frame rather than parsed per frame.
+				waterFlags = null;
+			}
 			else if (configChanged.getKey().equals("removeVertexSnapping"))
 			{
 				log.debug("Toggle {}", configChanged.getKey());
@@ -816,6 +837,12 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 		uniLightAmbient = glGetUniformLocation(glProgram, "lightAmbient");
 		uniLightSunColor = glGetUniformLocation(glProgram, "lightSunColor");
 		uniLightSunDir = glGetUniformLocation(glProgram, "lightSunDir");
+		uniWaterFlags = glGetUniformLocation(glProgram, "waterFlags");
+		uniWaterStrength = glGetUniformLocation(glProgram, "waterStrength");
+		uniWaterChoppiness = glGetUniformLocation(glProgram, "waterChoppiness");
+		uniWaterTime = glGetUniformLocation(glProgram, "waterTime");
+		uniWaterTint = glGetUniformLocation(glProgram, "waterTint");
+		uniCameraPos = glGetUniformLocation(glProgram, "cameraPos");
 
 		uniTex = glGetUniformLocation(glUiProgram, "tex");
 		uniTexTargetDimensions = glGetUniformLocation(glUiProgram, "targetDimensions");
@@ -1198,6 +1225,7 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 		glUniform1f(uniRetroNoTextures, config.retroNoTextures() ? 1f : 0f);
 		glUniform1f(uniRetroPosterize, config.retroPosterize());
 		setupLightingUniforms();
+		setupWaterUniforms(cameraX, cameraY, cameraZ);
 
 		// Brightness happens to also be stored in the texture provider, so we use that
 		TextureProvider textureProvider = client.getTextureProvider();
@@ -1320,10 +1348,83 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 	}
 
 	/**
+	 * Uploads the water surface uniforms for this frame.
+	 */
+	private void setupWaterUniforms(float cameraX, float cameraY, float cameraZ)
+	{
+		float strength = config.waterEnabled() ? config.waterStrength() / 100f : 0f;
+		glUniform1f(uniWaterStrength, strength);
+		if (strength < 0.001f)
+		{
+			// Shader early-outs; skip the rest, including the flag array upload.
+			return;
+		}
+
+		if (waterFlags == null)
+		{
+			waterFlags = buildWaterFlags(config.waterTextureIds());
+		}
+		glUniform1fv(uniWaterFlags, waterFlags);
+
+		glUniform1f(uniWaterChoppiness, config.waterChoppiness() / 100f);
+		glUniform1f(uniWaterTime, (System.nanoTime() % 1_000_000_000_000L) / 1e9f);
+		glUniform3f(uniCameraPos, cameraX, cameraY, cameraZ);
+
+		Color tint = config.waterTint();
+		glUniform3f(uniWaterTint,
+			tint.getRed() / 255f, tint.getGreen() / 255f, tint.getBlue() / 255f);
+	}
+
+	/**
+	 * Turns a comma-separated texture id list into a per-id lookup the shader can index
+	 * directly, so water detection is a single array read rather than a loop.
+	 */
+	private static float[] buildWaterFlags(String csv)
+	{
+		float[] flags = new float[TextureManager.TEXTURE_COUNT];
+		if (csv == null)
+		{
+			return flags;
+		}
+
+		for (String part : csv.split(","))
+		{
+			String trimmed = part.trim();
+			if (trimmed.isEmpty())
+			{
+				continue;
+			}
+
+			try
+			{
+				int id = Integer.parseInt(trimmed);
+				if (id >= 0 && id < TextureManager.TEXTURE_COUNT)
+				{
+					flags[id] = 1f;
+				}
+				else
+				{
+					log.warn("water texture id out of range: {}", id);
+				}
+			}
+			catch (NumberFormatException ex)
+			{
+				log.warn("ignoring unparseable water texture id: '{}'", trimmed);
+			}
+		}
+		return flags;
+	}
+
+	/**
 	 * Uploads the ambient and directional light terms for this frame.
 	 */
 	private void setupLightingUniforms()
 	{
+		LocalTime time = skyTime();
+		computeSunDirection(time);
+		// Uploaded regardless of whether scene lighting is enabled - the water glint uses it.
+		glUniform3f(uniLightSunDir, sunDir[0], sunDir[1], sunDir[2]);
+
 		float strength = config.lightStrength() / 100f;
 		glUniform1f(uniLightStrength, strength);
 		if (strength < 0.001f)
@@ -1331,10 +1432,6 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 			// Shader early-outs; no point computing the rest.
 			return;
 		}
-
-		LocalTime time = skyTime();
-		computeSunDirection(time);
-		glUniform3f(uniLightSunDir, sunDir[0], sunDir[1], sunDir[2]);
 
 		// Only follow the clock when the sky is actually running on it - otherwise the
 		// world would dim with no matching change in the sky.
@@ -2579,5 +2676,42 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 			}
 			log.info("Total: {}kb", totalSzKb);
 		}
+		else if (event.getCommand().equals("watertex"))
+		{
+			reportTileTexture();
+		}
+	}
+
+	/**
+	 * Reports the texture id of the tile the player is standing on, so water texture ids
+	 * can be identified in-game rather than guessed.
+	 */
+	private void reportTileTexture()
+	{
+		WorldView wv = client.getTopLevelWorldView();
+		Player player = client.getLocalPlayer();
+		if (wv == null || player == null)
+		{
+			return;
+		}
+
+		LocalPoint lp = player.getLocalLocation();
+		Tile tile = wv.getScene().getTiles()[wv.getPlane()][lp.getSceneX()][lp.getSceneY()];
+		SceneTilePaint paint = tile == null ? null : tile.getSceneTilePaint();
+
+		String msg;
+		if (paint == null)
+		{
+			msg = "[GPU v2] This tile has no flat paint - stand on open water, not on a "
+				+ "bridge or shaped tile.";
+		}
+		else
+		{
+			msg = "[GPU v2] Tile texture id: " + paint.getTexture()
+				+ " (add it to 'Water texture ids' to treat it as water)";
+		}
+
+		log.info(msg);
+		client.addChatMessage(ChatMessageType.GAMEMESSAGE, "", msg, null);
 	}
 }

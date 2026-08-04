@@ -129,6 +129,81 @@ public interface GpuPluginConfig extends Config
 	}
 
 	@ConfigSection(
+		name = "Water",
+		description = "Animated water surfaces.",
+		position = 225,
+		closedByDefault = true
+	)
+	String waterSection = "waterSection";
+
+	@ConfigItem(
+		keyName = "waterEnabled",
+		name = "Enable water",
+		description = "Animate surfaces whose texture id is listed below.",
+		position = 226,
+		section = waterSection
+	)
+	default boolean waterEnabled()
+	{
+		return false;
+	}
+
+	@Range(
+		max = 100
+	)
+	@ConfigItem(
+		keyName = "waterStrength",
+		name = "Strength",
+		description = "How much the water effect replaces the original surface.",
+		position = 227,
+		section = waterSection
+	)
+	default int waterStrength()
+	{
+		return 70;
+	}
+
+	@Range(
+		max = 200
+	)
+	@ConfigItem(
+		keyName = "waterChoppiness",
+		name = "Choppiness",
+		description = "Size of the ripples. Low is glassy, high is rough.",
+		position = 228,
+		section = waterSection
+	)
+	default int waterChoppiness()
+	{
+		return 60;
+	}
+
+	@ConfigItem(
+		keyName = "waterTint",
+		name = "Water tint",
+		description = "Colour of the water body, under the sky reflection.",
+		position = 229,
+		section = waterSection
+	)
+	default Color waterTint()
+	{
+		return new Color(0x2E, 0x6B, 0x8A);
+	}
+
+	@ConfigItem(
+		keyName = "waterTextureIds",
+		name = "Water texture ids",
+		description = "Comma-separated texture ids treated as water. Stand on water and "
+			+ "type ::watertex in chat to find the id for a tile.",
+		position = 230,
+		section = waterSection
+	)
+	default String waterTextureIds()
+	{
+		return "1";
+	}
+
+	@ConfigSection(
 		name = "Lighting",
 		description = "Ambient and directional light over the game's own shading.",
 		position = 250,
