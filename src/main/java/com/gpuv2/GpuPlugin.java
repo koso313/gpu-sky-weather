@@ -218,6 +218,13 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 	private int uniWeatherLightning;
 	private int uniWeatherWind;
 	private int uniWeatherLight;
+	private int uniWeatherSkyColor;
+
+	/**
+	 * Sky colour from the last scene draw. The weather pass runs later, in its own
+	 * program, so it cannot read the scene shader's fog uniform.
+	 */
+	private int lastSkyColor;
 
 	private int glGodrayProgram;
 	private int uniRaySrc;
@@ -633,7 +640,14 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 			{
 				log.error("Error starting GPU plugin", e);
 
-				disableSelf();
+				/*
+				 * Stops without writing "disabled" to config. A startup failure is
+				 * usually a shader that needs fixing, and persisting the disable means
+				 * the plugin no longer loads at all - so the next build cannot prove
+				 * itself and has to be re-enabled by hand every time. It only attempts
+				 * startup once per launch, so there is no crash loop to guard against.
+				 */
+				standDown();
 
 				shutDown();
 			}
@@ -1026,6 +1040,7 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 		uniWeatherLightning = glGetUniformLocation(glWeatherProgram, "lightning");
 		uniWeatherWind = glGetUniformLocation(glWeatherProgram, "weatherWind");
 		uniWeatherLight = glGetUniformLocation(glWeatherProgram, "weatherLight");
+		uniWeatherSkyColor = glGetUniformLocation(glWeatherProgram, "weatherSkyColor");
 
 		uniRaySrc = glGetUniformLocation(glGodrayProgram, "src");
 		uniRayPass = glGetUniformLocation(glGodrayProgram, "rayPass");
@@ -1480,6 +1495,8 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 		// Feeds both the fog uniform below and drawSkybox() further down, so overriding it
 		// here keeps the sky and the fog it fades into the same colour.
 		final int sky = resolveSkyColor();
+		// Kept for the weather pass, which runs later in its own program.
+		lastSkyColor = sky;
 		glUniform1i(uniUseFog, fogDepth > 0 ? 1 : 0);
 		glUniform4f(uniFogColor, (sky >> 16 & 0xFF) / 255f, (sky >> 8 & 0xFF) / 255f, (sky & 0xFF) / 255f, 1f);
 		glUniform1i(uniFogDepth, fogDepth);
@@ -2555,6 +2572,10 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 			? SkyGradient.nightFactorAt(skyTime())
 			: 0f;
 		glUniform1f(uniWeatherLight, 1f - night * 0.55f);
+		glUniform3f(uniWeatherSkyColor,
+			(lastSkyColor >> 16 & 0xFF) / 255f,
+			(lastSkyColor >> 8 & 0xFF) / 255f,
+			(lastSkyColor & 0xFF) / 255f);
 		glUniform1f(uniWeatherLightning,
 			mode.hasLightning() && config.lightning() ? lightningFlash(weatherSeconds()) : 0f);
 		// Keeps drops and flakes from stretching with the window's aspect ratio.

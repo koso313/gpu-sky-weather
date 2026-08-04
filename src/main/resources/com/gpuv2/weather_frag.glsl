@@ -9,6 +9,7 @@ uniform float weatherAmount;  // 0..1
 uniform float weatherHeavy;   // 0 = calm, 1 = storm/blizzard
 uniform float weatherWind;    // sideways drift multiplier; 1.0 is the default strength
 uniform float weatherLight;   // ambient brightness, 1 = daylight, low at night
+uniform vec3 weatherSkyColor; // current sky colour, so precipitation belongs to the scene
 uniform float lightning;      // 0..1 flash this frame
 uniform float aspect;         // viewport width / height
 
@@ -159,7 +160,7 @@ void main()
 		 * takes its colour from the sky so it still belongs to the scene.
 		 */
 		amount = rain(uv, t) * weatherAmount * 0.85;
-		vec3 dim = mix(vec3(0.46, 0.53, 0.64), fogColor.rgb * 1.35, 0.35);
+		vec3 dim = mix(vec3(0.46, 0.53, 0.64), weatherSkyColor * 1.35, 0.35);
 		color = mix(dim, vec3(0.82, 0.88, 0.97), weatherLight);
 	}
 	else
