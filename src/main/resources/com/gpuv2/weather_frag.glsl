@@ -7,6 +7,7 @@ uniform int weatherType;      // 1 = rain family, 2 = snow family
 uniform float weatherTime;
 uniform float weatherAmount;  // 0..1
 uniform float weatherHeavy;   // 0 = calm, 1 = storm/blizzard
+uniform float weatherWind;    // sideways drift multiplier; 1.0 is the default strength
 uniform float lightning;      // 0..1 flash this frame
 uniform float aspect;         // viewport width / height
 
@@ -28,7 +29,7 @@ float rain(vec2 uv, float t)
 {
 	float total = 0.0;
 	float speedUp = mix(1.0, 2.1, weatherHeavy);
-	float slant = mix(0.16, 0.42, weatherHeavy);
+	float slant = mix(0.16, 0.42, weatherHeavy) * weatherWind;
 
 	for (int layer = 0; layer < 3; ++layer)
 	{
@@ -67,15 +68,17 @@ float rain(vec2 uv, float t)
 float snow(vec2 uv, float t)
 {
 	float total = 0.0;
-	float speedUp = mix(1.0, 3.4, weatherHeavy);
-	float drift = mix(0.6, 3.2, weatherHeavy);
+	float speedUp = mix(1.0, 2.4, weatherHeavy);
+	float drift = mix(0.5, 1.7, weatherHeavy) * weatherWind;
 
 	/*
 	 * Wind arrives in gusts rather than at a constant rate. Two slow, non-harmonic terms
-	 * so the pattern doesn't visibly repeat, staying near 1 in calm snow and swinging
-	 * hard in a blizzard.
+	 * so the pattern doesn't visibly repeat, staying near 1 in calm snow and swelling in
+	 * a blizzard. Kept modest at the peak - a hard swing reads as erratic rather than
+	 * windy, and the gust is meant to be felt, not fought.
 	 */
-	float gust = 1.0 + weatherHeavy * (0.55 * sin(t * 0.31) + 0.30 * sin(t * 0.13 + 1.7));
+	float gust = 1.0 + weatherHeavy * weatherWind
+		* (0.30 * sin(t * 0.21) + 0.16 * sin(t * 0.09 + 1.7));
 
 	for (int layer = 0; layer < 3; ++layer)
 	{
@@ -85,7 +88,7 @@ float snow(vec2 uv, float t)
 		vec2 p = uv * vec2(22.0 * scale * aspect, 22.0 * scale);
 		p.y += t * (1.15 + fl * 0.55) * speedUp;          // + => falls downward
 		p.x += sin(t * (0.6 + fl * 0.35) + uv.y * 7.0) * drift;
-		p.x += t * drift * 0.55 * weatherHeavy * gust;    // blizzards blow sideways
+		p.x += t * drift * 0.34 * weatherHeavy * gust;    // blizzards blow sideways
 
 		vec2 cell = floor(p);
 		float h = hash12(cell + fl * 17.3);
@@ -101,7 +104,7 @@ float snow(vec2 uv, float t)
 		vec2 q = fract(p) - 0.5 - jitter * 0.55;
 
 		// Wind smears flakes along its direction, so they streak instead of staying round.
-		q.x /= 1.0 + weatherHeavy * 1.6 * abs(gust);
+		q.x /= 1.0 + weatherHeavy * weatherWind * 0.9 * abs(gust);
 
 		float d = length(q);
 

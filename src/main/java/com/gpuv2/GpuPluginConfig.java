@@ -210,6 +210,22 @@ public interface GpuPluginConfig extends Config
 		return 70;
 	}
 
+	@Range(
+		max = 200
+	)
+	@ConfigItem(
+		keyName = "weatherWind",
+		name = "Wind strength",
+		description = "How hard the wind blows precipitation sideways, and how much it "
+			+ "gusts. 0 makes it fall straight down.",
+		position = 208,
+		section = weatherSection
+	)
+	default int weatherWind()
+	{
+		return 60;
+	}
+
 	@ConfigItem(
 		keyName = "lightning",
 		name = "Lightning",

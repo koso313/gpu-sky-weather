@@ -207,6 +207,7 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 	private int uniWeatherAspect;
 	private int uniWeatherHeavy;
 	private int uniWeatherLightning;
+	private int uniWeatherWind;
 
 	private int uniSkyColor;
 	private int uniSkyNight;
@@ -939,6 +940,7 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 		uniWeatherAspect = glGetUniformLocation(glWeatherProgram, "aspect");
 		uniWeatherHeavy = glGetUniformLocation(glWeatherProgram, "weatherHeavy");
 		uniWeatherLightning = glGetUniformLocation(glWeatherProgram, "lightning");
+		uniWeatherWind = glGetUniformLocation(glWeatherProgram, "weatherWind");
 
 		uniSkyShowMoon = glGetUniformLocation(glSkyProgram, "showMoon");
 		uniSkyShowSun = glGetUniformLocation(glSkyProgram, "showSun");
@@ -2108,6 +2110,7 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 		glUniform1f(uniWeatherTime, weatherSeconds());
 		glUniform1f(uniWeatherAmount, config.weatherAmount() / 100f);
 		glUniform1f(uniWeatherHeavy, mode.heavy());
+		glUniform1f(uniWeatherWind, config.weatherWind() / 100f);
 		glUniform1f(uniWeatherLightning,
 			mode.hasLightning() && config.lightning() ? lightningFlash(weatherSeconds()) : 0f);
 		// Keeps drops and flakes from stretching with the window's aspect ratio.
