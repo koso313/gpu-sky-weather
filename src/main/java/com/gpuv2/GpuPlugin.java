@@ -1956,30 +1956,61 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 		return (System.nanoTime() % 1_000_000_000_000L) / 1e9f;
 	}
 
-	private static final float LIGHTNING_PERIOD = 7f;
-
 	/**
-	 * Per-strike random in 0..1, or -1 when this slot has no strike. Skipping roughly half
-	 * the slots keeps the cadence irregular; the value also seeds the bolt's shape and
-	 * bearing so one strike is consistent across the flash and the bolt.
+	 * Seconds between candidate strikes, by frequency setting. Shortening the gap alone
+	 * would make strikes metronomic, so the skip rate drops alongside it.
 	 */
-	private static float lightningSeed(float seconds)
+	private float lightningPeriod()
 	{
-		int slot = (int) (seconds / LIGHTNING_PERIOD);
-		float r = fract(slot * 0.6180339887f);
-		return r < 0.45f ? -1f : r;
+		switch (config.lightningFrequency())
+		{
+			case 3:
+				return 2.4f;
+			case 2:
+				return 4.2f;
+			default:
+				return 7f;
+		}
 	}
 
-	private static float lightningPhase(float seconds)
+	/**
+	 * Slots below this random value are skipped, keeping the cadence irregular.
+	 */
+	private float lightningSkip()
 	{
-		return seconds / LIGHTNING_PERIOD - (int) (seconds / LIGHTNING_PERIOD);
+		switch (config.lightningFrequency())
+		{
+			case 3:
+				return 0.12f;
+			case 2:
+				return 0.30f;
+			default:
+				return 0.45f;
+		}
+	}
+
+	/**
+	 * Per-strike random in 0..1, or -1 when this slot has no strike. The value also seeds
+	 * the bolt's shape and bearing, so one strike is consistent across the flash and bolt.
+	 */
+	private float lightningSeed(float seconds)
+	{
+		int slot = (int) (seconds / lightningPeriod());
+		float r = fract(slot * 0.6180339887f);
+		return r < lightningSkip() ? -1f : r;
+	}
+
+	private float lightningPhase(float seconds)
+	{
+		float period = lightningPeriod();
+		return seconds / period - (int) (seconds / period);
 	}
 
 	/**
 	 * Whole-frame flash brightness, 0..1. A fast double-flash with exponential falloff -
 	 * a single even pulse reads as a screen glitch rather than lightning.
 	 */
-	private static float lightningFlash(float seconds)
+	private float lightningFlash(float seconds)
 	{
 		float r = lightningSeed(seconds);
 		if (r < 0f)
@@ -1998,7 +2029,7 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 	 * Brightness of the drawn bolt, 0..1. Held slightly longer than the flash so the bolt
 	 * is still visible as the frame-wide wash fades.
 	 */
-	private static float lightningBolt(float seconds)
+	private float lightningBolt(float seconds)
 	{
 		float r = lightningSeed(seconds);
 		if (r < 0f)

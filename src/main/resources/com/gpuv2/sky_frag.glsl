@@ -143,15 +143,35 @@ vec2 celestial(vec3 dir, vec3 bodyDir, float discCos, float glowCos)
 	return vec2(disc, glow);
 }
 
+float hash11(float x)
+{
+	return fract(sin(x * 127.1 + 311.7) * 43758.5453);
+}
+
 /*
- * Horizontal wander of the bolt as it descends, as a signed angular offset. Layered
- * non-harmonic sines give a jagged path without needing noise textures.
+ * Horizontal wander of the bolt as it descends, as a signed angular offset.
+ *
+ * Built from straight segments with random endpoints rather than summed sines: real
+ * lightning is piecewise-linear with sharp corners, and sines - however many you layer -
+ * always read as a smooth snake.
  */
 float boltWander(float h, float seed)
 {
-	return (sin(h * 11.0 + seed * 5.0) * 0.50
-		+ sin(h * 23.0 + seed * 10.0) * 0.32
-		+ sin(h * 47.0 + seed * 21.0) * 0.18) * 0.06;
+	// Coarse zigzag: the overall path of the bolt.
+	float segs = 22.0;
+	float x = h * segs + seed;
+	float i = floor(x);
+	float f = fract(x);
+	float coarse = mix(hash11(i) - 0.5, hash11(i + 1.0) - 0.5, f);
+
+	// Fine kinks on top, so each straight run isn't perfectly clean.
+	float fsegs = 74.0;
+	float fx = h * fsegs + seed * 3.0;
+	float fi = floor(fx);
+	float ff = fract(fx);
+	float fine = mix(hash11(fi + 91.3) - 0.5, hash11(fi + 92.3) - 0.5, ff);
+
+	return coarse * 0.085 + fine * 0.022;
 }
 
 /*
@@ -180,7 +200,6 @@ vec3 lightningBolt(vec3 dir, float up)
 	float ang = atan(side, facing);
 
 	float h = clamp(up, 0.0, 1.0);
-	float d = abs(ang - boltWander(h, boltSeed));
 
 	// Runs from just above the horizon up into the cloud deck, tapering at both ends.
 	float extent = smoothstep(0.01, 0.06, h) * (1.0 - smoothstep(0.34, 0.52, h));
@@ -189,10 +208,22 @@ vec3 lightningBolt(vec3 dir, float up)
 		return vec3(0.0);
 	}
 
-	float core = 1.0 - smoothstep(0.0, 0.005, d);
-	float glow = 1.0 - smoothstep(0.0, 0.055, d);
+	float main_ = abs(ang - boltWander(h, boltSeed));
 
-	vec3 c = vec3(1.0, 0.98, 0.92) * core + vec3(0.55, 0.65, 1.0) * glow * 0.35;
+	// A fork branching off partway down, offset sideways and living only over the lower
+	// stretch - a single unbroken line reads as a wire rather than a strike.
+	float forkOffset = (hash11(boltSeed + 4.7) - 0.5) * 0.10;
+	float fork = abs(ang - (boltWander(h, boltSeed + 19.3) + forkOffset));
+	float forkExtent = smoothstep(0.02, 0.07, h) * (1.0 - smoothstep(0.18, 0.30, h));
+
+	// Tight core, wide soft glow. The narrow core is what makes it read as sharp.
+	float core = (1.0 - smoothstep(0.0, 0.0022, main_))
+		+ (1.0 - smoothstep(0.0, 0.0016, fork)) * forkExtent;
+	float glow = (1.0 - smoothstep(0.0, 0.045, main_))
+		+ (1.0 - smoothstep(0.0, 0.030, fork)) * forkExtent * 0.7;
+
+	vec3 c = vec3(1.0, 0.99, 0.95) * clamp(core, 0.0, 1.0)
+		+ vec3(0.55, 0.65, 1.0) * clamp(glow, 0.0, 1.0) * 0.30;
 	return c * extent * boltStrength;
 }
 

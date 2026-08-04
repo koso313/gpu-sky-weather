@@ -222,6 +222,23 @@ public interface GpuPluginConfig extends Config
 		return true;
 	}
 
+	@Range(
+		min = 1,
+		max = 3
+	)
+	@ConfigItem(
+		keyName = "lightningFrequency",
+		name = "Lightning frequency",
+		description = "How often lightning strikes during a storm. 1 is occasional, "
+			+ "2 is frequent, 3 is near-constant.",
+		position = 211,
+		section = weatherSection
+	)
+	default int lightningFrequency()
+	{
+		return 1;
+	}
+
 	@ConfigSection(
 		name = "Bloom",
 		description = "Glow around bright areas.",
