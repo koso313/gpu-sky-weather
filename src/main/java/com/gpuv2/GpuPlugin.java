@@ -260,6 +260,9 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 	private int uniSkyMoonDir;
 	private int uniSkyShowMoon;
 	private int uniSkyShowSun;
+	private int uniSkySunGlow;
+	private int uniSkySunGlare;
+	private int uniSkyMoonGlow;
 	private int uniSkyCloudAmount;
 	private int uniSkyCloudOpacity;
 	private int uniSkyAuroraStrength;
@@ -1019,6 +1022,9 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 
 		uniSkyShowMoon = glGetUniformLocation(glSkyProgram, "showMoon");
 		uniSkyShowSun = glGetUniformLocation(glSkyProgram, "showSun");
+		uniSkySunGlow = glGetUniformLocation(glSkyProgram, "sunGlow");
+		uniSkySunGlare = glGetUniformLocation(glSkyProgram, "sunGlare");
+		uniSkyMoonGlow = glGetUniformLocation(glSkyProgram, "moonGlow");
 		uniSkyCloudAmount = glGetUniformLocation(glSkyProgram, "cloudAmount");
 		uniSkyCloudOpacity = glGetUniformLocation(glSkyProgram, "cloudOpacity");
 		uniSkyAuroraStrength = glGetUniformLocation(glSkyProgram, "auroraStrength");
@@ -1561,6 +1567,9 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 		glUniform1f(uniSkyCloudTime, skySeconds());
 		glUniform1f(uniSkyShowMoon, config.showMoon() ? 1f : 0f);
 		glUniform1f(uniSkyShowSun, config.showSun() ? 1f : 0f);
+		glUniform1f(uniSkySunGlow, config.sunGlow() / 100f);
+		glUniform1f(uniSkySunGlare, config.showSun() ? config.sunGlare() / 100f : 0f);
+		glUniform1f(uniSkyMoonGlow, config.moonGlow() / 100f);
 		// Weather thickens the cloud deck as well as greying the sky.
 		float clouds = config.cloudAmount() / 100f;
 		WeatherMode weather = activeWeather();

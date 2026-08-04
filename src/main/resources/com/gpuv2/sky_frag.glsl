@@ -18,6 +18,9 @@ uniform vec3 sunDir;      // normalised world direction toward the sun
 uniform vec3 moonDir;     // normalised world direction toward the moon
 uniform float showMoon;
 uniform float showSun;
+uniform float sunGlow;    // brightness of the sun disc
+uniform float sunGlare;   // strength of the halo and streaks around it
+uniform float moonGlow;   // brightness of the moon disc and its halo
 uniform float cloudAmount;   // 0 = clear, 1 = overcast
 uniform float cloudOpacity;
 
@@ -215,38 +218,13 @@ float craterField(vec2 p, float scale, float threshold)
 }
 
 /*
- * A sunspot: a dark umbra inside a lighter penumbra. Returns how much to darken by.
- */
-float sunspotField(vec2 p, float scale, float threshold)
-{
-	vec2 g = p * scale;
-	vec2 cell = floor(g);
-	float h = hash12(cell);
-	if (h < threshold)
-	{
-		return 0.0;
-	}
-
-	vec2 jitter = vec2(hash12(cell + 2.3), hash12(cell + 8.9)) - 0.5;
-	float d = length(fract(g) - 0.5 - jitter * 0.5);
-	float radius = mix(0.09, 0.22, hash12(cell + 5.5));
-
-	float umbra = 1.0 - smoothstep(0.0, radius * 0.55, d);
-	float penumbra = (1.0 - smoothstep(radius * 0.55, radius, d)) * 0.45;
-
-	return umbra * 0.55 + penumbra * 0.20;
-}
-
-/*
- * The sun as a sphere rather than a flat disc.
+ * The sun: a smooth incandescent disc.
  *
- * Same projection as the moon, but the surface features are solar rather than lunar -
- * craters would be nonsense on plasma. What a sun actually shows is granulation from
- * convection, occasional sunspots, and limb darkening far stronger than the moon's,
- * because the edge is seen through more of the atmosphere above the photosphere.
- *
- * Kept subtle deliberately: the disc is extremely bright, and heavy detail on it reads
- * as a textured ball rather than something incandescent.
+ * Granulation and sunspots were tried and removed. At the sun's on-screen size any
+ * surface feature collapses into scattered dark dots, which reads as a pale rocky ball -
+ * the same as the moon - rather than something too bright to look at. A sun is defined by
+ * being blown out, so the disc is deliberately featureless and heavily overdriven, and
+ * all the character lives in the glare around it.
  */
 vec3 sunSurface(vec3 dir, float discCos)
 {
@@ -263,29 +241,51 @@ vec3 sunSurface(vec3 dir, float discCos)
 	float u = dot(dir, right) / discRadius;
 	float v = dot(dir, upv) / discRadius;
 
-	float r2 = clamp(u * u + v * v, 0.0, 1.0);
-	float w = sqrt(1.0 - r2);
-	vec2 suv = vec2(u, v) / (0.35 + 0.65 * w);
+	float r = sqrt(clamp(u * u + v * v, 0.0, 1.0));
 
-	// Granulation: fine convection cells, churning slowly.
-	float gran = valueNoise(suv * 20.0 + starTime * 0.05) * 0.55
-		+ valueNoise(suv * 44.0 - starTime * 0.035) * 0.45;
-	float surface = 0.94 + 0.12 * (gran - 0.5) * 2.0;
+	// Blazing white core easing to a warm rim, with the edge feathered into the glare
+	// rather than stopping at a hard circle.
+	vec3 col = mix(vec3(1.0, 0.99, 0.95), vec3(1.0, 0.78, 0.42), smoothstep(0.35, 1.0, r));
+	float edge = 1.0 - smoothstep(0.80, 1.05, r);
 
-	// Sparse sunspots.
-	surface -= sunspotField(suv, 3.5, 0.80);
-	surface -= sunspotField(suv, 7.0, 0.88) * 0.6;
+	return col * edge * 2.2 * sunGlow;
+}
 
-	// Limb darkening - much more pronounced than the moon's.
-	surface *= 0.52 + 0.48 * pow(max(w, 0.0), 0.55);
+/*
+ * Glare around the sun: a tight halo, a wide bloom, and streaks radiating outward.
+ *
+ * The streaks are oriented in the sun's own frame rather than screen space, so they stay
+ * fixed to it as the camera turns - screen-aligned streaks read as a camera artifact
+ * pinned to the display, which is wrong for something being looked at in the world.
+ */
+vec3 sunGlareColor(vec3 dir)
+{
+	if (sunGlare < 0.001)
+	{
+		return vec3(0.0);
+	}
 
-	// White-hot at the centre grading to orange at the limb.
-	vec3 col = mix(vec3(1.0, 0.55, 0.18), vec3(1.0, 0.97, 0.88), pow(max(w, 0.0), 0.75));
+	float sd = dot(dir, sunDir);
+	if (sd <= 0.0)
+	{
+		return vec3(0.0);
+	}
 
-	float edge = 1.0 - smoothstep(0.88, 1.0, sqrt(r2));
+	// Tight halo hugging the disc, then a broad falloff reaching well out into the sky.
+	float halo = pow(smoothstep(0.988, 1.0, sd), 2.0);
+	float wide = pow(smoothstep(0.55, 1.0, sd), 3.0);
 
-	// Overdriven so it still reads as a light source rather than a painted ball.
-	return col * clamp(surface, 0.0, 2.0) * edge * 1.35;
+	vec3 right = normalize(cross(vec3(0.0, -1.0, 0.0), sunDir));
+	vec3 upv = cross(sunDir, right);
+	float a = atan(dot(dir, upv), dot(dir, right));
+
+	// Four main spikes with four shorter ones between them.
+	float spikes = pow(abs(cos(a * 2.0)), 28.0)
+		+ pow(abs(cos(a * 2.0 + 0.7854)), 40.0) * 0.45;
+	spikes *= pow(smoothstep(0.72, 1.0, sd), 1.6);
+
+	vec3 warm = vec3(1.0, 0.80, 0.50);
+	return warm * (halo * 0.9 + wide * 0.35 + spikes * 0.55) * sunGlare;
 }
 
 /*
@@ -572,14 +572,9 @@ void main()
 		const float SUN_DISC_COS = 0.9975;
 		float vis = horizonFade * day;
 
-		// Corona first, so the disc sits on top of it.
-		float glow = smoothstep(0.96, 1.0, dot(dir, sunDir));
-		col += vec3(1.0, 0.72, 0.42) * glow * 0.55 * vis;
-
-		vec3 sun = sunSurface(dir, SUN_DISC_COS);
-		// Replaces the sky rather than adding, so the granulation and spots keep their
-		// contrast instead of saturating to flat white.
-		col = mix(col, sun, min(length(sun), 1.0) * vis);
+		// Glare is additive and goes down first, so the disc blazes on top of it.
+		col += sunGlareColor(dir) * vis;
+		col += sunSurface(dir, SUN_DISC_COS) * vis;
 	}
 
 	// --- Moon and stars ---
@@ -597,9 +592,9 @@ void main()
 
 			// Halo first, so the disc sits on top of it.
 			float glow = smoothstep(0.985, 1.0, dot(dir, moonDir));
-			col += vec3(0.40, 0.42, 0.50) * glow * 0.5 * nightVis;
+			col += vec3(0.40, 0.42, 0.50) * glow * 0.5 * nightVis * moonGlow;
 
-			vec3 moon = moonSurface(dir, MOON_DISC_COS);
+			vec3 moon = moonSurface(dir, MOON_DISC_COS) * moonGlow;
 			// Replaces the sky rather than adding to it, so the surface keeps its
 			// contrast instead of the maria being washed out by whatever is behind.
 			col = mix(col, moon, min(length(moon), 1.0) * nightVis);

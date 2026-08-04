@@ -261,10 +261,31 @@ public interface GpuPluginConfig extends Config
 
 	@ConfigSection(
 		name = "Sky",
-		description = "Sky colour, sun, moon, stars, clouds and fog.",
+		description = "Sky colour, time of day, fog and ground mist.",
 		position = 30
 	)
 	String skySection = "skySection";
+
+	@ConfigSection(
+		name = "Sun and moon",
+		description = "The sun and moon discs and the light they throw.",
+		position = 34
+	)
+	String sunMoonSection = "sunMoonSection";
+
+	@ConfigSection(
+		name = "Stars and aurora",
+		description = "Night sky detail.",
+		position = 38
+	)
+	String starSection = "starSection";
+
+	@ConfigSection(
+		name = "Clouds",
+		description = "Cloud cover, drift and the shadows they cast.",
+		position = 42
+	)
+	String cloudSection = "cloudSection";
 
 	@ConfigItem(
 		keyName = "skyMode",
@@ -326,32 +347,77 @@ public interface GpuPluginConfig extends Config
 		keyName = "showSun",
 		name = "Sun",
 		description = "Draw a sun that arcs east to west across the day.",
-		position = 35,
-		section = skySection
+		position = 340,
+		section = sunMoonSection
 	)
 	default boolean showSun()
 	{
 		return true;
 	}
 
+	@Range(
+		max = 250
+	)
+	@ConfigItem(
+		keyName = "sunGlow",
+		name = "Sun brightness",
+		description = "How fiercely the sun's disc burns.",
+		position = 341,
+		section = sunMoonSection
+	)
+	default int sunGlow()
+	{
+		return 100;
+	}
+
+	@Range(
+		max = 250
+	)
+	@ConfigItem(
+		keyName = "sunGlare",
+		name = "Sun glare",
+		description = "Halo and streaks radiating from the sun. 0 disables.",
+		position = 342,
+		section = sunMoonSection
+	)
+	default int sunGlare()
+	{
+		return 90;
+	}
+
 	@ConfigItem(
 		keyName = "showMoon",
 		name = "Moon",
 		description = "Draw a moon, opposite the sun so it is up at night.",
-		position = 36,
-		section = skySection
+		position = 343,
+		section = sunMoonSection
 	)
 	default boolean showMoon()
 	{
 		return true;
 	}
 
+	@Range(
+		max = 250
+	)
+	@ConfigItem(
+		keyName = "moonGlow",
+		name = "Moon brightness",
+		description = "How brightly the moon's disc and halo shine.",
+		position = 344,
+		section = sunMoonSection
+	)
+	default int moonGlow()
+	{
+		return 100;
+	}
+
 	@ConfigItem(
 		keyName = "nightSky",
 		name = "Stars at night",
 		description = "Draw a starfield after dark.",
-		position = 37,
-		section = skySection
+		position = 380,
+		section = starSection
 	)
 	default boolean nightSky()
 	{
@@ -366,8 +432,8 @@ public interface GpuPluginConfig extends Config
 		keyName = "starDensity",
 		name = "Star density",
 		description = "How many stars fill the sky.",
-		position = 38,
-		section = skySection
+		position = 381,
+		section = starSection
 	)
 	default int starDensity()
 	{
@@ -381,8 +447,8 @@ public interface GpuPluginConfig extends Config
 		keyName = "cloudAmount",
 		name = "Cloud cover",
 		description = "How much of the sky is covered by cloud. 0 disables clouds entirely.",
-		position = 39,
-		section = skySection
+		position = 420,
+		section = cloudSection
 	)
 	default int cloudAmount()
 	{
@@ -396,8 +462,8 @@ public interface GpuPluginConfig extends Config
 		keyName = "cloudOpacity",
 		name = "Cloud strength",
 		description = "How solid the clouds look against the sky.",
-		position = 40,
-		section = skySection
+		position = 421,
+		section = cloudSection
 	)
 	default int cloudOpacity()
 	{
@@ -413,8 +479,8 @@ public interface GpuPluginConfig extends Config
 		name = "Cloud speed",
 		description = "How fast clouds drift and reshape. 1 is a realistic crawl, "
 			+ "3 is a brisk sky.",
-		position = 41,
-		section = skySection
+		position = 422,
+		section = cloudSection
 	)
 	default int cloudSpeed()
 	{
@@ -426,8 +492,8 @@ public interface GpuPluginConfig extends Config
 		name = "Aurora",
 		description = "Shimmering curtains low in the northern sky on clear nights. "
 			+ "Cloud cover hides it.",
-		position = 45,
-		section = skySection
+		position = 382,
+		section = starSection
 	)
 	default boolean aurora()
 	{
@@ -442,8 +508,8 @@ public interface GpuPluginConfig extends Config
 		keyName = "auroraStrength",
 		name = "Aurora strength",
 		description = "How bright the aurora is.",
-		position = 46,
-		section = skySection
+		position = 383,
+		section = starSection
 	)
 	default int auroraStrength()
 	{
@@ -459,8 +525,8 @@ public interface GpuPluginConfig extends Config
 		name = "Aurora speed",
 		description = "How fast the aurora churns. 1 is a slow lava-lamp drift, "
 			+ "3 is restless.",
-		position = 47,
-		section = skySection
+		position = 384,
+		section = starSection
 	)
 	default int auroraSpeed()
 	{
@@ -508,8 +574,8 @@ public interface GpuPluginConfig extends Config
 		name = "Cloud shadows",
 		description = "Drift cloud shadows across the world, matching the deck overhead. "
 			+ "0 disables.",
-		position = 42,
-		section = skySection
+		position = 423,
+		section = cloudSection
 	)
 	default int cloudShadows()
 	{
