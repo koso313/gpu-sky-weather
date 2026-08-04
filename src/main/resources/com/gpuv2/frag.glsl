@@ -42,10 +42,6 @@ uniform float gradeContrast;
 uniform float gradeSaturation;
 uniform float gradeTemperature;
 
-// Retro stylisation. 0 / <0.5 leaves the image untouched.
-uniform float retroNoTextures;
-uniform float retroPosterize;   // colour levels per channel; 0 disables
-uniform vec3 textureDefaultColors[TEXTURE_COUNT];
 
 // Water. waterFlags[i] is 1.0 for texture ids treated as water.
 uniform float waterFlags[TEXTURE_COUNT];
@@ -316,16 +312,7 @@ vec3 applyGrade(vec3 c)
   float luma = dot(c, vec3(0.2126, 0.7152, 0.0722));
   c = mix(vec3(luma), c, gradeSaturation);
 
-  c = clamp(c, 0.0, 1.0);
-
-  // Posterise last, so it quantises the final graded image rather than being smeared
-  // back into a gradient by the grade.
-  if (retroPosterize > 1.5)
-  {
-    c = floor(c * retroPosterize + 0.5) / retroPosterize;
-  }
-
-  return c;
+  return clamp(c, 0.0, 1.0);
 }
 
 #include "hsl_to_rgb.glsl"
@@ -345,17 +332,7 @@ float linear_depth(float depth) {
 void main() {
   vec4 c;
 
-  if (fTextureId > 0 && retroNoTextures > 0.5) {
-    // Textures off on a textured face. Its fHsl is a 0-127 lightness, not packed HSL,
-    // and its vertex colour is not a usable surface colour - so take the texture's own
-    // average colour, the way the vanilla client does without textures, and shade it by
-    // that lightness.
-    // Matches the textured path's own maths - gamma, then scale by lightness - so
-    // toggling textures off changes detail without changing overall brightness.
-    float light = fHsl / 127.f;
-    vec3 base = pow(textureDefaultColors[fTextureId - 1], vec3(brightness));
-    c = vec4(base * light, fColor.a);
-  } else if (fTextureId > 0) {
+  if (fTextureId > 0) {
     int textureIdx = fTextureId - 1;
 
     vec4 textureColor = texture(textures, vec3(fUv, float(textureIdx)));

@@ -108,7 +108,7 @@ import org.lwjgl.system.Configuration;
 @PluginDescriptor(
 	name = "GPU v2",
 	description = "GPU renderer with a lightweight suite of graphical enhancements",
-	tags = {"gpu", "hd", "fog", "skybox", "lighting", "draw distance", "retro"},
+	tags = {"gpu", "hd", "fog", "skybox", "lighting", "draw distance", "weather"},
 	/*
 	 * Required. PluginManager stores a plugin's enabled state under configName, falling
 	 * back to the class's simple name - and this class is called GpuPlugin, exactly like
@@ -418,9 +418,6 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 	private int uniGradeContrast;
 	private int uniGradeSaturation;
 	private int uniGradeTemperature;
-	private int uniTextureDefaultColors;
-	private int uniRetroNoTextures;
-	private int uniRetroPosterize;
 	private int uniLightStrength;
 	private int uniLightAmbient;
 	private int uniLightSunColor;
@@ -946,9 +943,6 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 		uniGradeContrast = glGetUniformLocation(glProgram, "gradeContrast");
 		uniGradeSaturation = glGetUniformLocation(glProgram, "gradeSaturation");
 		uniGradeTemperature = glGetUniformLocation(glProgram, "gradeTemperature");
-		uniTextureDefaultColors = glGetUniformLocation(glProgram, "textureDefaultColors");
-		uniRetroNoTextures = glGetUniformLocation(glProgram, "retroNoTextures");
-		uniRetroPosterize = glGetUniformLocation(glProgram, "retroPosterize");
 		uniLightStrength = glGetUniformLocation(glProgram, "lightStrength");
 		uniLightAmbient = glGetUniformLocation(glProgram, "lightAmbient");
 		uniLightSunColor = glGetUniformLocation(glProgram, "lightSunColor");
@@ -1453,8 +1447,6 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 		glUniform1f(uniGradeContrast, config.gradeContrast() / 100f);
 		glUniform1f(uniGradeSaturation, config.gradeSaturation() / 100f);
 		glUniform1f(uniGradeTemperature, config.gradeTemperature() / 100f);
-		glUniform1f(uniRetroNoTextures, config.retroNoTextures() ? 1f : 0f);
-		glUniform1f(uniRetroPosterize, config.retroPosterize());
 		setupLightingUniforms();
 		setupWaterUniforms(cameraX, cameraY, cameraZ);
 		setupGroundWeatherUniforms();
@@ -2829,10 +2821,8 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 			{
 				// if texture upload is successful, compute and set texture animations
 				float[] texAnims = textureManager.computeTextureAnimations(textureProvider);
-				float[] texColors = textureManager.computeTextureDefaultColors(textureProvider);
 				glUseProgram(glProgram);
 				glUniform2fv(uniTextureAnimations, texAnims);
-				glUniform3fv(uniTextureDefaultColors, texColors);
 				glUseProgram(0);
 			}
 		}

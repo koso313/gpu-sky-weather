@@ -222,32 +222,6 @@ class TextureManager
 		return pixels;
 	}
 
-	/**
-	 * Per-texture average colour, as the vanilla client uses when rendering without
-	 * textures. Needed because textured faces carry no usable vertex colour of their own -
-	 * their packed colour is a lightness, not a hue - so untextured rendering has to get
-	 * the surface colour from the texture itself.
-	 */
-	float[] computeTextureDefaultColors(TextureProvider textureProvider)
-	{
-		Texture[] textures = textureProvider.getTextures();
-
-		float[] colors = new float[TEXTURE_COUNT * 3];
-		for (int i = 0; i < Math.min(TEXTURE_COUNT, textures.length); ++i)
-		{
-			if (textures[i] == null)
-			{
-				continue;
-			}
-
-			int rgb = textureProvider.getDefaultColor(i);
-			colors[i * 3] = (rgb >> 16 & 0xFF) / 255f;
-			colors[i * 3 + 1] = (rgb >> 8 & 0xFF) / 255f;
-			colors[i * 3 + 2] = (rgb & 0xFF) / 255f;
-		}
-		return colors;
-	}
-
 	float[] computeTextureAnimations(TextureProvider textureProvider)
 	{
 		Texture[] textures = textureProvider.getTextures();
