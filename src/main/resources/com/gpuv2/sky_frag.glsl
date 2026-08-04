@@ -210,61 +210,80 @@ vec3 aurora(vec3 dir, float up, float night)
 	}
 	dxz /= len;
 
-	// Facing north, fading out to the sides.
+	/*
+	 * Northern sky only - these are the northern lights, and one ringing the horizon
+	 * would read as a screen effect rather than something far away to the north.
+	 *
+	 * The arc is deliberately wide though: strong from northwest through northeast and
+	 * only tailing off past due east and west, so it covers the northern sky rather than
+	 * demanding the camera point exactly at it.
+	 */
 	float north = dxz.y;
-	if (north <= 0.0)
+	float sector = smoothstep(-0.30, 0.55, north);
+	if (sector <= 0.0)
 	{
 		return vec3(0.0);
 	}
-	float sector = pow(north, 1.5);
 
 	float h = clamp(up, 0.0, 1.0);
-	// Sits low: from just above the horizon to partway up, tapering at both ends.
-	float vert = smoothstep(0.02, 0.10, h) * (1.0 - smoothstep(0.26, 0.55, h));
-	if (vert <= 0.0)
-	{
-		return vec3(0.0);
-	}
-
 	float bearing = atan(dxz.x, dxz.y);
 	float t = auroraTime;
 
 	/*
-	 * Lava-lamp motion. Scrolling noise slides a fixed pattern past and reads as streaks;
-	 * what makes a lava lamp is the field folding through itself, so blobs stretch, pinch
-	 * apart and merge rather than travelling.
+	 * An aurora is a hanging ribbon of vertical rays, not a cloud. Three things define
+	 * the look, and isotropic blobs have none of them:
 	 *
-	 * Two rounds of domain warping do that - each bends the coordinates by another noise
-	 * field moving at its own rate - with the second finer than the first so large masses
-	 * drift while their edges churn. The slow rise on top gives the upward creep.
+	 *  - a bottom edge that snakes across the sky, which the curtain hangs up from
+	 *  - rays running strictly vertically, so the field must vary fast across bearing
+	 *    and slowly with height
+	 *  - a sharp bright lower edge fading out toward the top
+	 *
+	 * Motion is waves travelling ALONG the ribbon rather than the field churning in
+	 * place: the base line undulates and the rays shift sideways, which is what reads as
+	 * an aurora rippling.
 	 */
-	vec2 p = vec2(bearing * 3.2, h * 5.0);
+	vec3 total = vec3(0.0);
 
-	vec2 w1 = vec2(
-		valueNoise(p * 0.7 + vec2(t * 0.030, 0.0)),
-		valueNoise(p * 0.7 + vec2(5.2, -t * 0.024))
-	) - 0.5;
-	p += w1 * 2.3;
+	for (int band = 0; band < 2; ++band)
+	{
+		float fb = float(band);
 
-	vec2 w2 = vec2(
-		valueNoise(p * 1.6 + vec2(-t * 0.019, t * 0.013)),
-		valueNoise(p * 1.6 + vec2(9.1, t * 0.022))
-	) - 0.5;
-	p += w2 * 1.1;
+		// Where this curtain's lower edge sits, snaking with bearing and time.
+		float base = 0.13 + fb * 0.075
+			+ sin(bearing * 2.3 + t * 0.055 + fb * 2.1) * 0.030
+			+ sin(bearing * 4.7 - t * 0.037 + fb * 4.3) * 0.017;
 
-	// Blobs creep upward as they morph.
-	p.y -= t * 0.028;
+		float above = h - base;
+		if (above < 0.0)
+		{
+			continue;
+		}
 
-	float blob = valueNoise(p) + valueNoise(p * 2.1) * 0.5;
-	blob /= 1.5;
+		// Bright, tight lower edge fading up - the defining aurora gradient.
+		float height = mix(0.20, 0.14, fb);
+		float fade = (1.0 - smoothstep(0.0, height, above)) * smoothstep(0.0, 0.012, above);
 
-	// Rounded masses with soft edges rather than thin streaks.
-	float curtain = smoothstep(0.40, 0.70, blob);
+		/*
+		 * Vertical rays. The large bearing multiplier against a small height one is what
+		 * makes the structure vertical - sampling fast horizontally and slowly upward
+		 * stretches the noise into columns.
+		 */
+		float sway = t * 0.06 + fb * 7.0;
+		float rays = valueNoise(vec2(bearing * 34.0 + sway, h * 1.6));
+		rays *= 0.55 + 0.45 * valueNoise(vec2(bearing * 78.0 - sway * 0.6, h * 2.4));
+		rays = pow(clamp(rays, 0.0, 1.0), 1.7);
 
-	// Green at the base rising into violet, as real aurora does.
-	vec3 col = mix(vec3(0.18, 1.0, 0.55), vec3(0.45, 0.25, 0.95), smoothstep(0.05, 0.40, h));
+		// Slow brightening and dimming along the ribbon, so it pulses rather than sitting.
+		float pulse = 0.55 + 0.45 * valueNoise(vec2(bearing * 1.7 + t * 0.045, fb * 3.0));
 
-	return col * curtain * vert * sector * night * auroraStrength;
+		// Green along the bottom edge climbing into violet, as real aurora does.
+		vec3 col = mix(vec3(0.20, 1.0, 0.55), vec3(0.45, 0.22, 0.95),
+			smoothstep(0.0, height * 0.9, above));
+
+		total += col * rays * fade * pulse * mix(1.0, 0.6, fb);
+	}
+
+	return total * sector * night * auroraStrength;
 }
 
 /*
