@@ -109,6 +109,13 @@ import org.lwjgl.system.Configuration;
 	name = "GPU v2",
 	description = "GPU renderer with a lightweight suite of graphical enhancements",
 	tags = {"gpu", "hd", "fog", "skybox", "lighting", "draw distance", "retro"},
+	/*
+	 * Required. PluginManager stores a plugin's enabled state under configName, falling
+	 * back to the class's simple name - and this class is called GpuPlugin, exactly like
+	 * RuneLite's built-in one. Sharing that key meant enabling GPU v2 also re-enabled the
+	 * built-in GPU plugin, which then raced us for the renderer.
+	 */
+	configName = "gpuv2",
 	loadInSafeMode = false
 )
 @Slf4j
