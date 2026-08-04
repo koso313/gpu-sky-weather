@@ -34,6 +34,7 @@ import static com.gpuv2.GpuPlugin.MAX_DISTANCE;
 import static com.gpuv2.GpuPlugin.MAX_FOG_DEPTH;
 import com.gpuv2.config.AntiAliasingMode;
 import com.gpuv2.config.ColorBlindMode;
+import com.gpuv2.config.GraphicsPreset;
 import com.gpuv2.config.SkyMode;
 import com.gpuv2.config.UIScalingMode;
 
@@ -41,6 +42,18 @@ import com.gpuv2.config.UIScalingMode;
 public interface GpuPluginConfig extends Config
 {
 	String GROUP = "gpuv2";
+
+	@ConfigItem(
+		keyName = "preset",
+		name = "Preset",
+		description = "Applies a set of the settings below in one go. Changing settings "
+			+ "afterwards does not change this back to Custom.",
+		position = 0
+	)
+	default GraphicsPreset preset()
+	{
+		return GraphicsPreset.CUSTOM;
+	}
 
 	@Range(
 		max = MAX_DISTANCE
