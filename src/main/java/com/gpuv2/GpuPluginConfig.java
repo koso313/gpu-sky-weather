@@ -438,6 +438,23 @@ public interface GpuPluginConfig extends Config
 	}
 
 	@Range(
+		max = 100
+	)
+	@ConfigItem(
+		keyName = "aerialPerspective",
+		name = "Aerial perspective",
+		description = "Distant scenery picks up the sky's colour, the way looking through "
+			+ "air does. Builds gradually with distance rather than only at the scene "
+			+ "edge like fog depth. 0 disables.",
+		position = 324,
+		section = fogSection
+	)
+	default int aerialPerspective()
+	{
+		return 0;
+	}
+
+	@Range(
 		max = MAX_FOG_DEPTH
 	)
 	@ConfigItem(
@@ -504,6 +521,23 @@ public interface GpuPluginConfig extends Config
 	default boolean showMoon()
 	{
 		return true;
+	}
+
+	@Range(
+		min = -1,
+		max = 100
+	)
+	@ConfigItem(
+		keyName = "moonPhasePreview",
+		name = "Moon phase",
+		description = "-1 follows the real lunar calendar. 0-100 forces a phase: 0 new, "
+			+ "50 full, 100 new again.",
+		position = 345,
+		section = sunMoonSection
+	)
+	default int moonPhasePreview()
+	{
+		return -1;
 	}
 
 	@Range(
@@ -960,6 +994,95 @@ public interface GpuPluginConfig extends Config
 		return 45;
 	}
 
+	@Range(
+		max = 200
+	)
+	@ConfigItem(
+		keyName = "dynamicLights",
+		name = "Dynamic lights",
+		description = "Fires, torches and lanterns cast light on their surroundings. "
+			+ "0 disables. Needs object ids below - type ::lightids in chat next to a "
+			+ "fire to find them.",
+		position = 557,
+		section = lightSection
+	)
+	default int dynamicLights()
+	{
+		return 0;
+	}
+
+	@ConfigItem(
+		keyName = "lightObjectIds",
+		name = "Light object ids",
+		description = "Comma-separated object ids that cast light. Empty means none - "
+			+ "stand next to a fire and type ::lightids to discover them.",
+		position = 558,
+		section = lightSection
+	)
+	default String lightObjectIds()
+	{
+		return "";
+	}
+
+	@ConfigItem(
+		keyName = "lightColour",
+		name = "Light colour",
+		description = "Colour cast by dynamic lights.",
+		position = 559,
+		section = lightSection
+	)
+	default Color lightColour()
+	{
+		return new Color(0xFF, 0xA5, 0x4A);
+	}
+
+	@Range(
+		min = 1,
+		max = 20
+	)
+	@ConfigItem(
+		keyName = "lightRadius",
+		name = "Light radius",
+		description = "How far a light reaches, in tiles.",
+		position = 560,
+		section = lightSection
+	)
+	default int lightRadius()
+	{
+		return 6;
+	}
+
+	@Range(
+		max = 200
+	)
+	@ConfigItem(
+		keyName = "lightFlicker",
+		name = "Light flicker",
+		description = "How much firelight wavers. 0 is a steady glow.",
+		position = 561,
+		section = lightSection
+	)
+	default int lightFlicker()
+	{
+		return 100;
+	}
+
+	@Range(
+		max = 100
+	)
+	@ConfigItem(
+		keyName = "undergroundDarkening",
+		name = "Underground darkening",
+		description = "Darken, cool and desaturate underground areas, where there is no "
+			+ "daylight. 0 disables.",
+		position = 562,
+		section = lightSection
+	)
+	default int undergroundDarkening()
+	{
+		return 0;
+	}
+
 	@ConfigItem(
 		keyName = "lightFollowsTime",
 		name = "Follow time of day",
@@ -1197,6 +1320,20 @@ public interface GpuPluginConfig extends Config
 	default int gradeSaturation()
 	{
 		return 100;
+	}
+
+	@ConfigItem(
+		keyName = "autoTemperature",
+		name = "Auto colour temperature",
+		description = "Warm the image at sunrise and sunset and cool it at night, "
+			+ "following the sky clock. The slider below becomes an offset. Needs sky "
+			+ "colour set to 'Time of day'.",
+		position = 805,
+		section = postSection
+	)
+	default boolean autoTemperature()
+	{
+		return false;
 	}
 
 	@Range(

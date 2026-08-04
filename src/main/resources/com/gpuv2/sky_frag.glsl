@@ -21,6 +21,7 @@ uniform float showSun;
 uniform float sunGlow;    // brightness of the sun disc
 uniform float sunGlare;   // strength of the halo and streaks around it
 uniform float moonGlow;   // brightness of the moon disc and its halo
+uniform float moonPhase;  // 0 and 1 new, 0.5 full
 uniform float cloudAmount;   // 0 = clear, 1 = overcast
 uniform float cloudOpacity;
 
@@ -348,7 +349,25 @@ vec3 moonSurface(vec3 dir, float discCos)
 	surface *= 0.72 + 0.28 * w;
 	float edge = 1.0 - smoothstep(0.86, 1.0, sqrt(r2));
 
-	return vec3(0.96, 0.95, 0.88) * clamp(surface, 0.0, 1.4) * edge;
+	/*
+	 * Phase. The terminator is not a straight line across the disc but an ellipse: it is
+	 * the circular edge of the lit hemisphere seen at an angle, so it bows and its width
+	 * follows the cosine of the phase angle. A straight cut reads as a wipe rather than a
+	 * sphere being lit from the side.
+	 *
+	 * The unlit side is dimmed rather than removed, since earthshine keeps a real moon's
+	 * dark limb faintly visible.
+	 */
+	float phaseAngle = 6.28318 * moonPhase;
+	float termX = cos(phaseAngle);
+	float ellipse = termX * sqrt(max(0.0, 1.0 - v * v));
+
+	// Which side is lit flips at full moon.
+	float side = moonPhase < 0.5 ? 1.0 : -1.0;
+	float litness = smoothstep(-0.06, 0.06, (u - ellipse) * side);
+	float lit = mix(0.10, 1.0, litness);
+
+	return vec3(0.96, 0.95, 0.88) * clamp(surface, 0.0, 1.4) * edge * lit;
 }
 
 /*

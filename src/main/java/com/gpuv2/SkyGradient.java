@@ -61,6 +61,23 @@ public final class SkyGradient
 		1f, // wraps onto NIGHT[0]
 	};
 
+	/**
+	 * Colour temperature at each keyframe, -1 coolest to 1 warmest. Same layout rule as
+	 * COLORS: one longer than TIMES, with the first entry repeated for the wrap.
+	 */
+	private static final float[] TEMPERATURE = {
+		-0.55f, // midnight, cold
+		-0.50f, // 05:00
+		0.75f,  // 06:15 sunrise, very warm
+		0.20f,  // 07:30 morning
+		0f,     // 13:00 midday, neutral
+		0.15f,  // 17:00 afternoon
+		0.80f,  // 19:00 sunset, very warm
+		-0.35f, // 20:45 dusk
+		-0.55f, // 23:00
+		-0.55f, // wraps onto TEMPERATURE[0]
+	};
+
 	private SkyGradient()
 	{
 	}
@@ -74,6 +91,21 @@ public final class SkyGradient
 		int i = segmentStart(minute);
 		float t = segmentProgress(minute, i);
 		return lerpColor(COLORS[i], COLORS[i + 1], t);
+	}
+
+	/**
+	 * Colour temperature for the time of day, -1 (coolest) to 1 (warmest).
+	 *
+	 * <p>Warm at sunrise and sunset when light travels through more atmosphere, neutral at
+	 * midday, and cool at night when what little light there is comes from the sky rather
+	 * than the sun.
+	 */
+	public static float temperatureAt(LocalTime time)
+	{
+		int minute = minuteOfDay(time);
+		int i = segmentStart(minute);
+		float t = segmentProgress(minute, i);
+		return TEMPERATURE[i] + (TEMPERATURE[i + 1] - TEMPERATURE[i]) * t;
 	}
 
 	/**

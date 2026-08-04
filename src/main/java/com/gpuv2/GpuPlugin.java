@@ -72,7 +72,9 @@ import net.runelite.api.Player;
 import net.runelite.api.SceneTileModel;
 import net.runelite.api.SceneTilePaint;
 import net.runelite.api.Tile;
+import net.runelite.api.GameObject;
 import net.runelite.api.coords.LocalPoint;
+import net.runelite.api.coords.WorldPoint;
 import net.runelite.api.events.CommandExecuted;
 import net.runelite.api.events.GameStateChanged;
 import net.runelite.api.events.GameTick;
@@ -283,6 +285,17 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 	private int uniSkySunGlow;
 	private int uniSkySunGlare;
 	private int uniSkyMoonGlow;
+	private int uniSkyMoonPhase;
+
+	/** World y at which OSRS places underground areas. */
+	private static final int UNDERGROUND_Y = 6400;
+	/** Eased underground factor, so entering a cave fades rather than snaps. */
+	private float undergroundBlend;
+
+	/** Synodic month in days - one new moon to the next. */
+	private static final double LUNAR_CYCLE_DAYS = 29.530588;
+	/** A known new moon, as epoch days, to count cycles from. */
+	private static final double KNOWN_NEW_MOON_EPOCH_DAYS = 18219.0;
 	private int uniSkyCloudAmount;
 	private int uniSkyCloudOpacity;
 	private int uniSkyMeteorSamples;
@@ -482,6 +495,20 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 	private int uniGroundWet;
 	private int uniCloudShadow;
 	private int uniCloudShadowTime;
+	private int uniAerial;
+	private int uniUnderground;
+	private int uniLightCount;
+	private int uniLightPos;
+	private int uniLightColor;
+	private int uniLightRadius;
+	private int uniLightFlicker;
+
+	private LightScanner lightScanner;
+	/** Object ids treated as lights, rebuilt from config rather than parsed per frame. */
+	private Set<Integer> lightIds;
+	private final float[] lightColours = new float[LightScanner.MAX_LIGHTS * 3];
+	private final float[] lightRadii = new float[LightScanner.MAX_LIGHTS];
+
 	private int uniHeightFog;
 	private int uniHeightFogTop;
 	private int uniHeightFogDepth;
@@ -874,6 +901,10 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 				// Rebuilt lazily on the next frame rather than parsed per frame.
 				waterFlags = null;
 			}
+			else if (configChanged.getKey().equals("lightObjectIds"))
+			{
+				lightIds = null;
+			}
 			else if (configChanged.getKey().equals("removeVertexSnapping"))
 			{
 				log.debug("Toggle {}", configChanged.getKey());
@@ -1019,6 +1050,13 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 		uniGroundWet = glGetUniformLocation(glProgram, "groundWet");
 		uniCloudShadow = glGetUniformLocation(glProgram, "cloudShadow");
 		uniCloudShadowTime = glGetUniformLocation(glProgram, "cloudShadowTime");
+		uniAerial = glGetUniformLocation(glProgram, "aerial");
+		uniUnderground = glGetUniformLocation(glProgram, "underground");
+		uniLightCount = glGetUniformLocation(glProgram, "lightCount");
+		uniLightPos = glGetUniformLocation(glProgram, "lightPos");
+		uniLightColor = glGetUniformLocation(glProgram, "lightColor");
+		uniLightRadius = glGetUniformLocation(glProgram, "lightRadius");
+		uniLightFlicker = glGetUniformLocation(glProgram, "lightFlicker");
 		uniHeightFog = glGetUniformLocation(glProgram, "heightFog");
 		uniHeightFogTop = glGetUniformLocation(glProgram, "heightFogTop");
 		uniHeightFogDepth = glGetUniformLocation(glProgram, "heightFogDepth");
@@ -1084,6 +1122,7 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 		uniSkySunGlow = glGetUniformLocation(glSkyProgram, "sunGlow");
 		uniSkySunGlare = glGetUniformLocation(glSkyProgram, "sunGlare");
 		uniSkyMoonGlow = glGetUniformLocation(glSkyProgram, "moonGlow");
+		uniSkyMoonPhase = glGetUniformLocation(glSkyProgram, "moonPhase");
 		uniSkyCloudAmount = glGetUniformLocation(glSkyProgram, "cloudAmount");
 		uniSkyCloudOpacity = glGetUniformLocation(glSkyProgram, "cloudOpacity");
 		uniSkyMeteorSamples = glGetUniformLocation(glSkyProgram, "meteorSamples");
@@ -1553,7 +1592,22 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 		glUniform1f(uniGradeGamma, config.gradeGamma() / 100f);
 		glUniform1f(uniGradeContrast, config.gradeContrast() / 100f);
 		glUniform1f(uniGradeSaturation, config.gradeSaturation() / 100f);
-		glUniform1f(uniGradeTemperature, config.gradeTemperature() / 100f);
+		/*
+		 * Colour temperature either comes from the slider or follows the sky clock, in
+		 * which case the slider becomes an offset so it can still be nudged either way.
+		 * Only meaningful with the time-of-day sky - there is no clock to follow otherwise.
+		 */
+		float temperature = config.gradeTemperature() / 100f;
+		if (config.autoTemperature() && config.skyMode() == SkyMode.TIME_OF_DAY)
+		{
+			temperature = Math.max(-1f, Math.min(1f,
+				temperature + SkyGradient.temperatureAt(skyTime())));
+		}
+		glUniform1f(uniGradeTemperature, temperature);
+
+		glUniform1f(uniAerial, config.aerialPerspective() / 100f);
+		glUniform1f(uniUnderground, undergroundFactor());
+		setupPointLights();
 		setupLightingUniforms();
 		setupWaterUniforms(cameraX, cameraY, cameraZ);
 		setupGroundWeatherUniforms();
@@ -1649,6 +1703,7 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 		glUniform1f(uniSkySunGlow, config.sunGlow() / 100f);
 		glUniform1f(uniSkySunGlare, config.showSun() ? config.sunGlare() / 100f : 0f);
 		glUniform1f(uniSkyMoonGlow, config.moonGlow() / 100f);
+		glUniform1f(uniSkyMoonPhase, moonPhase());
 		// Weather thickens the cloud deck as well as greying the sky.
 		float clouds = config.cloudAmount() / 100f;
 		WeatherMode weather = activeWeather();
@@ -2046,6 +2101,155 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 	{
 		int preview = config.previewHour();
 		return preview < 0 ? LocalTime.now() : LocalTime.of(preview % 24, 0);
+	}
+
+	/**
+	 * Rescans for light sources.
+	 *
+	 * <p>On the game tick rather than per frame: the scan walks a patch of the scene, and
+	 * objects do not move between ticks anyway.
+	 */
+	private void updateLights()
+	{
+		if (config.dynamicLights() <= 0)
+		{
+			if (lightScanner != null)
+			{
+				lightScanner.count = 0;
+			}
+			return;
+		}
+
+		if (lightScanner == null)
+		{
+			lightScanner = new LightScanner(client);
+		}
+		if (lightIds == null)
+		{
+			lightIds = parseIds(config.lightObjectIds());
+		}
+
+		lightScanner.scan(lightIds);
+	}
+
+	/**
+	 * Parses a comma-separated id list, ignoring anything unparseable rather than
+	 * throwing - this comes straight from a text box.
+	 */
+	private static Set<Integer> parseIds(String csv)
+	{
+		Set<Integer> ids = new TreeSet<>();
+		if (csv == null)
+		{
+			return ids;
+		}
+
+		for (String part : csv.split(","))
+		{
+			String trimmed = part.trim();
+			if (trimmed.isEmpty())
+			{
+				continue;
+			}
+			try
+			{
+				ids.add(Integer.parseInt(trimmed));
+			}
+			catch (NumberFormatException ex)
+			{
+				log.warn("ignoring unparseable light object id: '{}'", trimmed);
+			}
+		}
+		return ids;
+	}
+
+	/**
+	 * Uploads the point lights found by the last scan.
+	 *
+	 * <p>Colour and radius are shared rather than per-light: without a database saying
+	 * what each object is, there is nothing to vary them by, and inventing differences
+	 * would look arbitrary rather than informed.
+	 */
+	private void setupPointLights()
+	{
+		int count = config.dynamicLights() > 0 && lightScanner != null ? lightScanner.count : 0;
+		glUniform1i(uniLightCount, count);
+		if (count <= 0)
+		{
+			return;
+		}
+
+		Color tint = config.lightColour();
+		float strength = config.dynamicLights() / 100f;
+		float radius = config.lightRadius() * Perspective.LOCAL_TILE_SIZE;
+
+		for (int i = 0; i < count; ++i)
+		{
+			lightColours[i * 3] = tint.getRed() / 255f * strength;
+			lightColours[i * 3 + 1] = tint.getGreen() / 255f * strength;
+			lightColours[i * 3 + 2] = tint.getBlue() / 255f * strength;
+			lightRadii[i] = radius;
+		}
+
+		glUniform3fv(uniLightPos, lightScanner.positions);
+		glUniform3fv(uniLightColor, lightColours);
+		glUniform1fv(uniLightRadius, lightRadii);
+
+		/*
+		 * Flicker from two out-of-step sines rather than random noise: firelight wavers
+		 * continuously, and per-frame randomness reads as a strobe instead.
+		 */
+		float t = monotonicSeconds();
+		float flicker = 1f + config.lightFlicker() / 100f
+			* (0.10f * (float) Math.sin(t * 7.3) + 0.06f * (float) Math.sin(t * 11.9 + 1.7));
+		glUniform1f(uniLightFlicker, flicker);
+	}
+
+	/**
+	 * How enclosed the player is, 0 open sky to 1 fully underground.
+	 *
+	 * <p>Detected from world coordinates: OSRS puts underground areas in a band starting
+	 * at y 6400, which is a stable property of the map rather than something that needs a
+	 * per-region list. Eased rather than switched, so stepping into a cave fades down
+	 * instead of snapping.
+	 */
+	private float undergroundFactor()
+	{
+		float target = 0f;
+
+		if (config.undergroundDarkening() > 0)
+		{
+			Player player = client.getLocalPlayer();
+			WorldPoint wp = player == null ? null : player.getWorldLocation();
+			if (wp != null && wp.getY() >= UNDERGROUND_Y)
+			{
+				target = config.undergroundDarkening() / 100f;
+			}
+		}
+
+		// Roughly a second to settle at 50fps.
+		undergroundBlend += (target - undergroundBlend) * 0.02f;
+		return undergroundBlend;
+	}
+
+	/**
+	 * Where the moon is in its cycle: 0 and 1 are new, 0.5 is full.
+	 *
+	 * <p>Follows the real lunar calendar rather than an arbitrary loop, so the moon
+	 * outside matches the one in game. The preview override forces a phase for testing,
+	 * since waiting a fortnight to see the other half of the cycle is not practical.
+	 */
+	private float moonPhase()
+	{
+		int preview = config.moonPhasePreview();
+		if (preview >= 0)
+		{
+			return preview / 100f;
+		}
+
+		double epochDays = System.currentTimeMillis() / 86400000d;
+		double cycles = (epochDays - KNOWN_NEW_MOON_EPOCH_DAYS) / LUNAR_CYCLE_DAYS;
+		return (float) (cycles - Math.floor(cycles));
 	}
 
 	/**
@@ -3892,6 +4096,7 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 		}
 
 		updateUnfocusedFpsCap();
+		updateLights();
 
 		DrawCallbacks active = client.getDrawCallbacks();
 		if (active == this || active == null)
@@ -3943,6 +4148,76 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 		{
 			reportTileTexture();
 		}
+		else if (event.getCommand().equals("lightids"))
+		{
+			reportNearbyObjectIds();
+		}
+	}
+
+	/**
+	 * Lists object ids near the player, so light sources can be identified from what is
+	 * actually there rather than guessed.
+	 */
+	private void reportNearbyObjectIds()
+	{
+		WorldView wv = client.getTopLevelWorldView();
+		Player player = client.getLocalPlayer();
+		if (wv == null || player == null)
+		{
+			say("[GPU v2] Not logged in.");
+			return;
+		}
+
+		LocalPoint origin = player.getLocalLocation();
+		Tile[][][] tiles = wv.getScene().getTiles();
+		int plane = wv.getPlane();
+		if (origin == null || plane < 0 || plane >= tiles.length)
+		{
+			return;
+		}
+
+		Set<Integer> ids = new TreeSet<>();
+		final int radius = 4;
+		int cx = origin.getSceneX();
+		int cy = origin.getSceneY();
+
+		for (int x = Math.max(0, cx - radius); x <= Math.min(tiles[plane].length - 1, cx + radius); ++x)
+		{
+			for (int y = Math.max(0, cy - radius); y <= Math.min(tiles[plane][x].length - 1, cy + radius); ++y)
+			{
+				Tile tile = tiles[plane][x][y];
+				if (tile == null)
+				{
+					continue;
+				}
+
+				if (tile.getGameObjects() != null)
+				{
+					for (GameObject obj : tile.getGameObjects())
+					{
+						if (obj != null)
+						{
+							ids.add(obj.getId());
+						}
+					}
+				}
+				if (tile.getWallObject() != null)
+				{
+					ids.add(tile.getWallObject().getId());
+				}
+				if (tile.getGroundObject() != null)
+				{
+					ids.add(tile.getGroundObject().getId());
+				}
+				if (tile.getDecorativeObject() != null)
+				{
+					ids.add(tile.getDecorativeObject().getId());
+				}
+			}
+		}
+
+		say("[GPU v2] Object ids within " + radius + " tiles: " + ids);
+		say("[GPU v2] Stand next to a fire or torch and add its id to 'Light object ids'.");
 	}
 
 	/**

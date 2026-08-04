@@ -59,6 +59,20 @@ uniform float groundWet;
 uniform float cloudShadow;
 uniform float cloudShadowTime;
 
+// Aerial perspective: distance haze independent of the fog slider. 0 disables.
+uniform float aerial;
+
+// How far underground the player is, 0 open sky to 1 fully enclosed.
+uniform float underground;
+
+// Point lights from fires, torches and lanterns. Count 0 disables.
+#define MAX_LIGHTS 12
+uniform int lightCount;
+uniform vec3 lightPos[MAX_LIGHTS];
+uniform vec3 lightColor[MAX_LIGHTS];
+uniform float lightRadius[MAX_LIGHTS];
+uniform float lightFlicker;   // shared flicker phase, animated on the CPU
+
 // Ground mist. 0 disables.
 uniform float heightFog;       // overall density
 uniform float heightFogTop;    // world Y the mist thins out at
@@ -329,6 +343,55 @@ vec3 applyWater(vec3 c)
   return mix(c, surface, waterStrength);
 }
 
+/*
+ * Point lights from fires and torches.
+ *
+ * Inverse-square falloff cut off at the light's radius, so a light cannot reach further
+ * than its own range - without the cutoff every light contributes something everywhere,
+ * which washes the whole scene out as more are added.
+ *
+ * Surfaces facing the light get more of it, but the term is biased upward rather than
+ * clamped at zero: the reconstructed normals are per-face, and a hard cosine on faceted
+ * geometry makes flat ground under a fire look blotchy.
+ */
+vec3 applyPointLights(vec3 c, vec3 n)
+{
+  if (lightCount <= 0)
+  {
+    return c;
+  }
+
+  vec3 accum = vec3(0.0);
+
+  for (int i = 0; i < lightCount && i < MAX_LIGHTS; ++i)
+  {
+    vec3 delta = lightPos[i] - fWorldPos;
+    float dist = length(delta);
+    float radius = max(lightRadius[i], 1.0);
+    if (dist >= radius)
+    {
+      continue;
+    }
+
+    float atten = 1.0 - dist / radius;
+    atten *= atten;
+
+    float facing = 1.0;
+    if (n != vec3(0.0))
+    {
+      facing = 0.45 + 0.55 * max(dot(n, delta / max(dist, 0.001)), 0.0);
+    }
+
+    accum += lightColor[i] * atten * facing;
+  }
+
+  // Flicker applies to the accumulated contribution, so nearby lights pulse together
+  // rather than each having its own visible rhythm.
+  accum *= lightFlicker;
+
+  return c * (1.0 + accum);
+}
+
 vec3 applyLighting(vec3 c, vec3 n)
 {
   // Degenerate on slivers and perfectly edge-on faces; leave those unlit.
@@ -421,6 +484,7 @@ void main() {
   }
 
   shaded = applyLighting(shaded, n);
+  shaded = applyPointLights(shaded, n);
 
   if (cloudShadow > 0.001) {
     shaded = applyCloudShadow(shaded);
@@ -430,6 +494,33 @@ void main() {
   // top of the haze.
   if (heightFog > 0.001) {
     shaded = applyHeightFog(shaded);
+  }
+
+  /*
+   * Aerial perspective: everything picks up the sky's colour with distance, because
+   * that is what looking through air does. Distinct from the fog slider, which only
+   * kicks in near the scene edge - this builds gradually across the whole view, which
+   * is what actually reads as depth.
+   *
+   * Applied to every surface regardless of texture, so it works everywhere in a world
+   * that is mostly untextured flat-shaded geometry.
+   */
+  if (aerial > 0.001) {
+    float dist = length(fWorldPos - cameraPos);
+    // Squared falloff so nearby geometry stays clean and the effect gathers with range.
+    float t = clamp(dist / 8000.0, 0.0, 1.0);
+    // Suppressed underground - there is no sky to pick colour up from in a cave.
+    shaded = mix(shaded, fogColor.rgb, t * t * aerial * (1.0 - underground));
+  }
+
+  /*
+   * Underground: darker and cooler, since the only light is whatever is carried or lit
+   * rather than daylight. Desaturated too - colour perception falls away in low light.
+   */
+  if (underground > 0.001) {
+    float grey = dot(shaded, vec3(0.2126, 0.7152, 0.0722));
+    vec3 cave = mix(shaded, vec3(grey), 0.35) * vec3(0.62, 0.66, 0.78);
+    shaded = mix(shaded, cave, underground);
   }
 
   // Shadowed and lit before fog, so fogged distance blends toward the sky colour rather
