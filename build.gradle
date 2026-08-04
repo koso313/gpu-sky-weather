@@ -39,10 +39,10 @@ tasks.register('run', JavaExec) {
 	classpath = sourceSets.test.runtimeClasspath
 	mainClass = pluginMainClass
 
-	// Assertions deliberately left off, so the dev client behaves like production.
-	// The ported renderer has asserts that trip on upstream edge cases, and with -ea an
-	// AssertionError from deep in the draw path takes the whole client down.
-	// jvmArgs "-ea"
+	// Required: ExternalPluginManager.loadBuiltin refuses to run without assertions.
+	// This means the ported renderer's asserts are live in the dev client when they are
+	// not in production, so draw-path guards must catch Throwable, not just Exception.
+	jvmArgs "-ea"
 	args "--developer-mode", "--debug"
 }
 
