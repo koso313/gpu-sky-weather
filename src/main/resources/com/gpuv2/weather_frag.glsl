@@ -44,7 +44,7 @@ float rain(vec2 uv, float t)
 		vec2 cell = floor(p);
 		float h = hash12(cell + fl * 31.7);
 
-		float density = mix(0.88, 0.72, weatherHeavy) + fl * 0.02;
+		float density = mix(0.84, 0.70, weatherHeavy) + fl * 0.02;
 		if (h < density)
 		{
 			continue;
@@ -54,7 +54,7 @@ float rain(vec2 uv, float t)
 
 		// Narrow across, long along - a rain streak, not a dash. Soft edges: a hard-edged
 		// line reads as a scratch on the lens rather than water.
-		float across = 1.0 - smoothstep(0.0, 0.085, abs(f.x - 0.5));
+		float across = 1.0 - smoothstep(0.0, 0.105, abs(f.x - 0.5));
 
 		// Streak length varies per drop, so they don't all look stamped from one shape.
 		float len = mix(0.35, 0.85, hash12(cell + 61.3));
@@ -149,11 +149,18 @@ void main()
 
 	if (weatherType == 1)
 	{
-		// Rain is largely transparent - it is visible because it refracts light, not
-		// because it is bright. Full-strength white streaks read as screen damage.
-		amount = rain(uv, t) * weatherAmount * 0.60;
-		// Dimmed to match the ambient light, so it doesn't glow white at midnight.
-		color = mix(vec3(0.26, 0.31, 0.40), vec3(0.80, 0.86, 0.96), weatherLight);
+		/*
+		 * Rain is largely transparent - visible because it refracts light rather than
+		 * because it is bright, so full-strength white streaks read as screen damage.
+		 *
+		 * The night end is a balance, not a realism exercise: dimming it as far as the
+		 * real light level would suggest makes it disappear entirely against a dark
+		 * scene, which is worse than being slightly too visible. It stays legible and
+		 * takes its colour from the sky so it still belongs to the scene.
+		 */
+		amount = rain(uv, t) * weatherAmount * 0.85;
+		vec3 dim = mix(vec3(0.46, 0.53, 0.64), fogColor.rgb * 1.35, 0.35);
+		color = mix(dim, vec3(0.82, 0.88, 0.97), weatherLight);
 	}
 	else
 	{

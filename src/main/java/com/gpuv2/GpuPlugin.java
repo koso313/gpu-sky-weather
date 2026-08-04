@@ -2543,12 +2543,18 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 		glUniform1f(uniWeatherHeavy, mode.heavy());
 		glUniform1f(uniWeatherWind, config.weatherWind() / 100f);
 
-		// Precipitation is lit by the sky, so it has to dim after dark - otherwise rain
-		// glows white against a night scene and reads as screen damage.
+		/*
+		 * Precipitation is lit by the sky, so it dims after dark - otherwise rain glows
+		 * white against a night scene and reads as screen damage.
+		 *
+		 * The floor is deliberately well above the real light level. Dimming as far as
+		 * physics suggests made rain effectively invisible at night, which is a worse
+		 * failure than being a little too bright.
+		 */
 		float night = config.skyMode() == SkyMode.TIME_OF_DAY
 			? SkyGradient.nightFactorAt(skyTime())
 			: 0f;
-		glUniform1f(uniWeatherLight, 1f - night * 0.82f);
+		glUniform1f(uniWeatherLight, 1f - night * 0.55f);
 		glUniform1f(uniWeatherLightning,
 			mode.hasLightning() && config.lightning() ? lightningFlash(weatherSeconds()) : 0f);
 		// Keeps drops and flakes from stretching with the window's aspect ratio.
