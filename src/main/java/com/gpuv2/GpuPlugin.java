@@ -305,6 +305,10 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 	private int uniTick;
 	private int uniColorblindIntensity;
 	private int uniUiColorblindIntensity;
+	private int uniGradeGamma;
+	private int uniGradeContrast;
+	private int uniGradeSaturation;
+	private int uniGradeTemperature;
 	static int uniBase;
 
 	static final float[] IDENTITY = Mat4.identity();
@@ -784,6 +788,10 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 		uniTextureAnimations = glGetUniformLocation(glProgram, "textureAnimations");
 		uniBase = glGetUniformLocation(glProgram, "base");
 		uniColorblindIntensity = glGetUniformLocation(glProgram, "colorblindIntensity");
+		uniGradeGamma = glGetUniformLocation(glProgram, "gradeGamma");
+		uniGradeContrast = glGetUniformLocation(glProgram, "gradeContrast");
+		uniGradeSaturation = glGetUniformLocation(glProgram, "gradeSaturation");
+		uniGradeTemperature = glGetUniformLocation(glProgram, "gradeTemperature");
 
 		uniTex = glGetUniformLocation(glUiProgram, "tex");
 		uniTexTargetDimensions = glGetUniformLocation(glUiProgram, "targetDimensions");
@@ -1159,6 +1167,10 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 		glUniform1i(uniDrawDistance, drawDistance * Perspective.LOCAL_TILE_SIZE);
 		glUniform1i(uniExpandedMapLoadingChunks, client.getExpandedMapLoading());
 		glUniform1f(uniColorblindIntensity, config.colorBlindIntensity());
+		glUniform1f(uniGradeGamma, config.gradeGamma() / 100f);
+		glUniform1f(uniGradeContrast, config.gradeContrast() / 100f);
+		glUniform1f(uniGradeSaturation, config.gradeSaturation() / 100f);
+		glUniform1f(uniGradeTemperature, config.gradeTemperature() / 100f);
 
 		// Brightness happens to also be stored in the texture provider, so we use that
 		TextureProvider textureProvider = client.getTextureProvider();

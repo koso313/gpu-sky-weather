@@ -129,6 +129,77 @@ public interface GpuPluginConfig extends Config
 	}
 
 	@ConfigSection(
+		name = "Colour grading",
+		description = "Final image adjustments.",
+		position = 200,
+		closedByDefault = true
+	)
+	String gradeSection = "gradeSection";
+
+	@Range(
+		min = 25,
+		max = 250
+	)
+	@ConfigItem(
+		keyName = "gradeGamma",
+		name = "Gamma",
+		description = "Midtone brightness. 100 is neutral; lower is darker, higher is brighter.",
+		position = 201,
+		section = gradeSection
+	)
+	default int gradeGamma()
+	{
+		return 100;
+	}
+
+	@Range(
+		min = 25,
+		max = 250
+	)
+	@ConfigItem(
+		keyName = "gradeContrast",
+		name = "Contrast",
+		description = "Separation between lights and darks. 100 is neutral.",
+		position = 202,
+		section = gradeSection
+	)
+	default int gradeContrast()
+	{
+		return 100;
+	}
+
+	@Range(
+		max = 250
+	)
+	@ConfigItem(
+		keyName = "gradeSaturation",
+		name = "Saturation",
+		description = "Colour intensity. 100 is neutral, 0 is greyscale.",
+		position = 203,
+		section = gradeSection
+	)
+	default int gradeSaturation()
+	{
+		return 100;
+	}
+
+	@Range(
+		min = -100,
+		max = 100
+	)
+	@ConfigItem(
+		keyName = "gradeTemperature",
+		name = "Temperature",
+		description = "Colour warmth. 0 is neutral, positive is warmer, negative is cooler.",
+		position = 204,
+		section = gradeSection
+	)
+	default int gradeTemperature()
+	{
+		return 0;
+	}
+
+	@ConfigSection(
 		name = "Sky",
 		description = "Sky and fog colour.",
 		position = 100

@@ -35,6 +35,12 @@ uniform float smoothBanding;
 uniform vec4 fogColor;
 uniform float textureLightMode;
 
+// Colour grading. All neutral at 1.0 / 0.0, in which case applyGrade is a no-op.
+uniform float gradeGamma;
+uniform float gradeContrast;
+uniform float gradeSaturation;
+uniform float gradeTemperature;
+
 in vec4 fColor;
 noperspective centroid in float fHsl;
 flat in int fTextureId;
@@ -45,6 +51,23 @@ in float fDepth;
 #endif
 
 out vec4 FragColor;
+
+/*
+ * Final grade, applied after fog so it acts on the composed image rather than on
+ * surface colours alone. Order is temperature -> gamma -> contrast -> saturation:
+ * gamma before contrast, so contrast pivots around mid-grey in the corrected space.
+ */
+vec3 applyGrade(vec3 c)
+{
+  c *= vec3(1.0 + gradeTemperature * 0.20, 1.0, 1.0 - gradeTemperature * 0.20);
+  c = pow(max(c, 0.0), vec3(1.0 / max(gradeGamma, 0.01)));
+  c = (c - 0.5) * gradeContrast + 0.5;
+
+  float luma = dot(c, vec3(0.2126, 0.7152, 0.0722));
+  c = mix(vec3(luma), c, gradeSaturation);
+
+  return clamp(c, 0.0, 1.0);
+}
 
 #include "hsl_to_rgb.glsl"
 
@@ -92,7 +115,7 @@ void main() {
 #endif
 
   vec3 mixedColor = mix(c.rgb, fogColor.rgb, fFogAmount);
-  FragColor = vec4(mixedColor, c.a);
+  FragColor = vec4(applyGrade(mixedColor), c.a);
 
 #ifdef FRAG_UVS
   if (fTextureId > 0) {
