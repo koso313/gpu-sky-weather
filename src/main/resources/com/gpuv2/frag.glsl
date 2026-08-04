@@ -134,10 +134,22 @@ vec3 applySnowCover(vec3 c, vec3 n)
     return c;
   }
 
-  float drift = gNoise(fWorldPos.xz * 0.02) * 0.6 + gNoise(fWorldPos.xz * 0.06) * 0.4;
-  float cover = smoothstep(0.35, 0.75, drift) * flat_ * groundSnow;
+  /*
+   * Drift noise runs at a few tiles per cycle, not a few per tile. World units are ~128
+   * per tile, so anything much above 0.005 varies within a single tile and reads as
+   * dirty speckle rather than snow.
+   *
+   * Snow also lies as a near-continuous blanket with thinner patches, so this is mostly
+   * uniform coverage with the noise only taking a bite out of it - not noise deciding
+   * where snow exists at all.
+   */
+  float drift = gNoise(fWorldPos.xz * 0.0018) * 0.65 + gNoise(fWorldPos.xz * 0.0055) * 0.35;
+  float patch = 0.72 + 0.28 * smoothstep(0.30, 0.70, drift);
+  float cover = clamp(patch * flat_ * groundSnow, 0.0, 1.0);
 
-  return mix(c, vec3(0.92, 0.94, 0.98), clamp(cover, 0.0, 1.0));
+  // Slightly blue-shadowed white rather than pure white, which reads as flat paint.
+  vec3 snow = vec3(0.94, 0.96, 1.0);
+  return mix(c, snow, cover);
 }
 
 /*
@@ -157,8 +169,9 @@ vec3 applyWetGround(vec3 c, vec3 n)
   vec3 wet = mix(c * 0.66, c, 0.25);
   c = mix(c, wet, flat_ * groundWet * 0.85);
 
-  float pool = gNoise(fWorldPos.xz * 0.015) * 0.65 + gNoise(fWorldPos.xz * 0.05) * 0.35;
-  float puddle = smoothstep(0.62, 0.78, pool) * flat_ * groundWet;
+  // Same scale reasoning as the snow drift above - puddles pool over several tiles.
+  float pool = gNoise(fWorldPos.xz * 0.0022) * 0.65 + gNoise(fWorldPos.xz * 0.0065) * 0.35;
+  float puddle = smoothstep(0.60, 0.76, pool) * flat_ * groundWet;
   if (puddle < 0.001)
   {
     return c;

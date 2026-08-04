@@ -246,6 +246,9 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 	/** How far either side of the view a bolt can land, in radians (~55 degrees). */
 	private static final float BOLT_SPREAD = 0.95f;
 
+	/** What an overcast sky darkens to at full night. */
+	private static final int NIGHT_OVERCAST = 0x141922;
+
 	/** Strike the current bearing was chosen for, so it is picked once and then held. */
 	private int lastLightningSlot = -1;
 	private float lightningBearing;
@@ -1806,7 +1809,17 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 		WeatherMode weather = config.weather();
 		if (weather != WeatherMode.OFF)
 		{
-			sky = blendRgb(sky, weather.overcastColor(), weather.overcast());
+			int overcast = weather.overcastColor();
+
+			// Overcast colours describe a daytime sky. Blending toward them at night would
+			// light the sky back up, so they're darkened by how dark it currently is.
+			if (config.skyMode() == SkyMode.TIME_OF_DAY)
+			{
+				float night = SkyGradient.nightFactorAt(skyTime());
+				overcast = blendRgb(overcast, NIGHT_OVERCAST, night);
+			}
+
+			sky = blendRgb(sky, overcast, weather.overcast());
 		}
 
 		return sky;

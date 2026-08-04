@@ -70,6 +70,13 @@ float snow(vec2 uv, float t)
 	float speedUp = mix(1.0, 3.4, weatherHeavy);
 	float drift = mix(0.6, 3.2, weatherHeavy);
 
+	/*
+	 * Wind arrives in gusts rather than at a constant rate. Two slow, non-harmonic terms
+	 * so the pattern doesn't visibly repeat, staying near 1 in calm snow and swinging
+	 * hard in a blizzard.
+	 */
+	float gust = 1.0 + weatherHeavy * (0.55 * sin(t * 0.31) + 0.30 * sin(t * 0.13 + 1.7));
+
 	for (int layer = 0; layer < 3; ++layer)
 	{
 		float fl = float(layer);
@@ -78,7 +85,7 @@ float snow(vec2 uv, float t)
 		vec2 p = uv * vec2(22.0 * scale * aspect, 22.0 * scale);
 		p.y += t * (1.15 + fl * 0.55) * speedUp;          // + => falls downward
 		p.x += sin(t * (0.6 + fl * 0.35) + uv.y * 7.0) * drift;
-		p.x += t * drift * 0.55 * weatherHeavy;           // blizzards blow sideways
+		p.x += t * drift * 0.55 * weatherHeavy * gust;    // blizzards blow sideways
 
 		vec2 cell = floor(p);
 		float h = hash12(cell + fl * 17.3);
@@ -92,6 +99,10 @@ float snow(vec2 uv, float t)
 		// Jitter within the cell so flakes don't sit on a visible lattice.
 		vec2 jitter = vec2(hash12(cell + 5.1), hash12(cell + 9.7)) - 0.5;
 		vec2 q = fract(p) - 0.5 - jitter * 0.55;
+
+		// Wind smears flakes along its direction, so they streak instead of staying round.
+		q.x /= 1.0 + weatherHeavy * 1.6 * abs(gust);
+
 		float d = length(q);
 
 		// Vary flake size; the smaller ones read as further away.
@@ -99,11 +110,12 @@ float snow(vec2 uv, float t)
 
 		/*
 		 * Six-point silhouette: modulating the radius by cos(6*theta) pulls the outline
-		 * into arms. Each flake gets its own rotation so they aren't all aligned, and the
-		 * nearest layer gets the most pronounced arms - distant flakes are too small for
-		 * the shape to survive, so they stay round.
+		 * into arms. Each flake gets its own rotation and tumbles slowly as it falls, so
+		 * they aren't all aligned or frozen. The nearest layer gets the most pronounced
+		 * arms - distant flakes are too small for the shape to survive, so they stay round.
 		 */
-		float theta = atan(q.y, q.x) + hash12(cell + 12.9) * 6.2831;
+		float spin = (hash12(cell + 27.4) - 0.5) * 1.6;
+		float theta = atan(q.y, q.x) + hash12(cell + 12.9) * 6.2831 + t * spin;
 		float arms = mix(0.30, 0.0, min(fl, 1.0));
 		float shaped = radius * (1.0 - arms + arms * abs(cos(theta * 3.0)));
 

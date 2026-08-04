@@ -9,10 +9,12 @@ package com.gpuv2.config;
 public enum WeatherMode
 {
 	OFF("Off", false, 0f, 0x000000, 0f),
-	RAIN("Rain", true, 0f, 0x7C848C, 0.55f),
-	STORM("Storm", true, 1f, 0x4A5057, 0.85f),
-	SNOW("Snow", false, 0f, 0xAEB6BE, 0.60f),
-	BLIZZARD("Blizzard", false, 1f, 0xC2C8CE, 0.92f);
+	RAIN("Rain", true, 0f, 0x7C848C, 0.60f),
+	STORM("Storm", true, 1f, 0x4A5057, 0.88f),
+	// Snow skies are bright and heavy rather than grey - the light bounces off the cloud
+	// base and the falling snow, so they read almost white.
+	SNOW("Snow", false, 0f, 0xD6DCE2, 0.75f),
+	BLIZZARD("Blizzard", false, 1f, 0xE6EBEF, 0.95f);
 
 	private final String name;
 	private final boolean rainLike;
