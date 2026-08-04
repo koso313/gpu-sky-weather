@@ -248,10 +248,15 @@ vec3 aurora(vec3 dir, float up, float night)
 	{
 		float fb = float(band);
 
-		// Where this curtain's lower edge sits, snaking with bearing and time.
+		/*
+		 * Where this curtain's lower edge sits. Two sines give the broad snake, and a
+		 * noise term roughens it - a purely sinusoidal edge reads as a clean drawn curve
+		 * rather than the ragged bottom a real curtain has.
+		 */
 		float base = 0.13 + fb * 0.075
 			+ sin(bearing * 2.3 + t * 0.055 + fb * 2.1) * 0.030
-			+ sin(bearing * 4.7 - t * 0.037 + fb * 4.3) * 0.017;
+			+ sin(bearing * 4.7 - t * 0.037 + fb * 4.3) * 0.017
+			+ (valueNoise(vec2(bearing * 9.0 + t * 0.04, fb * 5.0)) - 0.5) * 0.026;
 
 		float above = h - base;
 		if (above < 0.0)
@@ -259,9 +264,16 @@ vec3 aurora(vec3 dir, float up, float night)
 			continue;
 		}
 
-		// Bright, tight lower edge fading up - the defining aurora gradient.
-		float height = mix(0.20, 0.14, fb);
-		float fade = (1.0 - smoothstep(0.0, height, above)) * smoothstep(0.0, 0.012, above);
+		/*
+		 * Ray length varies along the ribbon, so some shoot well above the rest instead
+		 * of the whole curtain ending at one flat height.
+		 */
+		float lengthVary = valueNoise(vec2(bearing * 14.0 + t * 0.03, fb * 2.0 + 3.1));
+		float height = mix(0.20, 0.14, fb) * (0.55 + 1.15 * lengthVary);
+
+		// Bright, tight lower edge fading up - the defining aurora gradient. The base is
+		// softened rather than a hard cut, so the bottom dissolves instead of stopping.
+		float fade = (1.0 - smoothstep(0.0, height, above)) * smoothstep(0.0, 0.030, above);
 
 		/*
 		 * Vertical rays. The large bearing multiplier against a small height one is what
@@ -276,9 +288,15 @@ vec3 aurora(vec3 dir, float up, float night)
 		// Slow brightening and dimming along the ribbon, so it pulses rather than sitting.
 		float pulse = 0.55 + 0.45 * valueNoise(vec2(bearing * 1.7 + t * 0.045, fb * 3.0));
 
-		// Green along the bottom edge climbing into violet, as real aurora does.
-		vec3 col = mix(vec3(0.20, 1.0, 0.55), vec3(0.45, 0.22, 0.95),
-			smoothstep(0.0, height * 0.9, above));
+		/*
+		 * Green along the bottom edge climbing into violet. The transition sits low in
+		 * the curtain on purpose: putting it near the top hides the violet entirely,
+		 * because that is exactly where the brightness fade has already gone to nothing.
+		 * The violet is also boosted, since it is competing with a much brighter green.
+		 */
+		float up01 = smoothstep(0.0, height * 0.45, above);
+		vec3 col = mix(vec3(0.20, 1.0, 0.55), vec3(0.70, 0.30, 1.0), up01);
+		col *= 1.0 + up01 * 0.6;
 
 		total += col * rays * fade * pulse * mix(1.0, 0.6, fb);
 	}
