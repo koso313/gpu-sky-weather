@@ -208,6 +208,7 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 	private int uniWeatherHeavy;
 	private int uniWeatherLightning;
 	private int uniWeatherWind;
+	private int uniWeatherLight;
 
 	private int uniSkyColor;
 	private int uniSkyNight;
@@ -941,6 +942,7 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 		uniWeatherHeavy = glGetUniformLocation(glWeatherProgram, "weatherHeavy");
 		uniWeatherLightning = glGetUniformLocation(glWeatherProgram, "lightning");
 		uniWeatherWind = glGetUniformLocation(glWeatherProgram, "weatherWind");
+		uniWeatherLight = glGetUniformLocation(glWeatherProgram, "weatherLight");
 
 		uniSkyShowMoon = glGetUniformLocation(glSkyProgram, "showMoon");
 		uniSkyShowSun = glGetUniformLocation(glSkyProgram, "showSun");
@@ -2111,6 +2113,13 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 		glUniform1f(uniWeatherAmount, config.weatherAmount() / 100f);
 		glUniform1f(uniWeatherHeavy, mode.heavy());
 		glUniform1f(uniWeatherWind, config.weatherWind() / 100f);
+
+		// Precipitation is lit by the sky, so it has to dim after dark - otherwise rain
+		// glows white against a night scene and reads as screen damage.
+		float night = config.skyMode() == SkyMode.TIME_OF_DAY
+			? SkyGradient.nightFactorAt(skyTime())
+			: 0f;
+		glUniform1f(uniWeatherLight, 1f - night * 0.82f);
 		glUniform1f(uniWeatherLightning,
 			mode.hasLightning() && config.lightning() ? lightningFlash(weatherSeconds()) : 0f);
 		// Keeps drops and flakes from stretching with the window's aspect ratio.

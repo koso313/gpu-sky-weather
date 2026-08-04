@@ -8,6 +8,7 @@ uniform float weatherTime;
 uniform float weatherAmount;  // 0..1
 uniform float weatherHeavy;   // 0 = calm, 1 = storm/blizzard
 uniform float weatherWind;    // sideways drift multiplier; 1.0 is the default strength
+uniform float weatherLight;   // ambient brightness, 1 = daylight, low at night
 uniform float lightning;      // 0..1 flash this frame
 uniform float aspect;         // viewport width / height
 
@@ -51,11 +52,18 @@ float rain(vec2 uv, float t)
 
 		vec2 f = fract(p);
 
-		// Narrow across, long along - a rain streak, not a dash.
-		float across = 1.0 - smoothstep(0.0, 0.055, abs(f.x - 0.5));
-		float along = smoothstep(0.0, 0.30, f.y) * (1.0 - smoothstep(0.45, 1.0, f.y));
+		// Narrow across, long along - a rain streak, not a dash. Soft edges: a hard-edged
+		// line reads as a scratch on the lens rather than water.
+		float across = 1.0 - smoothstep(0.0, 0.085, abs(f.x - 0.5));
 
-		total += across * along * (0.5 + 0.5 * h) / (1.0 + fl * 0.5);
+		// Streak length varies per drop, so they don't all look stamped from one shape.
+		float len = mix(0.35, 0.85, hash12(cell + 61.3));
+		float along = smoothstep(0.0, 0.14, f.y) * (1.0 - smoothstep(len * 0.5, len, f.y));
+
+		// Brighter at the leading end, fading back along the trail.
+		float taper = 1.0 - smoothstep(0.0, len, f.y) * 0.65;
+
+		total += across * along * taper * (0.35 + 0.65 * h) / (1.0 + fl * 0.6);
 	}
 
 	return total;
@@ -141,15 +149,19 @@ void main()
 
 	if (weatherType == 1)
 	{
-		amount = rain(uv, t) * weatherAmount;
-		color = vec3(0.78, 0.84, 0.94);
+		// Rain is largely transparent - it is visible because it refracts light, not
+		// because it is bright. Full-strength white streaks read as screen damage.
+		amount = rain(uv, t) * weatherAmount * 0.60;
+		// Dimmed to match the ambient light, so it doesn't glow white at midnight.
+		color = mix(vec3(0.26, 0.31, 0.40), vec3(0.80, 0.86, 0.96), weatherLight);
 	}
 	else
 	{
 		// Snow is scaled less by the amount slider than rain: thinning snowfall should
 		// mean fewer flakes, not translucent grey ones.
 		amount = snow(uv, t) * (0.55 + 0.45 * weatherAmount);
-		color = vec3(1.0, 1.0, 1.0);
+		// Dims far less than rain at night - snow stays visible in low light.
+		color = mix(vec3(0.62, 0.66, 0.76), vec3(1.0, 1.0, 1.0), 0.35 + 0.65 * weatherLight);
 	}
 
 	amount = clamp(amount, 0.0, 1.0);
