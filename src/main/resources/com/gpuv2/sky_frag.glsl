@@ -329,7 +329,7 @@ void main()
 		// Driven by the sky clock rather than a free-running timer, so the deck advances
 		// with the hour: dawn and dusk show a different sky, and scrubbing the preview
 		// hour moves the clouds along with the sun instead of leaving them put.
-		uv += vec2(cloudTime * 0.0012, cloudTime * 0.0006);
+		uv += vec2(cloudTime * 0.0020, cloudTime * 0.0010);
 
 		float n = cloudFbm(uv * 1.4, cloudTime);
 		float cover = mix(0.72, 0.28, cloudAmount);

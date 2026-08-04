@@ -786,6 +786,23 @@ public interface GpuPluginConfig extends Config
 	}
 
 	@Range(
+		min = 1,
+		max = 3
+	)
+	@ConfigItem(
+		keyName = "cloudSpeed",
+		name = "Cloud speed",
+		description = "How fast clouds drift and reshape. 1 is a realistic crawl, "
+			+ "3 is a brisk sky.",
+		position = 110,
+		section = skySection
+	)
+	default int cloudSpeed()
+	{
+		return 1;
+	}
+
+	@Range(
 		max = 100
 	)
 	@ConfigItem(

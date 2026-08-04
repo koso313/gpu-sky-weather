@@ -162,7 +162,7 @@ vec3 applyCloudShadow(vec3 c)
   // Same drift rates as the sky deck, on the same clock, so the shadows travel and
   // reshape with the clouds overhead rather than on their own schedule.
   vec2 uv = fWorldPos.xz * 0.0011
-    + vec2(cloudShadowTime * 0.0012, cloudShadowTime * 0.0006);
+    + vec2(cloudShadowTime * 0.0020, cloudShadowTime * 0.0010);
   float n = gFbm(uv * 1.4, cloudShadowTime);
 
   // Broad soft patches: most of the ground is lit, with shadow pooling under the thicker

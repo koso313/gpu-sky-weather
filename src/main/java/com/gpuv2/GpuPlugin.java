@@ -1929,7 +1929,30 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 		// Adding elapsed to it keeps the value strictly increasing, so it neither steps at
 		// hour boundaries nor jumps at midnight the way seconds-of-day would.
 		float base = preview < 0 ? skyClockStartSeconds : (preview % 24) * 3600f;
-		return base + elapsed;
+
+		/*
+		 * Speed scales the clock rather than the drift rates, so it carries into the
+		 * domain warp and per-octave drift too - faster clouds also reshape faster, which
+		 * is what makes the higher settings read as weather moving through rather than a
+		 * static pattern being dragged past more quickly.
+		 *
+		 * Kept to modest multipliers: the drift offset grows with this, and large offsets
+		 * push the noise hash into the range where its precision fails.
+		 */
+		return (base + elapsed) * cloudSpeedMultiplier();
+	}
+
+	private float cloudSpeedMultiplier()
+	{
+		switch (config.cloudSpeed())
+		{
+			case 3:
+				return 3.5f;
+			case 2:
+				return 2f;
+			default:
+				return 1f;
+		}
 	}
 
 	private void drawSkybox(Scene scene, int sky, float cameraX, float cameraY, float cameraZ,
