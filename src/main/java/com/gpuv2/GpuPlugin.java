@@ -62,6 +62,7 @@ import java.awt.Color;
 import java.time.LocalTime;
 import com.gpuv2.config.GraphicsPreset;
 import com.gpuv2.config.SkyMode;
+import com.gpuv2.config.WeatherMode;
 import net.runelite.client.config.ConfigManager;
 import net.runelite.api.ChatMessageType;
 import java.util.Set;
@@ -173,6 +174,10 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 		.add(GL_VERTEX_SHADER, "sky_vert.glsl")
 		.add(GL_FRAGMENT_SHADER, "bloom_frag.glsl");
 
+	static final Shader WEATHER_PROGRAM = new Shader()
+		.add(GL_VERTEX_SHADER, "sky_vert.glsl")
+		.add(GL_FRAGMENT_SHADER, "weather_frag.glsl");
+
 	static int glProgram;
 	private int glUiProgram;
 	private int glSkyProgram;
@@ -194,6 +199,12 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 	private int uniBloomBlurDir;
 	private int uniBloomThreshold;
 	private int uniBloomIntensity;
+
+	private int glWeatherProgram;
+	private int uniWeatherType;
+	private int uniWeatherTime;
+	private int uniWeatherAmount;
+	private int uniWeatherAspect;
 
 	private int uniSkyColor;
 	private int uniSkyNight;
@@ -835,6 +846,7 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 		glUiProgram = UI_PROGRAM.compile(template);
 		glSkyProgram = SKY_PROGRAM.compile(template);
 		glBloomProgram = BLOOM_PROGRAM.compile(template);
+		glWeatherProgram = WEATHER_PROGRAM.compile(template);
 
 		glBindVertexArray(0);
 
@@ -902,6 +914,11 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 		uniBloomThreshold = glGetUniformLocation(glBloomProgram, "threshold");
 		uniBloomIntensity = glGetUniformLocation(glBloomProgram, "intensity");
 
+		uniWeatherType = glGetUniformLocation(glWeatherProgram, "weatherType");
+		uniWeatherTime = glGetUniformLocation(glWeatherProgram, "weatherTime");
+		uniWeatherAmount = glGetUniformLocation(glWeatherProgram, "weatherAmount");
+		uniWeatherAspect = glGetUniformLocation(glWeatherProgram, "aspect");
+
 		uniSkyShowMoon = glGetUniformLocation(glSkyProgram, "showMoon");
 		uniSkyShowSun = glGetUniformLocation(glSkyProgram, "showSun");
 		uniSkyCloudAmount = glGetUniformLocation(glSkyProgram, "cloudAmount");
@@ -921,6 +938,9 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 
 		glDeleteProgram(glBloomProgram);
 		glBloomProgram = 0;
+
+		glDeleteProgram(glWeatherProgram);
+		glWeatherProgram = 0;
 	}
 
 	private void initVao()
@@ -1844,6 +1864,35 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 		glDepthMask(true);
 	}
 
+	/**
+	 * Draws precipitation over the composed scene with normal alpha blending.
+	 */
+	private void drawWeather(int defaultFbo, int width, int height)
+	{
+		glBindFramebuffer(GL_FRAMEBUFFER, defaultFbo);
+		glViewport(0, 0, width, height);
+
+		glUseProgram(glWeatherProgram);
+		glBindVertexArray(vaoSkyHandle);
+		glDisable(GL_DEPTH_TEST);
+		glDepthMask(false);
+		glEnable(GL_BLEND);
+		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+		glUniform1i(uniWeatherType, config.weather() == WeatherMode.RAIN ? 1 : 2);
+		glUniform1f(uniWeatherTime, (System.nanoTime() % 1_000_000_000_000L) / 1e9f);
+		glUniform1f(uniWeatherAmount, config.weatherAmount() / 100f);
+		// Keeps drops and flakes from stretching with the window's aspect ratio.
+		glUniform1f(uniWeatherAspect, height > 0 ? (float) width / height : 1f);
+
+		glDrawArrays(GL_TRIANGLES, 0, 3);
+
+		glDisable(GL_BLEND);
+		glBindVertexArray(0);
+		glUseProgram(0);
+		glDepthMask(true);
+	}
+
 	private void blitSceneFbo()
 	{
 		int width = lastStretchedCanvasWidth;
@@ -1872,6 +1921,13 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 		if (bloom)
 		{
 			compositeBloom(defaultFbo, width, height);
+		}
+
+		// After the scene is on the default framebuffer but before the UI is composited,
+		// so precipitation falls in front of the world and behind the interface.
+		if (config.weather() != WeatherMode.OFF && glWeatherProgram != 0)
+		{
+			drawWeather(defaultFbo, width, height);
 		}
 
 		// Reset

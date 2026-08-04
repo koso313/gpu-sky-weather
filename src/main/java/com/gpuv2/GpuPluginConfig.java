@@ -36,6 +36,7 @@ import com.gpuv2.config.AntiAliasingMode;
 import com.gpuv2.config.ColorBlindMode;
 import com.gpuv2.config.GraphicsPreset;
 import com.gpuv2.config.SkyMode;
+import com.gpuv2.config.WeatherMode;
 import com.gpuv2.config.UIScalingMode;
 
 @ConfigGroup(GpuPluginConfig.GROUP)
@@ -139,6 +140,42 @@ public interface GpuPluginConfig extends Config
 	default int fogDepth()
 	{
 		return 0;
+	}
+
+	@ConfigSection(
+		name = "Weather",
+		description = "Rain and snow drawn over the scene.",
+		position = 205,
+		closedByDefault = true
+	)
+	String weatherSection = "weatherSection";
+
+	@ConfigItem(
+		keyName = "weather",
+		name = "Weather",
+		description = "Precipitation drawn in front of the world and behind the interface.",
+		position = 206,
+		section = weatherSection
+	)
+	default WeatherMode weather()
+	{
+		return WeatherMode.OFF;
+	}
+
+	@Range(
+		min = 1,
+		max = 100
+	)
+	@ConfigItem(
+		keyName = "weatherAmount",
+		name = "Amount",
+		description = "How heavy the rain or snow is.",
+		position = 207,
+		section = weatherSection
+	)
+	default int weatherAmount()
+	{
+		return 55;
 	}
 
 	@ConfigSection(
