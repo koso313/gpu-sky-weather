@@ -367,6 +367,8 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 	private int lastAnisotropicFilteringLevel = -1;
 	/** -1 until first applied, then 0 or 1. */
 	private int lastSmoothTextures = -1;
+	/** Texture array the current filter settings were applied to. */
+	private int lastFilterArrayId = -1;
 
 	/** Last FPS target pushed to the client, to avoid setting it every tick. */
 	private int lastAppliedFpsTarget = -1;
@@ -563,6 +565,7 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 			{
 				fboScene = -1;
 				lastAnisotropicFilteringLevel = -1;
+				lastSmoothTextures = -1;
 
 				AWTContext.loadNatives();
 
@@ -648,6 +651,9 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 				lastAntiAliasingMode = null;
 
 				textureArrayId = -1;
+				// Rebuilding the array resets its filters, so force them to reapply.
+				lastAnisotropicFilteringLevel = -1;
+				lastSmoothTextures = -1;
 
 				if (client.getGameState() == GameState.LOGGED_IN)
 				{
@@ -1490,12 +1496,21 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 		final int anisotropicFilteringLevel = config.anisotropicFilteringLevel();
 		final int smoothTextures = config.smoothTextures() ? 1 : 0;
 
+		/*
+		 * The array id is part of the check, not just the settings. Rebuilding the texture
+		 * array resets its filters to the defaults, and tracking only the settings meant
+		 * the cache still claimed they were applied - so they never went back on and the
+		 * whole thing silently reverted. Keying off the array itself makes that
+		 * self-correcting rather than depending on every teardown path remembering.
+		 */
 		if (textureArrayId != -1
-			&& (lastAnisotropicFilteringLevel != anisotropicFilteringLevel
+			&& (lastFilterArrayId != textureArrayId
+				|| lastAnisotropicFilteringLevel != anisotropicFilteringLevel
 				|| lastSmoothTextures != smoothTextures))
 		{
 			textureManager.setTextureFiltering(textureArrayId, anisotropicFilteringLevel,
 				smoothTextures == 1);
+			lastFilterArrayId = textureArrayId;
 			lastAnisotropicFilteringLevel = anisotropicFilteringLevel;
 			lastSmoothTextures = smoothTextures;
 		}
@@ -3291,6 +3306,7 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 			}
 			textureArrayId = -1;
 			lastAnisotropicFilteringLevel = -1;
+			lastSmoothTextures = -1;
 		}
 	}
 
