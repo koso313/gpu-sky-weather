@@ -2202,7 +2202,8 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 		}
 
 		Color tint = config.lightColour();
-		float strength = config.dynamicLights() / 100f;
+		// 0-10 scale, where 10 matches the brightest the old 0-200 scale reached.
+		float strength = config.dynamicLights() / 5f;
 		float radius = config.lightRadius() * Perspective.LOCAL_TILE_SIZE;
 
 		for (int i = 0; i < count; ++i)

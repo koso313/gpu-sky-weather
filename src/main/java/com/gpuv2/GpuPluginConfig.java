@@ -995,13 +995,14 @@ public interface GpuPluginConfig extends Config
 	}
 
 	@Range(
-		max = 200
+		max = 10
 	)
 	@ConfigItem(
 		keyName = "dynamicLights",
 		name = "Dynamic lights",
-		description = "Fires, torches, lanterns and braziers cast light on their "
-			+ "surroundings. Found automatically by name - no setup needed. 0 disables.",
+		description = "Brightness of light cast by fires, torches, lanterns and braziers. "
+			+ "0 to 10, where 0 is off and 10 is brightest. Sources are found "
+			+ "automatically by name - no setup needed.",
 		position = 557,
 		section = lightSection
 	)
