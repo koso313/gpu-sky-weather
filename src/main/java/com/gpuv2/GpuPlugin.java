@@ -2147,6 +2147,7 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 		}
 		if (lightIds == null)
 		{
+			// Optional extras only - the scanner finds lights by name on its own.
 			lightIds = parseIds(config.lightObjectIds());
 		}
 

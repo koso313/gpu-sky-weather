@@ -1000,9 +1000,8 @@ public interface GpuPluginConfig extends Config
 	@ConfigItem(
 		keyName = "dynamicLights",
 		name = "Dynamic lights",
-		description = "Fires, torches and lanterns cast light on their surroundings. "
-			+ "0 disables. Needs object ids below - type ::lightids in chat next to a "
-			+ "fire to find them.",
+		description = "Fires, torches, lanterns and braziers cast light on their "
+			+ "surroundings. Found automatically by name - no setup needed. 0 disables.",
 		position = 557,
 		section = lightSection
 	)
@@ -1013,9 +1012,10 @@ public interface GpuPluginConfig extends Config
 
 	@ConfigItem(
 		keyName = "lightObjectIds",
-		name = "Light object ids",
-		description = "Comma-separated object ids that cast light. Empty means none - "
-			+ "stand next to a fire and type ::lightids to discover them.",
+		name = "Extra light ids",
+		description = "Optional. Comma-separated object ids to light in addition to the "
+			+ "ones found by name, for anything unusual the names miss. ::lightids lists "
+			+ "what is nearby.",
 		position = 558,
 		section = lightSection
 	)
