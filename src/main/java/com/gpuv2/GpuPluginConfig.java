@@ -143,6 +143,63 @@ public interface GpuPluginConfig extends Config
 	}
 
 	@ConfigItem(
+		keyName = "fxaa",
+		name = "FXAA",
+		description = "Post-process anti-aliasing. Smooths shader-drawn edges such as the "
+			+ "aurora, clouds and lightning, which MSAA cannot touch since they are not "
+			+ "geometry.",
+		position = 151,
+		section = displaySection
+	)
+	default boolean fxaa()
+	{
+		return false;
+	}
+
+	@Range(
+		max = 100
+	)
+	@ConfigItem(
+		keyName = "sharpen",
+		name = "Sharpening",
+		description = "Crispens edges. 0 disables. Pairs well with FXAA, which softens.",
+		position = 152,
+		section = displaySection
+	)
+	default int sharpen()
+	{
+		return 0;
+	}
+
+	@Range(
+		max = 100
+	)
+	@ConfigItem(
+		keyName = "vignette",
+		name = "Vignette",
+		description = "Darkens the corners of the screen. 0 disables.",
+		position = 153,
+		section = displaySection
+	)
+	default int vignette()
+	{
+		return 0;
+	}
+
+	@ConfigItem(
+		keyName = "smoothTextures",
+		name = "Smooth textures",
+		description = "Blend textures instead of showing hard pixels up close. A matter "
+			+ "of taste rather than quality.",
+		position = 154,
+		section = displaySection
+	)
+	default boolean smoothTextures()
+	{
+		return false;
+	}
+
+	@ConfigItem(
 		keyName = "uiScalingMode",
 		name = "UI scaling mode",
 		description = "Sampling function to use for the UI in stretched mode.",
@@ -239,6 +296,52 @@ public interface GpuPluginConfig extends Config
 	default int fpsTarget()
 	{
 		return 60;
+	}
+
+	@Range(
+		max = 60
+	)
+	@ConfigItem(
+		keyName = "unfocusedFpsTarget",
+		name = "FPS when unfocused",
+		description = "Frame rate cap while the client is in the background. 0 keeps the "
+			+ "normal target. Needs Unlock FPS.",
+		position = 25,
+		section = performanceSection
+	)
+	default int unfocusedFpsTarget()
+	{
+		return 0;
+	}
+
+	@Range(
+		min = 1,
+		max = 3
+	)
+	@ConfigItem(
+		keyName = "effectQuality",
+		name = "Effect quality",
+		description = "Sample counts for the expensive effects - god rays, cloud detail "
+			+ "and shooting star trails. 1 is cheapest, 3 is best.",
+		position = 26,
+		section = performanceSection
+	)
+	default int effectQuality()
+	{
+		return 3;
+	}
+
+	@ConfigItem(
+		keyName = "postProcessing",
+		name = "Post-processing",
+		description = "Master switch for bloom, god rays, FXAA, sharpening and vignette. "
+			+ "Turn off to see what they cost.",
+		position = 27,
+		section = performanceSection
+	)
+	default boolean postProcessing()
+	{
+		return true;
 	}
 
 	@Range(

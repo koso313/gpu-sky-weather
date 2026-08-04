@@ -115,6 +115,20 @@ class TextureManager
 		}
 	}
 
+	/**
+	 * Magnification filter for the texture array.
+	 *
+	 * <p>Nearest is the default because the game's textures are low resolution and pixel
+	 * art - linear smooths them into mush up close for some, and looks softer and cleaner
+	 * to others, so it is a taste setting rather than a quality one.
+	 */
+	void setSmoothTextures(int textureArrayId, boolean smooth)
+	{
+		glBindTexture(GL_TEXTURE_2D_ARRAY, textureArrayId);
+		glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MAG_FILTER,
+			smooth ? GL_LINEAR : GL_NEAREST);
+	}
+
 	void freeTextureArray(int textureArrayId)
 	{
 		glDeleteTextures(textureArrayId);

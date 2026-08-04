@@ -28,6 +28,7 @@ import com.google.common.base.Stopwatch;
 import com.google.common.primitives.Ints;
 import com.google.inject.Provides;
 import java.awt.Canvas;
+import java.awt.Window;
 import java.awt.Dimension;
 import java.awt.GraphicsConfiguration;
 import java.awt.Image;
@@ -187,6 +188,10 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 		.add(GL_VERTEX_SHADER, "sky_vert.glsl")
 		.add(GL_FRAGMENT_SHADER, "godray_frag.glsl");
 
+	static final Shader POST_PROGRAM = new Shader()
+		.add(GL_VERTEX_SHADER, "sky_vert.glsl")
+		.add(GL_FRAGMENT_SHADER, "post_frag.glsl");
+
 	static int glProgram;
 	private int glUiProgram;
 	private int glSkyProgram;
@@ -226,6 +231,13 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 	 */
 	private int lastSkyColor;
 
+	private int glPostProgram;
+	private int uniPostSrc;
+	private int uniPostTexel;
+	private int uniPostFxaa;
+	private int uniPostSharpen;
+	private int uniPostVignette;
+
 	private int glGodrayProgram;
 	private int uniRaySrc;
 	private int uniRayPass;
@@ -234,6 +246,7 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 	private int uniRayDecay;
 	private int uniRayDensity;
 	private int uniRayIntensity;
+	private int uniRayCount;
 
 	/** Sun position in 0..1 screen space, filled by {@link #updateSunScreenPos}. */
 	private final float[] sunScreen = new float[2];
@@ -272,6 +285,8 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 	private int uniSkyMoonGlow;
 	private int uniSkyCloudAmount;
 	private int uniSkyCloudOpacity;
+	private int uniSkyMeteorSamples;
+	private int uniSkyCloudOctaves;
 	private int uniSkyMeteorActive;
 	private int uniSkyMeteorTravel;
 	private int uniSkyMeteorPath;
@@ -350,6 +365,11 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 	private int lastStretchedCanvasHeight;
 	private AntiAliasingMode lastAntiAliasingMode;
 	private int lastAnisotropicFilteringLevel = -1;
+	/** -1 until first applied, then 0 or 1. */
+	private int lastSmoothTextures = -1;
+
+	/** Last FPS target pushed to the client, to avoid setting it every tick. */
+	private int lastAppliedFpsTarget = -1;
 
 	private GpuFloatBuffer uniformBuffer;
 
@@ -960,6 +980,7 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 		glBloomProgram = BLOOM_PROGRAM.compile(template);
 		glWeatherProgram = WEATHER_PROGRAM.compile(template);
 		glGodrayProgram = GODRAY_PROGRAM.compile(template);
+		glPostProgram = POST_PROGRAM.compile(template);
 
 		glBindVertexArray(0);
 
@@ -1042,6 +1063,12 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 		uniWeatherLight = glGetUniformLocation(glWeatherProgram, "weatherLight");
 		uniWeatherSkyColor = glGetUniformLocation(glWeatherProgram, "weatherSkyColor");
 
+		uniPostSrc = glGetUniformLocation(glPostProgram, "src");
+		uniPostTexel = glGetUniformLocation(glPostProgram, "texel");
+		uniPostFxaa = glGetUniformLocation(glPostProgram, "useFxaa");
+		uniPostSharpen = glGetUniformLocation(glPostProgram, "sharpen");
+		uniPostVignette = glGetUniformLocation(glPostProgram, "vignette");
+
 		uniRaySrc = glGetUniformLocation(glGodrayProgram, "src");
 		uniRayPass = glGetUniformLocation(glGodrayProgram, "rayPass");
 		uniRaySunUv = glGetUniformLocation(glGodrayProgram, "sunUv");
@@ -1049,6 +1076,7 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 		uniRayDecay = glGetUniformLocation(glGodrayProgram, "decay");
 		uniRayDensity = glGetUniformLocation(glGodrayProgram, "density");
 		uniRayIntensity = glGetUniformLocation(glGodrayProgram, "intensity");
+		uniRayCount = glGetUniformLocation(glGodrayProgram, "rayCount");
 
 		uniSkyShowMoon = glGetUniformLocation(glSkyProgram, "showMoon");
 		uniSkyShowSun = glGetUniformLocation(glSkyProgram, "showSun");
@@ -1057,6 +1085,8 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 		uniSkyMoonGlow = glGetUniformLocation(glSkyProgram, "moonGlow");
 		uniSkyCloudAmount = glGetUniformLocation(glSkyProgram, "cloudAmount");
 		uniSkyCloudOpacity = glGetUniformLocation(glSkyProgram, "cloudOpacity");
+		uniSkyMeteorSamples = glGetUniformLocation(glSkyProgram, "meteorSamples");
+		uniSkyCloudOctaves = glGetUniformLocation(glSkyProgram, "cloudOctaves");
 		uniSkyMeteorActive = glGetUniformLocation(glSkyProgram, "meteorActive");
 		uniSkyMeteorTravel = glGetUniformLocation(glSkyProgram, "meteorTravel");
 		uniSkyMeteorPath = glGetUniformLocation(glSkyProgram, "meteorPath");
@@ -1086,6 +1116,9 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 
 		glDeleteProgram(glGodrayProgram);
 		glGodrayProgram = 0;
+
+		glDeleteProgram(glPostProgram);
+		glPostProgram = 0;
 	}
 
 	private void initVao()
@@ -1450,6 +1483,14 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 			glBindFramebuffer(GL_DRAW_FRAMEBUFFER, fboScene);
 		}
 
+		// Texture magnification filter, only reapplied when it actually changes.
+		final boolean smoothTextures = config.smoothTextures();
+		if (textureArrayId != -1 && lastSmoothTextures != (smoothTextures ? 1 : 0))
+		{
+			textureManager.setSmoothTextures(textureArrayId, smoothTextures);
+			lastSmoothTextures = smoothTextures ? 1 : 0;
+		}
+
 		// Setup anisotropic filtering
 		final int anisotropicFilteringLevel = config.anisotropicFilteringLevel();
 
@@ -1623,6 +1664,10 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 		boolean meteorsVisible = config.nightSky() && clearSky > 0.35f
 			&& SkyGradient.nightFactorAt(time) >= 0.35f;
 		updateMeteor(meteorsVisible ? config.shootingStars() : 0);
+
+		int quality = config.effectQuality();
+		glUniform1i(uniSkyMeteorSamples, quality >= 3 ? 14 : quality == 2 ? 10 : 6);
+		glUniform1i(uniSkyCloudOctaves, quality >= 3 ? 5 : quality == 2 ? 4 : 3);
 
 		glUniform1f(uniSkyMeteorActive, meteorActive ? 1f : 0f);
 		glUniform1f(uniSkyMeteorTravel, meteorTravel);
@@ -2336,6 +2381,37 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 	}
 
 	/**
+	 * Draws the resolved scene through anti-aliasing, sharpening and vignette, in place of
+	 * the plain blit.
+	 */
+	private void renderImagePass(int defaultFbo, int width, int height)
+	{
+		glBindFramebuffer(GL_FRAMEBUFFER, defaultFbo);
+		glViewport(0, 0, width, height);
+
+		glUseProgram(glPostProgram);
+		glBindVertexArray(vaoSkyHandle);
+		glDisable(GL_DEPTH_TEST);
+		glDepthMask(false);
+		glDisable(GL_BLEND);
+
+		glActiveTexture(GL_TEXTURE0);
+		glBindTexture(GL_TEXTURE_2D, texResolve);
+		glUniform1i(uniPostSrc, 0);
+		glUniform2f(uniPostTexel, 1f / Math.max(1, width), 1f / Math.max(1, height));
+		glUniform1f(uniPostFxaa, config.fxaa() ? 1f : 0f);
+		glUniform1f(uniPostSharpen, config.sharpen() / 100f * 0.5f);
+		glUniform1f(uniPostVignette, config.vignette() / 100f * 0.8f);
+
+		glDrawArrays(GL_TRIANGLES, 0, 3);
+
+		glBindTexture(GL_TEXTURE_2D, 0);
+		glBindVertexArray(0);
+		glUseProgram(0);
+		glDepthMask(true);
+	}
+
+	/**
 	 * Extracts light near the sun and smears it radially outward, leaving the result in
 	 * texBloom[0].
 	 */
@@ -2365,6 +2441,8 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 		glUniform1f(uniRayDecay, 0.92f);
 		glUniform1f(uniRayDensity, config.godRayLength() / 100f);
 		glUniform1f(uniRayIntensity, 1f);
+		int rq = config.effectQuality();
+		glUniform1i(uniRayCount, rq >= 3 ? 24 : rq == 2 ? 16 : 10);
 		glDrawArrays(GL_TRIANGLES, 0, 3);
 
 		glBindTexture(GL_TEXTURE_2D, 0);
@@ -2602,14 +2680,17 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 
 		int defaultFbo = awtContext.getFramebuffer(false);
 
-		boolean canPost = fboResolve != -1;
+		// One switch to bypass every post pass, for comparing what they actually cost.
+		boolean canPost = fboResolve != -1 && config.postProcessing();
 		boolean bloom = canPost && config.bloomEnabled() && glBloomProgram != 0;
 		boolean rays = canPost && config.godRays() > 0 && glGodrayProgram != 0
 			&& updateSunScreenPos();
+		boolean imagePass = canPost && glPostProgram != 0
+			&& (config.fxaa() || config.sharpen() > 0 || config.vignette() > 0);
 
-		if (bloom || rays)
+		if (bloom || rays || imagePass)
 		{
-			// Must run before the scene is blitted out, while fboScene still holds it.
+			// Must run before the scene leaves fboScene.
 			resolveScene(width, height);
 		}
 
@@ -2623,10 +2704,19 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 			renderGodRays();
 		}
 
-		glBindFramebuffer(GL_READ_FRAMEBUFFER, fboScene);
-		glBindFramebuffer(GL_DRAW_FRAMEBUFFER, defaultFbo);
-		glBlitFramebuffer(0, 0, width, height, 0, 0, width, height,
-			GL_COLOR_BUFFER_BIT, GL_NEAREST);
+		if (imagePass)
+		{
+			// Draws the scene through FXAA/sharpen/vignette instead of blitting it, so
+			// bloom and god rays still composite on top afterwards.
+			renderImagePass(defaultFbo, width, height);
+		}
+		else
+		{
+			glBindFramebuffer(GL_READ_FRAMEBUFFER, fboScene);
+			glBindFramebuffer(GL_DRAW_FRAMEBUFFER, defaultFbo);
+			glBlitFramebuffer(0, 0, width, height, 0, 0, width, height,
+				GL_COLOR_BUFFER_BIT, GL_NEAREST);
+		}
 
 		if (rays)
 		{
@@ -3750,6 +3840,43 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 	 * are silently displaced: still enabled, still initialised, but never drawn. None of
 	 * this plugin's effects would appear, with nothing in the log to say why.
 	 */
+	/**
+	 * Drops the frame rate cap while the client window is in the background.
+	 *
+	 * <p>Only meaningful with unlocked FPS - without it the client runs on its own 20ms
+	 * timer and this target is ignored. Checked on the game tick rather than per frame:
+	 * focus changes are a human-scale event and this writes client state.
+	 */
+	private void updateUnfocusedFpsCap()
+	{
+		if (!config.unlockFps())
+		{
+			return;
+		}
+
+		int cap = config.unfocusedFpsTarget();
+		int target = cap > 0 && !isClientFocused() ? cap : config.fpsTarget();
+		if (target != lastAppliedFpsTarget)
+		{
+			lastAppliedFpsTarget = target;
+			client.setUnlockedFpsTarget(target);
+		}
+	}
+
+	/**
+	 * Whether the client window is the active one. Uses the window rather than the canvas,
+	 * so typing in chat or clicking a side panel still counts as focused.
+	 */
+	private boolean isClientFocused()
+	{
+		if (canvas == null)
+		{
+			return true;
+		}
+		Window window = SwingUtilities.getWindowAncestor(canvas);
+		return window == null || window.isActive();
+	}
+
 	@Subscribe
 	public void onGameTick(GameTick tick)
 	{
@@ -3757,6 +3884,8 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 		{
 			return;
 		}
+
+		updateUnfocusedFpsCap();
 
 		DrawCallbacks active = client.getDrawCallbacks();
 		if (active == this || active == null)

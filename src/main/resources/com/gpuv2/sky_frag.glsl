@@ -29,6 +29,10 @@ uniform float cloudOpacity;
  * hashed here - that way the plugin knows the moment one spawns and can play a sound for
  * it, which it cannot do if the decision only ever exists inside the shader.
  */
+// Sample counts, driven by the effect quality setting.
+uniform int meteorSamples;
+uniform int cloudOctaves;
+
 uniform float meteorActive;
 uniform float meteorTravel;   // 0..1 along the flight; above 1 means finished
 uniform vec4 meteorPath;      // start bearing, start height, bearing arc, height drop
@@ -138,7 +142,9 @@ float cloudFbm(vec2 p, float t)
 
 	float total = 0.0;
 	float amplitude = 0.5;
-	for (int i = 0; i < 5; ++i)
+	// Octave count follows the quality setting; fewer means softer, cheaper clouds.
+	int octaves = max(cloudOctaves, 2);
+	for (int i = 0; i < octaves; ++i)
 	{
 		float fi = float(i);
 		vec2 drift = vec2(t * (0.0007 + fi * 0.0004), t * (-0.0005 + fi * 0.0003));
@@ -379,13 +385,13 @@ vec3 shootingStar(vec3 dir, float night)
 	vec3 b = dirFromBearingHeight(meteorPath.x + meteorPath.z, meteorPath.y - meteorPath.w);
 
 	// Sample back along the path; nearer the head is brighter and tighter.
-	const int TAIL_SAMPLES = 14;
+	int tailSamples = max(meteorSamples, 4);
 	const float TAIL = 0.22;
 	float glow = 0.0;
 
-	for (int i = 0; i < TAIL_SAMPLES; ++i)
+	for (int i = 0; i < tailSamples; ++i)
 	{
-		float f = float(i) / float(TAIL_SAMPLES - 1);
+		float f = float(i) / float(tailSamples - 1);
 		float tt = travel - f * TAIL;
 		if (tt < 0.0)
 		{

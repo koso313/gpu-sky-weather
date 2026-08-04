@@ -10,6 +10,7 @@ uniform float threshold;
 uniform float decay;
 uniform float density;
 uniform float intensity;   // 1.0 while blurring; scales the result when compositing
+uniform int rayCount;      // shaft samples; follows the effect quality setting
 
 /*
  * Screen-space light shafts.
@@ -38,19 +39,20 @@ void main()
 		return;
 	}
 
-	const int SAMPLES = 24;
+	// Sample count is the dominant cost here, so it follows the quality setting.
+	int samples = max(rayCount, 4);
 
-	vec2 delta = (uv - sunUv) * (density / float(SAMPLES));
+	vec2 delta = (uv - sunUv) * (density / float(samples));
 	vec2 pos = uv;
 	float weight = 1.0;
 	vec3 acc = vec3(0.0);
 
-	for (int i = 0; i < SAMPLES; ++i)
+	for (int i = 0; i < samples; ++i)
 	{
 		pos -= delta;
 		acc += texture(src, pos).rgb * weight;
 		weight *= decay;
 	}
 
-	FragColor = vec4(acc / float(SAMPLES) * intensity, 1.0);
+	FragColor = vec4(acc / float(samples) * intensity, 1.0);
 }
