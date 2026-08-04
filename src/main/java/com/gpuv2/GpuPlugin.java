@@ -168,11 +168,32 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 		.add(GL_VERTEX_SHADER, "sky_vert.glsl")
 		.add(GL_FRAGMENT_SHADER, "sky_frag.glsl");
 
+	// Reuses the sky pass's fullscreen-triangle vertex shader.
+	static final Shader BLOOM_PROGRAM = new Shader()
+		.add(GL_VERTEX_SHADER, "sky_vert.glsl")
+		.add(GL_FRAGMENT_SHADER, "bloom_frag.glsl");
+
 	static int glProgram;
 	private int glUiProgram;
 	private int glSkyProgram;
+	private int glBloomProgram;
 
 	private int vaoSkyHandle;
+
+	/** Single-sampled resolve of the multisampled scene FBO, so it can be sampled. */
+	private int fboResolve = -1;
+	private int texResolve;
+	/** Half-resolution ping-pong targets for the bright pass and separable blur. */
+	private final int[] fboBloom = {-1, -1};
+	private final int[] texBloom = new int[2];
+	private int bloomW;
+	private int bloomH;
+
+	private int uniBloomSrc;
+	private int uniBloomPass;
+	private int uniBloomBlurDir;
+	private int uniBloomThreshold;
+	private int uniBloomIntensity;
 
 	private int uniSkyColor;
 	private int uniSkyNight;
@@ -813,6 +834,7 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 		glProgram = PROGRAM.compile(template);
 		glUiProgram = UI_PROGRAM.compile(template);
 		glSkyProgram = SKY_PROGRAM.compile(template);
+		glBloomProgram = BLOOM_PROGRAM.compile(template);
 
 		glBindVertexArray(0);
 
@@ -874,6 +896,12 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 		uniSkyStarTime = glGetUniformLocation(glSkyProgram, "starTime");
 		uniSkySunDir = glGetUniformLocation(glSkyProgram, "sunDir");
 		uniSkyMoonDir = glGetUniformLocation(glSkyProgram, "moonDir");
+		uniBloomSrc = glGetUniformLocation(glBloomProgram, "src");
+		uniBloomPass = glGetUniformLocation(glBloomProgram, "bloomPass");
+		uniBloomBlurDir = glGetUniformLocation(glBloomProgram, "blurDir");
+		uniBloomThreshold = glGetUniformLocation(glBloomProgram, "threshold");
+		uniBloomIntensity = glGetUniformLocation(glBloomProgram, "intensity");
+
 		uniSkyShowMoon = glGetUniformLocation(glSkyProgram, "showMoon");
 		uniSkyShowSun = glGetUniformLocation(glSkyProgram, "showSun");
 		uniSkyCloudAmount = glGetUniformLocation(glSkyProgram, "cloudAmount");
@@ -890,6 +918,9 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 
 		glDeleteProgram(glSkyProgram);
 		glSkyProgram = 0;
+
+		glDeleteProgram(glBloomProgram);
+		glBloomProgram = 0;
 	}
 
 	private void initVao()
@@ -1050,13 +1081,88 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 			throw new RuntimeException("FBO is incomplete. status: " + status);
 		}
 
+		initBloomFbos(width, height);
+
 		// Reset
 		glBindFramebuffer(GL_FRAMEBUFFER, awtContext.getFramebuffer(false));
 		glBindRenderbuffer(GL_RENDERBUFFER, 0);
 	}
 
+	/**
+	 * Allocates the bloom targets: a single-sampled resolve of the scene at full size
+	 * (an MSAA blit cannot scale, so the downsample happens in the bright pass instead),
+	 * plus two half-resolution buffers to ping-pong the separable blur through.
+	 */
+	private void initBloomFbos(int width, int height)
+	{
+		bloomW = Math.max(1, width / 2);
+		bloomH = Math.max(1, height / 2);
+
+		texResolve = glGenTextures();
+		glBindTexture(GL_TEXTURE_2D, texResolve);
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, 0);
+		setBloomTexParams();
+
+		fboResolve = glGenFramebuffers();
+		glBindFramebuffer(GL_FRAMEBUFFER, fboResolve);
+		glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, texResolve, 0);
+
+		for (int i = 0; i < 2; ++i)
+		{
+			texBloom[i] = glGenTextures();
+			glBindTexture(GL_TEXTURE_2D, texBloom[i]);
+			glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, bloomW, bloomH, 0, GL_RGBA, GL_UNSIGNED_BYTE, 0);
+			setBloomTexParams();
+
+			fboBloom[i] = glGenFramebuffers();
+			glBindFramebuffer(GL_FRAMEBUFFER, fboBloom[i]);
+			glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, texBloom[i], 0);
+		}
+
+		glBindTexture(GL_TEXTURE_2D, 0);
+	}
+
+	private static void setBloomTexParams()
+	{
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+		// Clamped so the blur doesn't wrap bright pixels around to the opposite edge.
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	}
+
+	private void shutdownBloomFbos()
+	{
+		if (fboResolve != -1)
+		{
+			glDeleteFramebuffers(fboResolve);
+			fboResolve = -1;
+		}
+		if (texResolve != 0)
+		{
+			glDeleteTextures(texResolve);
+			texResolve = 0;
+		}
+
+		for (int i = 0; i < 2; ++i)
+		{
+			if (fboBloom[i] != -1)
+			{
+				glDeleteFramebuffers(fboBloom[i]);
+				fboBloom[i] = -1;
+			}
+			if (texBloom[i] != 0)
+			{
+				glDeleteTextures(texBloom[i]);
+				texBloom[i] = 0;
+			}
+		}
+	}
+
 	private void shutdownFbo()
 	{
+		shutdownBloomFbos();
+
 		if (fboScene != -1)
 		{
 			glDeleteFramebuffers(fboScene);
@@ -1659,6 +1765,85 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 		sceneFboValid = true;
 	}
 
+	/**
+	 * Resolves the multisampled scene, extracts the bright parts, and blurs them into
+	 * texBloom[0], ready for {@link #compositeBloom}.
+	 */
+	private void renderBloom(int width, int height)
+	{
+		// An MSAA blit cannot rescale, so this resolves at full size; the bright pass
+		// samples it down to half resolution.
+		glBindFramebuffer(GL_READ_FRAMEBUFFER, fboScene);
+		glBindFramebuffer(GL_DRAW_FRAMEBUFFER, fboResolve);
+		glBlitFramebuffer(0, 0, width, height, 0, 0, width, height,
+			GL_COLOR_BUFFER_BIT, GL_NEAREST);
+
+		glUseProgram(glBloomProgram);
+		glBindVertexArray(vaoSkyHandle);
+		glDisable(GL_DEPTH_TEST);
+		glDepthMask(false);
+		glDisable(GL_BLEND);
+		glActiveTexture(GL_TEXTURE0);
+		glUniform1i(uniBloomSrc, 0);
+		glViewport(0, 0, bloomW, bloomH);
+
+		// Bright extract: resolve -> bloom[0]
+		glBindFramebuffer(GL_FRAMEBUFFER, fboBloom[0]);
+		glBindTexture(GL_TEXTURE_2D, texResolve);
+		glUniform1i(uniBloomPass, 0);
+		glUniform1f(uniBloomThreshold, config.bloomThreshold() / 100f);
+		glDrawArrays(GL_TRIANGLES, 0, 3);
+
+		glUniform1i(uniBloomPass, 1);
+
+		// Blur horizontally: bloom[0] -> bloom[1]
+		glBindFramebuffer(GL_FRAMEBUFFER, fboBloom[1]);
+		glBindTexture(GL_TEXTURE_2D, texBloom[0]);
+		glUniform2f(uniBloomBlurDir, 1f / bloomW, 0f);
+		glDrawArrays(GL_TRIANGLES, 0, 3);
+
+		// Blur vertically: bloom[1] -> bloom[0]
+		glBindFramebuffer(GL_FRAMEBUFFER, fboBloom[0]);
+		glBindTexture(GL_TEXTURE_2D, texBloom[1]);
+		glUniform2f(uniBloomBlurDir, 0f, 1f / bloomH);
+		glDrawArrays(GL_TRIANGLES, 0, 3);
+
+		glBindTexture(GL_TEXTURE_2D, 0);
+		glBindVertexArray(0);
+		glDepthMask(true);
+	}
+
+	/**
+	 * Adds the blurred bloom over the already-blitted scene.
+	 */
+	private void compositeBloom(int defaultFbo, int width, int height)
+	{
+		glBindFramebuffer(GL_FRAMEBUFFER, defaultFbo);
+		glViewport(0, 0, width, height);
+
+		glUseProgram(glBloomProgram);
+		glBindVertexArray(vaoSkyHandle);
+		glDisable(GL_DEPTH_TEST);
+		glDepthMask(false);
+		glEnable(GL_BLEND);
+		glBlendFunc(GL_ONE, GL_ONE);
+
+		glActiveTexture(GL_TEXTURE0);
+		glBindTexture(GL_TEXTURE_2D, texBloom[0]);
+		glUniform1i(uniBloomSrc, 0);
+		glUniform1i(uniBloomPass, 2);
+		glUniform1f(uniBloomIntensity, config.bloomIntensity() / 100f);
+		glDrawArrays(GL_TRIANGLES, 0, 3);
+
+		// Restore the blend function the UI pass expects.
+		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+		glDisable(GL_BLEND);
+		glBindTexture(GL_TEXTURE_2D, 0);
+		glBindVertexArray(0);
+		glUseProgram(0);
+		glDepthMask(true);
+	}
+
 	private void blitSceneFbo()
 	{
 		int width = lastStretchedCanvasWidth;
@@ -1671,10 +1856,23 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 		height = getScaledValue(transform.getScaleY(), height);
 
 		int defaultFbo = awtContext.getFramebuffer(false);
+
+		boolean bloom = config.bloomEnabled() && fboResolve != -1 && glBloomProgram != 0;
+		if (bloom)
+		{
+			// Must run before the scene is blitted out, while fboScene still holds it.
+			renderBloom(width, height);
+		}
+
 		glBindFramebuffer(GL_READ_FRAMEBUFFER, fboScene);
 		glBindFramebuffer(GL_DRAW_FRAMEBUFFER, defaultFbo);
 		glBlitFramebuffer(0, 0, width, height, 0, 0, width, height,
 			GL_COLOR_BUFFER_BIT, GL_NEAREST);
+
+		if (bloom)
+		{
+			compositeBloom(defaultFbo, width, height);
+		}
 
 		// Reset
 		glBindFramebuffer(GL_READ_FRAMEBUFFER, defaultFbo);

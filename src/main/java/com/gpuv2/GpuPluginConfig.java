@@ -142,6 +142,58 @@ public interface GpuPluginConfig extends Config
 	}
 
 	@ConfigSection(
+		name = "Bloom",
+		description = "Glow around bright areas.",
+		position = 210,
+		closedByDefault = true
+	)
+	String bloomSection = "bloomSection";
+
+	@ConfigItem(
+		keyName = "bloomEnabled",
+		name = "Enable bloom",
+		description = "Bleed a glow out of bright parts of the scene. Costs a few extra "
+			+ "render passes.",
+		position = 211,
+		section = bloomSection
+	)
+	default boolean bloomEnabled()
+	{
+		return false;
+	}
+
+	@Range(
+		max = 99
+	)
+	@ConfigItem(
+		keyName = "bloomThreshold",
+		name = "Threshold",
+		description = "How bright a pixel must be before it glows. Lower makes more of "
+			+ "the scene glow.",
+		position = 212,
+		section = bloomSection
+	)
+	default int bloomThreshold()
+	{
+		return 65;
+	}
+
+	@Range(
+		max = 200
+	)
+	@ConfigItem(
+		keyName = "bloomIntensity",
+		name = "Intensity",
+		description = "Strength of the glow added back over the scene.",
+		position = 213,
+		section = bloomSection
+	)
+	default int bloomIntensity()
+	{
+		return 60;
+	}
+
+	@ConfigSection(
 		name = "Water",
 		description = "Animated water surfaces.",
 		position = 225,
