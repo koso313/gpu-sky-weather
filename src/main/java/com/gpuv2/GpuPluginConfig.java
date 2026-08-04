@@ -554,8 +554,8 @@ public interface GpuPluginConfig extends Config
 	@ConfigItem(
 		keyName = "shootingStarSoundId",
 		name = "Sound effect id",
-		description = "Which game sound to play. 3924 is a coin tinkle; try other ids if "
-			+ "you would rather something else.",
+		description = "Any in-game sound effect id - type whichever you prefer. 3924 is "
+			+ "a coin tinkle, 200 a teleport whoosh, 3925 a bell ding.",
 		position = 388,
 		section = starSection
 	)

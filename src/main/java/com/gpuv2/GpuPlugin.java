@@ -272,6 +272,9 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 	/** Seconds between candidate meteors; whether one flies is decided per slot. */
 	private static final float METEOR_SLOT = 3f;
 
+	/** How far either side of the view a meteor can start, in radians (~40 degrees). */
+	private static final float METEOR_SPREAD = 0.70f;
+
 	private int lastMeteorSlot = -1;
 	private boolean meteorActive;
 	private float meteorTravel;
@@ -2053,7 +2056,19 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 
 			if (meteorActive)
 			{
-				meteorPath[0] = rng.nextFloat() * (float) (2 * Math.PI);
+				/*
+				 * Aimed at wherever the camera is facing, with a spread either side so
+				 * they don't all cross dead centre. A uniformly random bearing puts most
+				 * meteors behind the player, and given how rarely they fire, one that
+				 * spawns out of view is one nobody ever sees.
+				 *
+				 * The camera's forward direction in world XZ is (-sin(yaw), cos(yaw)) and
+				 * a bearing b points along (sin(b), cos(b)), so b = -yaw faces the centre
+				 * of the view. Chosen once here and held for the flight, so the meteor
+				 * stays fixed in the world rather than following the camera.
+				 */
+				float spread = (rng.nextFloat() - 0.5f) * 2f * METEOR_SPREAD;
+				meteorPath[0] = -lastCameraYawRad + spread;
 				meteorPath[1] = 0.30f + rng.nextFloat() * 0.45f;
 				meteorPath[2] = (rng.nextFloat() - 0.5f) * 1.5f;
 				meteorPath[3] = 0.18f + rng.nextFloat() * 0.22f;
@@ -2081,11 +2096,11 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 		switch (config.shootingStarSpeed())
 		{
 			case 3:
-				return 5f;
+				return 4.5f;
 			case 2:
-				return 3f;
+				return 2.4f;
 			default:
-				return 1.7f;
+				return 1.15f;
 		}
 	}
 
