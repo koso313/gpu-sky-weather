@@ -74,6 +74,7 @@ import net.runelite.api.Tile;
 import net.runelite.api.coords.LocalPoint;
 import net.runelite.api.events.CommandExecuted;
 import net.runelite.api.events.GameStateChanged;
+import net.runelite.api.events.GameTick;
 import net.runelite.api.events.PostClientTick;
 import net.runelite.api.hooks.DrawCallbacks;
 import net.runelite.client.callback.ClientThread;
@@ -435,6 +436,10 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 	 * stop/start loop.
 	 */
 	private boolean triedDisablingBuiltinGpu;
+
+	/** Bounded so a renderer that keeps reclaiming the slot can't loop us forever. */
+	private static final int MAX_BUILTIN_RECLAIMS = 3;
+	private int builtinGpuReclaims;
 
 	@Override
 	protected void startUp()
@@ -3463,6 +3468,54 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 
 			log.debug("glGetError:", new Exception(errStr));
 		}
+	}
+
+	/**
+	 * Watches for another renderer taking the draw callbacks out from under us.
+	 *
+	 * <p>The check in {@link #startUp()} only covers the case where something else already
+	 * holds the slot. If the built-in GPU plugin starts *after* we do - a plain startup
+	 * race, since both are enabled at launch - it calls setDrawCallbacks on itself and we
+	 * are silently displaced: still enabled, still initialised, but never drawn. None of
+	 * this plugin's effects would appear, with nothing in the log to say why.
+	 */
+	@Subscribe
+	public void onGameTick(GameTick tick)
+	{
+		if (!lwjglInitted)
+		{
+			return;
+		}
+
+		DrawCallbacks active = client.getDrawCallbacks();
+		if (active == this || active == null)
+		{
+			return;
+		}
+
+		if (!BUILTIN_GPU_CLASS.equals(active.getClass().getName()))
+		{
+			// Another renderer entirely (117HD); that is a deliberate choice, so yield.
+			log.warn("Lost the renderer to {}; standing down", active.getClass().getName());
+			client.addChatMessage(ChatMessageType.GAMEMESSAGE, "",
+				"[GPU v2] Another renderer took over (" + active.getClass().getSimpleName()
+					+ "). Stopping.", null);
+			standDown();
+			return;
+		}
+
+		if (++builtinGpuReclaims > MAX_BUILTIN_RECLAIMS)
+		{
+			log.warn("Built-in GPU keeps reclaiming the renderer; giving up");
+			client.addChatMessage(ChatMessageType.GAMEMESSAGE, "",
+				"[GPU v2] The built-in GPU plugin keeps taking the renderer back. "
+					+ "Disable it manually and re-enable GPU v2.", null);
+			standDown();
+			return;
+		}
+
+		log.info("Built-in GPU plugin took the renderer after startup; reclaiming");
+		replaceBuiltinGpu();
 	}
 
 	@Subscribe
