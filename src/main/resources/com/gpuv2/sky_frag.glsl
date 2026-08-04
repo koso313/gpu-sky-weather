@@ -215,6 +215,80 @@ float craterField(vec2 p, float scale, float threshold)
 }
 
 /*
+ * A sunspot: a dark umbra inside a lighter penumbra. Returns how much to darken by.
+ */
+float sunspotField(vec2 p, float scale, float threshold)
+{
+	vec2 g = p * scale;
+	vec2 cell = floor(g);
+	float h = hash12(cell);
+	if (h < threshold)
+	{
+		return 0.0;
+	}
+
+	vec2 jitter = vec2(hash12(cell + 2.3), hash12(cell + 8.9)) - 0.5;
+	float d = length(fract(g) - 0.5 - jitter * 0.5);
+	float radius = mix(0.09, 0.22, hash12(cell + 5.5));
+
+	float umbra = 1.0 - smoothstep(0.0, radius * 0.55, d);
+	float penumbra = (1.0 - smoothstep(radius * 0.55, radius, d)) * 0.45;
+
+	return umbra * 0.55 + penumbra * 0.20;
+}
+
+/*
+ * The sun as a sphere rather than a flat disc.
+ *
+ * Same projection as the moon, but the surface features are solar rather than lunar -
+ * craters would be nonsense on plasma. What a sun actually shows is granulation from
+ * convection, occasional sunspots, and limb darkening far stronger than the moon's,
+ * because the edge is seen through more of the atmosphere above the photosphere.
+ *
+ * Kept subtle deliberately: the disc is extremely bright, and heavy detail on it reads
+ * as a textured ball rather than something incandescent.
+ */
+vec3 sunSurface(vec3 dir, float discCos)
+{
+	float sd = dot(dir, sunDir);
+	if (sd < discCos)
+	{
+		return vec3(0.0);
+	}
+
+	vec3 right = normalize(cross(vec3(0.0, -1.0, 0.0), sunDir));
+	vec3 upv = cross(sunDir, right);
+
+	float discRadius = sqrt(max(1.0 - discCos * discCos, 1e-6));
+	float u = dot(dir, right) / discRadius;
+	float v = dot(dir, upv) / discRadius;
+
+	float r2 = clamp(u * u + v * v, 0.0, 1.0);
+	float w = sqrt(1.0 - r2);
+	vec2 suv = vec2(u, v) / (0.35 + 0.65 * w);
+
+	// Granulation: fine convection cells, churning slowly.
+	float gran = valueNoise(suv * 20.0 + starTime * 0.05) * 0.55
+		+ valueNoise(suv * 44.0 - starTime * 0.035) * 0.45;
+	float surface = 0.94 + 0.12 * (gran - 0.5) * 2.0;
+
+	// Sparse sunspots.
+	surface -= sunspotField(suv, 3.5, 0.80);
+	surface -= sunspotField(suv, 7.0, 0.88) * 0.6;
+
+	// Limb darkening - much more pronounced than the moon's.
+	surface *= 0.52 + 0.48 * pow(max(w, 0.0), 0.55);
+
+	// White-hot at the centre grading to orange at the limb.
+	vec3 col = mix(vec3(1.0, 0.55, 0.18), vec3(1.0, 0.97, 0.88), pow(max(w, 0.0), 0.75));
+
+	float edge = 1.0 - smoothstep(0.88, 1.0, sqrt(r2));
+
+	// Overdriven so it still reads as a light source rather than a painted ball.
+	return col * clamp(surface, 0.0, 2.0) * edge * 1.35;
+}
+
+/*
  * The moon as a lit sphere rather than a flat disc.
  *
  * Each pixel inside the disc is projected back onto the sphere it represents, and the
@@ -495,10 +569,17 @@ void main()
 	// --- Sun ---
 	if (showSun > 0.5 && day > 0.001)
 	{
-		vec2 s = celestial(dir, sunDir, 0.9975, 0.96);
+		const float SUN_DISC_COS = 0.9975;
 		float vis = horizonFade * day;
-		col += vec3(1.0, 0.72, 0.42) * s.y * 0.55 * vis;
-		col = mix(col, vec3(1.0, 0.96, 0.82), s.x * vis);
+
+		// Corona first, so the disc sits on top of it.
+		float glow = smoothstep(0.96, 1.0, dot(dir, sunDir));
+		col += vec3(1.0, 0.72, 0.42) * glow * 0.55 * vis;
+
+		vec3 sun = sunSurface(dir, SUN_DISC_COS);
+		// Replaces the sky rather than adding, so the granulation and spots keep their
+		// contrast instead of saturating to flat white.
+		col = mix(col, sun, min(length(sun), 1.0) * vis);
 	}
 
 	// --- Moon and stars ---
