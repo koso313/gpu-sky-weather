@@ -243,6 +243,13 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 	/** Reused per-frame scratch for {@link #computeSunDirection}. */
 	private final float[] sunDir = new float[3];
 
+	/** How far either side of the view a bolt can land, in radians (~55 degrees). */
+	private static final float BOLT_SPREAD = 0.95f;
+
+	/** Strike the current bearing was chosen for, so it is picked once and then held. */
+	private int lastLightningSlot = -1;
+	private float lightningBearing;
+
 	private int interfaceTexture;
 	private int interfacePbo;
 
@@ -1488,10 +1495,29 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 		{
 			glUniform1f(uniSkyBoltStrength, lightningBolt(seconds));
 			glUniform1f(uniSkyBoltSeed, seed * 100f);
-			// Bearing derived from the strike's own random, so it stays put in the world
-			// for the duration of the strike instead of following the camera.
-			double bearing = seed * 2 * Math.PI;
-			glUniform2f(uniSkyBoltDirXZ, (float) Math.sin(bearing), (float) Math.cos(bearing));
+
+			/*
+			 * Bearing is chosen once, when the strike begins, and held for its duration -
+			 * so the bolt stays put in the world while it is on screen rather than
+			 * swinging around as the camera turns.
+			 *
+			 * It is biased toward wherever the camera is facing. A uniformly random
+			 * bearing puts most strikes behind the player, so the flash fires with no
+			 * visible bolt. The camera's forward direction in world XZ is
+			 * (-sin(yaw), cos(yaw)), and the bolt direction is (sin(b), cos(b)), so
+			 * b = -yaw points it at the centre of the view; the spread scatters it either
+			 * side so strikes don't all land dead ahead.
+			 */
+			int slot = (int) (seconds / lightningPeriod());
+			if (slot != lastLightningSlot)
+			{
+				lastLightningSlot = slot;
+				float spread = (seed - 0.5f) * 2f * BOLT_SPREAD;
+				lightningBearing = -cameraYaw + spread;
+			}
+
+			glUniform2f(uniSkyBoltDirXZ,
+				(float) Math.sin(lightningBearing), (float) Math.cos(lightningBearing));
 		}
 
 		glDrawArrays(GL_TRIANGLES, 0, 3);

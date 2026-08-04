@@ -158,20 +158,38 @@ float hash11(float x)
 float boltWander(float h, float seed)
 {
 	// Coarse zigzag: the overall path of the bolt.
-	float segs = 22.0;
+	float segs = 12.0;
 	float x = h * segs + seed;
 	float i = floor(x);
 	float f = fract(x);
 	float coarse = mix(hash11(i) - 0.5, hash11(i + 1.0) - 0.5, f);
 
-	// Fine kinks on top, so each straight run isn't perfectly clean.
-	float fsegs = 74.0;
+	// Fine kinks on top, so each straight run isn't perfectly clean. Kept modest: a very
+	// high segment count makes the path move further per pixel row than the stroke is
+	// wide, which breaks it into disconnected fragments.
+	float fsegs = 30.0;
 	float fx = h * fsegs + seed * 3.0;
 	float fi = floor(fx);
 	float ff = fract(fx);
 	float fine = mix(hash11(fi + 91.3) - 0.5, hash11(fi + 92.3) - 0.5, ff);
 
-	return coarse * 0.085 + fine * 0.022;
+	return coarse * 0.085 + fine * 0.016;
+}
+
+/*
+ * Perpendicular distance from the bolt's path, rather than the horizontal gap.
+ *
+ * Measuring horizontally makes a steeply-slanting stroke effectively thinner - and where
+ * the path moves further per pixel row than the stroke is wide, it breaks up entirely.
+ * Dividing by sqrt(1 + slope^2) converts the horizontal gap into true perpendicular
+ * distance, keeping the width constant however sharply the bolt zigzags.
+ */
+float boltDistance(float h, float ang, float seed)
+{
+	const float eps = 0.004;
+	float w = boltWander(h, seed);
+	float slope = (boltWander(h + eps, seed) - boltWander(h - eps, seed)) / (2.0 * eps);
+	return abs(ang - w) / sqrt(1.0 + slope * slope);
 }
 
 /*
@@ -208,22 +226,24 @@ vec3 lightningBolt(vec3 dir, float up)
 		return vec3(0.0);
 	}
 
-	float main_ = abs(ang - boltWander(h, boltSeed));
+	float main_ = boltDistance(h, ang, boltSeed);
 
 	// A fork branching off partway down, offset sideways and living only over the lower
 	// stretch - a single unbroken line reads as a wire rather than a strike.
 	float forkOffset = (hash11(boltSeed + 4.7) - 0.5) * 0.10;
-	float fork = abs(ang - (boltWander(h, boltSeed + 19.3) + forkOffset));
+	float fork = boltDistance(h, ang - forkOffset, boltSeed + 19.3);
 	float forkExtent = smoothstep(0.02, 0.07, h) * (1.0 - smoothstep(0.18, 0.30, h));
 
 	// Tight core, wide soft glow. The narrow core is what makes it read as sharp.
-	float core = (1.0 - smoothstep(0.0, 0.0022, main_))
-		+ (1.0 - smoothstep(0.0, 0.0016, fork)) * forkExtent;
-	float glow = (1.0 - smoothstep(0.0, 0.045, main_))
-		+ (1.0 - smoothstep(0.0, 0.030, fork)) * forkExtent * 0.7;
+	float core = (1.0 - smoothstep(0.0, 0.0045, main_))
+		+ (1.0 - smoothstep(0.0, 0.0032, fork)) * forkExtent;
+	float glow = (1.0 - smoothstep(0.0, 0.055, main_))
+		+ (1.0 - smoothstep(0.0, 0.035, fork)) * forkExtent * 0.7;
 
-	vec3 c = vec3(1.0, 0.99, 0.95) * clamp(core, 0.0, 1.0)
-		+ vec3(0.55, 0.65, 1.0) * clamp(glow, 0.0, 1.0) * 0.30;
+	// Overdriven core so the bolt stays legible against a bright overcast sky - it is
+	// competing with the frame-wide flash firing at the same moment.
+	vec3 c = vec3(1.6, 1.58, 1.5) * clamp(core, 0.0, 1.0)
+		+ vec3(0.60, 0.70, 1.0) * clamp(glow, 0.0, 1.0) * 0.45;
 	return c * extent * boltStrength;
 }
 

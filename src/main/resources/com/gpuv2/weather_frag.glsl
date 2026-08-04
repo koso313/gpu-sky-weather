@@ -139,10 +139,14 @@ void main()
 
 	amount = clamp(amount, 0.0, 1.0);
 
-	// Lightning washes the whole frame, not just the droplets.
+	/*
+	 * Lightning washes the whole frame, not just the droplets. Kept fairly translucent:
+	 * the bolt is drawn in the sky pass, which runs before the scene, so this pass sits
+	 * on top of it - too strong a wash and the flash erases the very bolt it belongs to.
+	 */
 	float flash = clamp(lightning, 0.0, 1.0);
-	vec3 rgb = color * amount + vec3(0.85, 0.88, 1.0) * flash;
-	float alpha = clamp(amount + flash * 0.65, 0.0, 1.0);
+	vec3 rgb = color * amount + vec3(0.85, 0.88, 1.0) * flash * 0.7;
+	float alpha = clamp(amount + flash * 0.34, 0.0, 1.0);
 
 	FragColor = vec4(rgb, alpha);
 }
