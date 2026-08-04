@@ -58,6 +58,7 @@ import net.runelite.api.TextureProvider;
 import net.runelite.api.TileObject;
 import net.runelite.api.WorldEntity;
 import net.runelite.api.WorldView;
+import java.awt.Color;
 import java.time.LocalTime;
 import com.gpuv2.config.SkyMode;
 import net.runelite.api.ChatMessageType;
@@ -183,6 +184,15 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 	 * pitch, so a steeper arc puts the sun and moon permanently out of view.
 	 */
 	private static final double MAX_SUN_ELEVATION = Math.toRadians(22);
+
+	/**
+	 * Fraction of ambient light retained at full night, so the world stays playable
+	 * instead of going black.
+	 */
+	private static final float NIGHT_AMBIENT_FLOOR = 0.4f;
+
+	/** Reused per-frame scratch for {@link #computeSunDirection}. */
+	private final float[] sunDir = new float[3];
 
 	private int interfaceTexture;
 	private int interfacePbo;
@@ -311,6 +321,10 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 	private int uniGradeTemperature;
 	private int uniRetroNoTextures;
 	private int uniRetroPosterize;
+	private int uniLightStrength;
+	private int uniLightAmbient;
+	private int uniLightSunColor;
+	private int uniLightSunDir;
 	static int uniBase;
 
 	static final float[] IDENTITY = Mat4.identity();
@@ -796,6 +810,10 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 		uniGradeTemperature = glGetUniformLocation(glProgram, "gradeTemperature");
 		uniRetroNoTextures = glGetUniformLocation(glProgram, "retroNoTextures");
 		uniRetroPosterize = glGetUniformLocation(glProgram, "retroPosterize");
+		uniLightStrength = glGetUniformLocation(glProgram, "lightStrength");
+		uniLightAmbient = glGetUniformLocation(glProgram, "lightAmbient");
+		uniLightSunColor = glGetUniformLocation(glProgram, "lightSunColor");
+		uniLightSunDir = glGetUniformLocation(glProgram, "lightSunDir");
 
 		uniTex = glGetUniformLocation(glUiProgram, "tex");
 		uniTexTargetDimensions = glGetUniformLocation(glUiProgram, "targetDimensions");
@@ -1177,6 +1195,7 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 		glUniform1f(uniGradeTemperature, config.gradeTemperature() / 100f);
 		glUniform1f(uniRetroNoTextures, config.retroNoTextures() ? 1f : 0f);
 		glUniform1f(uniRetroPosterize, config.retroPosterize());
+		setupLightingUniforms();
 
 		// Brightness happens to also be stored in the texture provider, so we use that
 		TextureProvider textureProvider = client.getTextureProvider();
@@ -1262,22 +1281,9 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 		glUniform1f(uniSkyCloudAmount, config.cloudAmount() / 100f);
 		glUniform1f(uniSkyCloudOpacity, config.cloudOpacity() / 100f);
 
-		// Sun arcs east to west: on the horizon at 06:00, highest at noon, back down by
-		// 18:00, below the horizon overnight. The moon is simply its opposite, so it is up
-		// exactly when the sun is not.
-		//
-		// MAX_SUN_ELEVATION is deliberately shallow - OSRS clamps how far the camera can
-		// pitch upward, so anything steep sits permanently above the visible frustum.
-		double dayFraction = (time.getHour() * 60 + time.getMinute()) / 1440d;
-		double phase = 2 * Math.PI * (dayFraction - 0.25);
-		double elevation = Math.sin(phase) * MAX_SUN_ELEVATION;
-		double azimuth = Math.PI / 2 + phase;
-
-		float sx = (float) (Math.sin(azimuth) * Math.cos(elevation));
-		float sy = (float) -Math.sin(elevation);
-		float sz = (float) (Math.cos(azimuth) * Math.cos(elevation));
-		glUniform3f(uniSkySunDir, sx, sy, sz);
-		glUniform3f(uniSkyMoonDir, -sx, -sy, -sz);
+		computeSunDirection(time);
+		glUniform3f(uniSkySunDir, sunDir[0], sunDir[1], sunDir[2]);
+		glUniform3f(uniSkyMoonDir, -sunDir[0], -sunDir[1], -sunDir[2]);
 
 		glDrawArrays(GL_TRIANGLES, 0, 3);
 
@@ -1286,6 +1292,71 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 		glEnable(GL_BLEND);
 		glBindVertexArray(0);
 		glUseProgram(glProgram);
+	}
+
+	/**
+	 * Fills {@link #sunDir} with the world-space direction toward the sun at the given
+	 * time. Shared by the sky pass and the scene lighting so the two always agree on where
+	 * the light is coming from.
+	 *
+	 * <p>The sun arcs east to west: on the horizon at 06:00, highest at noon, back down by
+	 * 18:00, below the horizon overnight. MAX_SUN_ELEVATION is deliberately shallow -
+	 * OSRS clamps upward camera pitch, so a steeper arc sits outside the visible frustum.
+	 *
+	 * <p>Written into a reused array rather than returning a new one: this runs every frame.
+	 */
+	private void computeSunDirection(LocalTime time)
+	{
+		double dayFraction = (time.getHour() * 60 + time.getMinute()) / 1440d;
+		double phase = 2 * Math.PI * (dayFraction - 0.25);
+		double elevation = Math.sin(phase) * MAX_SUN_ELEVATION;
+		double azimuth = Math.PI / 2 + phase;
+
+		sunDir[0] = (float) (Math.sin(azimuth) * Math.cos(elevation));
+		sunDir[1] = (float) -Math.sin(elevation);
+		sunDir[2] = (float) (Math.cos(azimuth) * Math.cos(elevation));
+	}
+
+	/**
+	 * Uploads the ambient and directional light terms for this frame.
+	 */
+	private void setupLightingUniforms()
+	{
+		float strength = config.lightStrength() / 100f;
+		glUniform1f(uniLightStrength, strength);
+		if (strength < 0.001f)
+		{
+			// Shader early-outs; no point computing the rest.
+			return;
+		}
+
+		LocalTime time = skyTime();
+		computeSunDirection(time);
+		glUniform3f(uniLightSunDir, sunDir[0], sunDir[1], sunDir[2]);
+
+		// Only follow the clock when the sky is actually running on it - otherwise the
+		// world would dim with no matching change in the sky.
+		float night = config.lightFollowsTime() && config.skyMode() == SkyMode.TIME_OF_DAY
+			? SkyGradient.nightFactorAt(time)
+			: 0f;
+		float day = 1f - night;
+
+		// Ambient keeps a floor at night so the world stays playable rather than black.
+		float ambMul = config.lightAmbientStrength() / 100f * (NIGHT_AMBIENT_FLOOR
+			+ (1f - NIGHT_AMBIENT_FLOOR) * day);
+		float sunMul = config.lightSunStrength() / 100f * day;
+
+		Color ambient = config.lightAmbientColor();
+		glUniform3f(uniLightAmbient,
+			ambient.getRed() / 255f * ambMul,
+			ambient.getGreen() / 255f * ambMul,
+			ambient.getBlue() / 255f * ambMul);
+
+		Color sun = config.lightSunColor();
+		glUniform3f(uniLightSunColor,
+			sun.getRed() / 255f * sunMul,
+			sun.getGreen() / 255f * sunMul,
+			sun.getBlue() / 255f * sunMul);
 	}
 
 	/**

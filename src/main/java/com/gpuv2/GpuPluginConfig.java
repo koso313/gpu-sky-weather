@@ -129,6 +129,96 @@ public interface GpuPluginConfig extends Config
 	}
 
 	@ConfigSection(
+		name = "Lighting",
+		description = "Ambient and directional light over the game's own shading.",
+		position = 250,
+		closedByDefault = true
+	)
+	String lightSection = "lightSection";
+
+	@Range(
+		max = 100
+	)
+	@ConfigItem(
+		keyName = "lightStrength",
+		name = "Lighting strength",
+		description = "How strongly the lighting below is applied. 0 disables it entirely.",
+		position = 251,
+		section = lightSection
+	)
+	default int lightStrength()
+	{
+		return 0;
+	}
+
+	@ConfigItem(
+		keyName = "lightAmbientColor",
+		name = "Ambient colour",
+		description = "Colour of the light filling shadowed faces.",
+		position = 252,
+		section = lightSection
+	)
+	default Color lightAmbientColor()
+	{
+		return new Color(0xB0, 0xC0, 0xD8);
+	}
+
+	@Range(
+		max = 200
+	)
+	@ConfigItem(
+		keyName = "lightAmbientStrength",
+		name = "Ambient strength",
+		description = "Brightness of the ambient fill.",
+		position = 253,
+		section = lightSection
+	)
+	default int lightAmbientStrength()
+	{
+		return 75;
+	}
+
+	@ConfigItem(
+		keyName = "lightSunColor",
+		name = "Sun colour",
+		description = "Colour of the directional light.",
+		position = 254,
+		section = lightSection
+	)
+	default Color lightSunColor()
+	{
+		return new Color(0xFF, 0xF0, 0xD0);
+	}
+
+	@Range(
+		max = 200
+	)
+	@ConfigItem(
+		keyName = "lightSunStrength",
+		name = "Sun strength",
+		description = "Brightness of the directional light on faces angled toward the sun.",
+		position = 255,
+		section = lightSection
+	)
+	default int lightSunStrength()
+	{
+		return 45;
+	}
+
+	@ConfigItem(
+		keyName = "lightFollowsTime",
+		name = "Follow time of day",
+		description = "Dim the world at night in step with the sky. Only applies when sky "
+			+ "colour is set to 'Time of day'.",
+		position = 256,
+		section = lightSection
+	)
+	default boolean lightFollowsTime()
+	{
+		return true;
+	}
+
+	@ConfigSection(
 		name = "Retro / performance",
 		description = "Old-school stylisation. Approximates the look - it does not load "
 			+ "pre-2007 model data, which isn't in the modern cache.",

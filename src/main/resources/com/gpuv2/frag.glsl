@@ -45,11 +45,18 @@ uniform float gradeTemperature;
 uniform float retroNoTextures;
 uniform float retroPosterize;   // colour levels per channel; 0 disables
 
+// Ambient + directional lighting. lightStrength 0 makes applyLighting a no-op.
+uniform float lightStrength;
+uniform vec3 lightAmbient;
+uniform vec3 lightSunColor;
+uniform vec3 lightSunDir;
+
 in vec4 fColor;
 noperspective centroid in float fHsl;
 flat in int fTextureId;
 in vec2 fUv;
 in float fFogAmount;
+in vec3 fWorldPos;
 #ifdef ZBUF_DEBUG
 in float fDepth;
 #endif
@@ -61,6 +68,41 @@ out vec4 FragColor;
  * surface colours alone. Order is temperature -> gamma -> contrast -> saturation:
  * gamma before contrast, so contrast pivots around mid-grey in the corrected space.
  */
+/*
+ * Ambient + directional light, modulated over the colour the client already produced.
+ *
+ * The vertex format carries no normals, so the face normal is reconstructed from the
+ * screen-space derivatives of world position. That yields a true per-face (flat) normal,
+ * which suits OSRS's low-poly geometry - smooth-shaded surfaces will read faceted.
+ *
+ * The client bakes its own lighting into vertex colours, so this modulates rather than
+ * replaces: the light term is centred on 1.0 so neutral settings leave the image alone.
+ */
+vec3 applyLighting(vec3 c)
+{
+  if (lightStrength < 0.001)
+  {
+    return c;
+  }
+
+  vec3 dx = dFdx(fWorldPos);
+  vec3 dy = dFdy(fWorldPos);
+  vec3 n = cross(dx, dy);
+
+  // Degenerate on slivers and perfectly edge-on faces; leave those unlit.
+  float len = length(n);
+  if (len < 1e-6)
+  {
+    return c;
+  }
+  n /= len;
+
+  float diffuse = max(dot(n, normalize(lightSunDir)), 0.0);
+  vec3 light = lightAmbient + lightSunColor * diffuse;
+
+  return c * mix(vec3(1.0), light, lightStrength);
+}
+
 vec3 applyGrade(vec3 c)
 {
   c *= vec3(1.0 + gradeTemperature * 0.20, 1.0, 1.0 - gradeTemperature * 0.20);
@@ -133,7 +175,9 @@ void main() {
   c.rgb = colorblind(c.rgb);
 #endif
 
-  vec3 mixedColor = mix(c.rgb, fogColor.rgb, fFogAmount);
+  // Light before fog, so fogged distance blends toward the sky colour rather than
+  // having the light term applied on top of it.
+  vec3 mixedColor = mix(applyLighting(c.rgb), fogColor.rgb, fFogAmount);
   FragColor = vec4(applyGrade(mixedColor), c.a);
 
 #ifdef FRAG_UVS
