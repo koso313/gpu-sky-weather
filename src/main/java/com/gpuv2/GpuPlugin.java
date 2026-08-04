@@ -319,6 +319,7 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 	private int uniGradeContrast;
 	private int uniGradeSaturation;
 	private int uniGradeTemperature;
+	private int uniTextureDefaultColors;
 	private int uniRetroNoTextures;
 	private int uniRetroPosterize;
 	private int uniLightStrength;
@@ -808,6 +809,7 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 		uniGradeContrast = glGetUniformLocation(glProgram, "gradeContrast");
 		uniGradeSaturation = glGetUniformLocation(glProgram, "gradeSaturation");
 		uniGradeTemperature = glGetUniformLocation(glProgram, "gradeTemperature");
+		uniTextureDefaultColors = glGetUniformLocation(glProgram, "textureDefaultColors");
 		uniRetroNoTextures = glGetUniformLocation(glProgram, "retroNoTextures");
 		uniRetroPosterize = glGetUniformLocation(glProgram, "retroPosterize");
 		uniLightStrength = glGetUniformLocation(glProgram, "lightStrength");
@@ -1850,8 +1852,10 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 			{
 				// if texture upload is successful, compute and set texture animations
 				float[] texAnims = textureManager.computeTextureAnimations(textureProvider);
+				float[] texColors = textureManager.computeTextureDefaultColors(textureProvider);
 				glUseProgram(glProgram);
 				glUniform2fv(uniTextureAnimations, texAnims);
+				glUniform3fv(uniTextureDefaultColors, texColors);
 				glUseProgram(0);
 			}
 		}

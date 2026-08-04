@@ -28,6 +28,7 @@
 //#define ZBUF_DEBUG
 
 #include colorblind_mode
+#include texture_config
 
 uniform sampler2DArray textures;
 uniform float brightness;
@@ -44,6 +45,7 @@ uniform float gradeTemperature;
 // Retro stylisation. 0 / <0.5 leaves the image untouched.
 uniform float retroNoTextures;
 uniform float retroPosterize;   // colour levels per channel; 0 disables
+uniform vec3 textureDefaultColors[TEXTURE_COUNT];
 
 // Ambient + directional lighting. lightStrength 0 makes applyLighting a no-op.
 uniform float lightStrength;
@@ -142,11 +144,15 @@ void main() {
   vec4 c;
 
   if (fTextureId > 0 && retroNoTextures > 0.5) {
-    // Textures off, but this is a textured face. Its fHsl is a 0-127 lightness rather
-    // than packed HSL, so the untextured decode below would render it flat grey -
-    // shade the vertex colour by that lightness instead.
+    // Textures off on a textured face. Its fHsl is a 0-127 lightness, not packed HSL,
+    // and its vertex colour is not a usable surface colour - so take the texture's own
+    // average colour, the way the vanilla client does without textures, and shade it by
+    // that lightness.
+    // Matches the textured path's own maths - gamma, then scale by lightness - so
+    // toggling textures off changes detail without changing overall brightness.
     float light = fHsl / 127.f;
-    c = vec4(fColor.rgb * (0.45f + 0.55f * light), fColor.a);
+    vec3 base = pow(textureDefaultColors[fTextureId - 1], vec3(brightness));
+    c = vec4(base * light, fColor.a);
   } else if (fTextureId > 0) {
     int textureIdx = fTextureId - 1;
 
