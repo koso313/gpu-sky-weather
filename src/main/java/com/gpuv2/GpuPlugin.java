@@ -268,6 +268,7 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 	private static final float HEIGHT_FOG_EYE_OFFSET = 180f;
 
 	private int uniSkyColor;
+	private int uniSkyZenithColor;
 	private int uniSkyNight;
 	private int uniSkyStarDensity;
 	private int uniSkyHalfW;
@@ -1074,6 +1075,7 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 		uniUiColorblindIntensity = glGetUniformLocation(glUiProgram, "colorblindIntensity");
 
 		uniSkyColor = glGetUniformLocation(glSkyProgram, "skyColor");
+		uniSkyZenithColor = glGetUniformLocation(glSkyProgram, "zenithColor");
 		uniSkyNight = glGetUniformLocation(glSkyProgram, "night");
 		uniSkyStarDensity = glGetUniformLocation(glSkyProgram, "starDensity");
 		uniSkyHalfW = glGetUniformLocation(glSkyProgram, "halfW");
@@ -1687,6 +1689,25 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 
 		glUniform3f(uniSkyColor,
 			(sky >> 16 & 0xFF) / 255f, (sky >> 8 & 0xFF) / 255f, (sky & 0xFF) / 255f);
+
+		/*
+		 * Overhead colour. Only the time-of-day sky has a separate zenith - a fixed or
+		 * game-supplied colour is a single value, so the zenith matches the horizon there
+		 * and the gradient collapses to nothing rather than inventing a hue.
+		 */
+		int zenith = sky;
+		if (config.skyMode() == SkyMode.TIME_OF_DAY)
+		{
+			zenith = SkyGradient.zenithColorAt(time);
+			WeatherMode weatherNow = activeWeather();
+			if (weatherNow != WeatherMode.OFF)
+			{
+				// Overcast flattens the sky - cloud closes the gradient down.
+				zenith = blendRgb(zenith, sky, weatherNow.overcast() * weatherIntensity());
+			}
+		}
+		glUniform3f(uniSkyZenithColor,
+			(zenith >> 16 & 0xFF) / 255f, (zenith >> 8 & 0xFF) / 255f, (zenith & 0xFF) / 255f);
 		glUniform1f(uniSkyNight, night);
 		// Density 0 is how the shader is told to skip stars entirely.
 		glUniform1f(uniSkyStarDensity, config.nightSky() ? config.starDensity() / 1000f : 0f);
@@ -3103,8 +3124,15 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 			{
 				sorter.uploadSortedModel(rt, worldProjection, m, orient, x, y, z, o.vbo.vb, a.vbo.vb, false);
 			}
-			catch (Exception ex)
+			catch (Throwable ex)
 			{
+				/*
+				 * Throwable, not Exception. The depth-sort bucket bounds check in
+				 * ModelUploader is an assert, and AssertionError extends Error - so it
+				 * slipped straight past a catch meant to contain exactly this, escaped
+				 * into the client's render loop and froze it. Upstream never sees this
+				 * because production runs without assertions enabled.
+				 */
 				log.debug("error drawing entity", ex);
 			}
 			int end = a.vbo.vb.position();
@@ -3157,8 +3185,15 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 			{
 				uploader.uploadSortedModel(rt, worldProjection, m, orient, x, y, z, o.vbo.vb, a.vbo.vb, renderMode == Renderable.RENDERMODE_SORTED_NO_DEPTH);
 			}
-			catch (Exception ex)
+			catch (Throwable ex)
 			{
+				/*
+				 * Throwable, not Exception. The depth-sort bucket bounds check in
+				 * ModelUploader is an assert, and AssertionError extends Error - so it
+				 * slipped straight past a catch meant to contain exactly this, escaped
+				 * into the client's render loop and froze it. Upstream never sees this
+				 * because production runs without assertions enabled.
+				 */
 				log.debug("error drawing entity", ex);
 			}
 			int end = a.vbo.vb.position();

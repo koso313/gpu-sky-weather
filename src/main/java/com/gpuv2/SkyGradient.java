@@ -45,6 +45,29 @@ public final class SkyGradient
 	};
 
 	/**
+	 * Colour directly overhead at each keyframe, packed 0xRRGGBB.
+	 *
+	 * <p>The sky is not one colour. At sunrise and sunset the horizon burns orange while
+	 * the zenith stays deep blue - sunlight is grazing through a lot of atmosphere near
+	 * the horizon and very little overhead. Painting the whole dome the horizon colour is
+	 * what makes a sunset look like it has been dipped in orange paint.
+	 *
+	 * <p>Same layout rule as COLORS: one longer than TIMES, first entry repeated to wrap.
+	 */
+	private static final int[] ZENITH = {
+		0x04060F,
+		0x0C1430,
+		0x2A4682, // sunrise: blue overhead, orange at the horizon
+		0x4A82C0,
+		0x3C8AD4, // midday: deeper than the paler horizon
+		0x5890C4,
+		0x2A4682, // sunset: blue overhead again
+		0x0C1430,
+		0x04060F,
+		0x04060F, // wraps onto ZENITH[0]
+	};
+
+	/**
 	 * How "night" each keyframe is, 0 = full daylight, 1 = full dark. Drives the starfield
 	 * and, once it exists, the scene lighting - so the world dims in step with the sky.
 	 */
@@ -91,6 +114,17 @@ public final class SkyGradient
 		int i = segmentStart(minute);
 		float t = segmentProgress(minute, i);
 		return lerpColor(COLORS[i], COLORS[i + 1], t);
+	}
+
+	/**
+	 * Colour directly overhead for the given time, packed 0xRRGGBB.
+	 */
+	public static int zenithColorAt(LocalTime time)
+	{
+		int minute = minuteOfDay(time);
+		int i = segmentStart(minute);
+		float t = segmentProgress(minute, i);
+		return lerpColor(ZENITH[i], ZENITH[i + 1], t);
 	}
 
 	/**

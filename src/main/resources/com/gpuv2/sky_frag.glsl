@@ -3,7 +3,8 @@
 in vec2 fNdc;
 out vec4 FragColor;
 
-uniform vec3 skyColor;
+uniform vec3 skyColor;    // at the horizon
+uniform vec3 zenithColor; // directly overhead
 uniform float night;      // 0 = full daylight, 1 = full dark
 uniform float starDensity;
 uniform float halfW;      // viewportWidth  / (2 * clientScale)
@@ -657,9 +658,15 @@ void main()
 	float horizonFade = smoothstep(0.0, 0.18, up);
 	float day = 1.0 - night;
 
-	// Real skies are pale at the horizon and deepen overhead. Applied only by day - the
-	// night sky already reads well flat, and darkening it further just crushes the stars.
-	col = mix(col, col * 0.76, smoothstep(0.0, 0.6, up) * day);
+	/*
+	 * Horizon colour grading into the zenith colour with height.
+	 *
+	 * This is a hue shift, not just a darkening. At sunset the horizon burns orange while
+	 * overhead stays blue, and colouring the whole dome from the horizon alone is what
+	 * makes a sunset look dipped in orange paint. The curve is weighted low so the warm
+	 * band hugs the horizon rather than filling half the sky.
+	 */
+	col = mix(col, zenithColor, pow(smoothstep(0.0, 0.75, up), 0.75));
 
 	// --- Sun ---
 	if (showSun > 0.5 && day > 0.001)
