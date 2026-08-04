@@ -20,6 +20,11 @@ uniform float showSun;
 uniform float cloudAmount;   // 0 = clear, 1 = overcast
 uniform float cloudOpacity;
 
+// Lightning bolt drawn in the sky. boltStrength 0 disables it.
+uniform float boltStrength;
+uniform float boltSeed;
+uniform vec2 boltDirXZ;      // normalised horizontal direction of the strike
+
 /*
  * World-space view direction for this pixel.
  *
@@ -138,6 +143,59 @@ vec2 celestial(vec3 dir, vec3 bodyDir, float discCos, float glowCos)
 	return vec2(disc, glow);
 }
 
+/*
+ * Horizontal wander of the bolt as it descends, as a signed angular offset. Layered
+ * non-harmonic sines give a jagged path without needing noise textures.
+ */
+float boltWander(float h, float seed)
+{
+	return (sin(h * 11.0 + seed * 5.0) * 0.50
+		+ sin(h * 23.0 + seed * 10.0) * 0.32
+		+ sin(h * 47.0 + seed * 21.0) * 0.18) * 0.06;
+}
+
+/*
+ * A bolt descending from the cloud deck toward the horizon at a fixed compass bearing,
+ * so it stays put in the world as the camera turns.
+ */
+vec3 lightningBolt(vec3 dir, float up)
+{
+	vec2 dxz = dir.xz;
+	float len = length(dxz);
+	if (len < 1e-5)
+	{
+		return vec3(0.0);
+	}
+	dxz /= len;
+
+	// Only visible when looking toward the strike.
+	float facing = dot(dxz, boltDirXZ);
+	if (facing <= 0.0)
+	{
+		return vec3(0.0);
+	}
+
+	// Signed bearing offset from the strike direction.
+	float side = dxz.x * boltDirXZ.y - dxz.y * boltDirXZ.x;
+	float ang = atan(side, facing);
+
+	float h = clamp(up, 0.0, 1.0);
+	float d = abs(ang - boltWander(h, boltSeed));
+
+	// Runs from just above the horizon up into the cloud deck, tapering at both ends.
+	float extent = smoothstep(0.01, 0.06, h) * (1.0 - smoothstep(0.34, 0.52, h));
+	if (extent <= 0.0)
+	{
+		return vec3(0.0);
+	}
+
+	float core = 1.0 - smoothstep(0.0, 0.005, d);
+	float glow = 1.0 - smoothstep(0.0, 0.055, d);
+
+	vec3 c = vec3(1.0, 0.98, 0.92) * core + vec3(0.55, 0.65, 1.0) * glow * 0.35;
+	return c * extent * boltStrength;
+}
+
 void main()
 {
 	vec3 dir = viewDirection();
@@ -197,6 +255,12 @@ void main()
 		lit = mix(lit, vec3(1.0, 0.80, 0.60), pow(sunward, 8.0) * day * 0.6);
 
 		col = mix(col, lit, c * cloudOpacity);
+	}
+
+	// Drawn over the clouds - the bolt hangs below the deck it comes out of.
+	if (boltStrength > 0.001)
+	{
+		col += lightningBolt(dir, up);
 	}
 
 	FragColor = vec4(col, 1.0);

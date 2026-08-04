@@ -224,6 +224,9 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 	private int uniSkyShowSun;
 	private int uniSkyCloudAmount;
 	private int uniSkyCloudOpacity;
+	private int uniSkyBoltStrength;
+	private int uniSkyBoltSeed;
+	private int uniSkyBoltDirXZ;
 
 	/**
 	 * Peak sun elevation, in radians. Kept shallow on purpose: OSRS limits upward camera
@@ -927,6 +930,9 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 		uniSkyShowSun = glGetUniformLocation(glSkyProgram, "showSun");
 		uniSkyCloudAmount = glGetUniformLocation(glSkyProgram, "cloudAmount");
 		uniSkyCloudOpacity = glGetUniformLocation(glSkyProgram, "cloudOpacity");
+		uniSkyBoltStrength = glGetUniformLocation(glSkyProgram, "boltStrength");
+		uniSkyBoltSeed = glGetUniformLocation(glSkyProgram, "boltSeed");
+		uniSkyBoltDirXZ = glGetUniformLocation(glSkyProgram, "boltDirXZ");
 	}
 
 	private void shutdownProgram()
@@ -1464,6 +1470,25 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 		glUniform3f(uniSkySunDir, sunDir[0], sunDir[1], sunDir[2]);
 		glUniform3f(uniSkyMoonDir, -sunDir[0], -sunDir[1], -sunDir[2]);
 
+		// Lightning bolt: same strike that drives the frame-wide flash, so they fire together.
+		float seconds = weatherSeconds();
+		float seed = config.weather().hasLightning() && config.lightning()
+			? lightningSeed(seconds)
+			: -1f;
+		if (seed < 0f)
+		{
+			glUniform1f(uniSkyBoltStrength, 0f);
+		}
+		else
+		{
+			glUniform1f(uniSkyBoltStrength, lightningBolt(seconds));
+			glUniform1f(uniSkyBoltSeed, seed * 100f);
+			// Bearing derived from the strike's own random, so it stays put in the world
+			// for the duration of the strike instead of following the camera.
+			double bearing = seed * 2 * Math.PI;
+			glUniform2f(uniSkyBoltDirXZ, (float) Math.sin(bearing), (float) Math.cos(bearing));
+		}
+
 		glDrawArrays(GL_TRIANGLES, 0, 3);
 
 		glDepthMask(true);
@@ -1771,9 +1796,12 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 			glClearDepth(0d);
 			glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-			// Runs day and night now - it draws the sun and clouds too, not just stars.
+			// Runs day and night now - it draws the sun, clouds and lightning bolts too,
+			// not just stars. A storm keeps the pass alive even with everything else off,
+			// since the bolt is drawn here.
 			if (config.skyMode() == SkyMode.TIME_OF_DAY
-				&& (config.nightSky() || config.showSun() || config.cloudAmount() > 0))
+				&& (config.nightSky() || config.showSun() || config.cloudAmount() > 0
+					|| (config.weather().hasLightning() && config.lightning())))
 			{
 				drawProceduralSky(sky, cameraPitch, cameraYaw);
 			}
@@ -1905,31 +1933,61 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 		return (System.nanoTime() % 1_000_000_000_000L) / 1e9f;
 	}
 
+	private static final float LIGHTNING_PERIOD = 7f;
+
 	/**
-	 * Lightning brightness for the given moment, 0..1.
-	 *
-	 * <p>Strikes fall on a fixed cadence but only fire on some of those slots, and each is
-	 * a fast double-flash with an exponential falloff - a single even pulse reads as a
-	 * screen glitch rather than lightning.
+	 * Per-strike random in 0..1, or -1 when this slot has no strike. Skipping roughly half
+	 * the slots keeps the cadence irregular; the value also seeds the bolt's shape and
+	 * bearing so one strike is consistent across the flash and the bolt.
+	 */
+	private static float lightningSeed(float seconds)
+	{
+		int slot = (int) (seconds / LIGHTNING_PERIOD);
+		float r = fract(slot * 0.6180339887f);
+		return r < 0.45f ? -1f : r;
+	}
+
+	private static float lightningPhase(float seconds)
+	{
+		return seconds / LIGHTNING_PERIOD - (int) (seconds / LIGHTNING_PERIOD);
+	}
+
+	/**
+	 * Whole-frame flash brightness, 0..1. A fast double-flash with exponential falloff -
+	 * a single even pulse reads as a screen glitch rather than lightning.
 	 */
 	private static float lightningFlash(float seconds)
 	{
-		final float period = 7f;
-		int slot = (int) (seconds / period);
-		float phase = seconds / period - slot;
-
-		// Skip roughly half the slots so strikes feel irregular.
-		float r = fract(slot * 0.6180339887f);
-		if (r < 0.45f)
+		float r = lightningSeed(seconds);
+		if (r < 0f)
 		{
 			return 0f;
 		}
 
-		float flash = (float) Math.exp(-phase * 55f);
-		// Second, weaker strike shortly after the first.
+		float phase = lightningPhase(seconds);
+		float first = (float) Math.exp(-phase * 55f);
 		float second = phase > 0.045f ? (float) Math.exp(-(phase - 0.045f) * 45f) * 0.55f : 0f;
 
-		return Math.min(1f, (flash + second) * (0.6f + 0.4f * r));
+		return Math.min(1f, (first + second) * (0.6f + 0.4f * r));
+	}
+
+	/**
+	 * Brightness of the drawn bolt, 0..1. Held slightly longer than the flash so the bolt
+	 * is still visible as the frame-wide wash fades.
+	 */
+	private static float lightningBolt(float seconds)
+	{
+		float r = lightningSeed(seconds);
+		if (r < 0f)
+		{
+			return 0f;
+		}
+
+		float phase = lightningPhase(seconds);
+		float first = (float) Math.exp(-phase * 34f);
+		float second = phase > 0.045f ? (float) Math.exp(-(phase - 0.045f) * 30f) * 0.6f : 0f;
+
+		return Math.min(1f, first + second);
 	}
 
 	private static float fract(float v)
