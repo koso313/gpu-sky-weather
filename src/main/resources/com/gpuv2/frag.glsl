@@ -59,6 +59,10 @@ uniform vec3 cameraPos;
 uniform float groundSnow;
 uniform float groundWet;
 
+// Cloud shadows. 0 disables.
+uniform float cloudShadow;
+uniform float cloudShadowTime;
+
 // Ambient + directional lighting. lightStrength 0 makes applyLighting a no-op.
 uniform float lightStrength;
 uniform vec3 lightAmbient;
@@ -118,6 +122,39 @@ vec3 faceNormal()
   vec3 n = cross(dFdx(fWorldPos), dFdy(fWorldPos));
   float len = length(n);
   return len < 1e-6 ? vec3(0.0) : n / len;
+}
+
+float gFbm(vec2 p)
+{
+  float total = 0.0;
+  float amp = 0.5;
+  for (int i = 0; i < 4; ++i)
+  {
+    total += gNoise(p) * amp;
+    p *= 2.03;
+    amp *= 0.5;
+  }
+  return total;
+}
+
+/*
+ * Cloud shadows drifting across the world.
+ *
+ * Uses the same kind of fbm field as the sky clouds and drifts at the same rate, so the
+ * dapple on the ground belongs to the deck overhead rather than looking like a separate
+ * effect. Applied to everything, not just flat ground - a cloud shadow falls across walls
+ * and trees too.
+ */
+vec3 applyCloudShadow(vec3 c)
+{
+  vec2 uv = fWorldPos.xz * 0.0011 + vec2(cloudShadowTime * 0.004, cloudShadowTime * 0.002);
+  float n = gFbm(uv * 1.4);
+
+  // Broad soft patches: most of the ground is lit, with shadow pooling under the thicker
+  // parts of the deck.
+  float shade = smoothstep(0.42, 0.72, n);
+
+  return c * (1.0 - shade * cloudShadow);
 }
 
 /*
@@ -351,9 +388,15 @@ void main() {
     }
   }
 
-  // Light before fog, so fogged distance blends toward the sky colour rather than
-  // having the light term applied on top of it.
-  vec3 mixedColor = mix(applyLighting(shaded, n), fogColor.rgb, fFogAmount);
+  shaded = applyLighting(shaded, n);
+
+  if (cloudShadow > 0.001) {
+    shaded = applyCloudShadow(shaded);
+  }
+
+  // Shadowed and lit before fog, so fogged distance blends toward the sky colour rather
+  // than having those terms applied on top of it.
+  vec3 mixedColor = mix(shaded, fogColor.rgb, fFogAmount);
   FragColor = vec4(applyGrade(mixedColor), c.a);
 
 #ifdef FRAG_UVS

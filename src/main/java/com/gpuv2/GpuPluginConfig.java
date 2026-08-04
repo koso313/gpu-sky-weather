@@ -151,9 +151,40 @@ public interface GpuPluginConfig extends Config
 	String weatherSection = "weatherSection";
 
 	@ConfigItem(
+		keyName = "autoWeather",
+		name = "Automatic weather",
+		description = "Let the weather change on its own over time. Overrides the manual "
+			+ "selection below.",
+		position = 205,
+		section = weatherSection
+	)
+	default boolean autoWeather()
+	{
+		return false;
+	}
+
+	@Range(
+		min = 1,
+		max = 60
+	)
+	@ConfigItem(
+		keyName = "autoWeatherPeriod",
+		name = "Weather changes every",
+		description = "Minutes each spell of weather lasts, including the time it spends "
+			+ "building and easing off.",
+		position = 205,
+		section = weatherSection
+	)
+	default int autoWeatherPeriod()
+	{
+		return 12;
+	}
+
+	@ConfigItem(
 		keyName = "weather",
 		name = "Weather",
-		description = "Precipitation drawn in front of the world and behind the interface.",
+		description = "Precipitation drawn in front of the world and behind the interface. "
+			+ "Ignored while automatic weather is on.",
 		position = 206,
 		section = weatherSection
 	)
@@ -303,6 +334,62 @@ public interface GpuPluginConfig extends Config
 		section = bloomSection
 	)
 	default int bloomIntensity()
+	{
+		return 60;
+	}
+
+	@ConfigSection(
+		name = "God rays",
+		description = "Light shafts radiating from the sun.",
+		position = 215,
+		closedByDefault = true
+	)
+	String godRaySection = "godRaySection";
+
+	@Range(
+		max = 100
+	)
+	@ConfigItem(
+		keyName = "godRays",
+		name = "God rays",
+		description = "Strength of light shafts from the sun. 0 disables. Needs sky "
+			+ "colour set to 'Time of day', and only shows when the sun is in view.",
+		position = 216,
+		section = godRaySection
+	)
+	default int godRays()
+	{
+		return 0;
+	}
+
+	@Range(
+		max = 99
+	)
+	@ConfigItem(
+		keyName = "godRayThreshold",
+		name = "Threshold",
+		description = "How bright a pixel must be to cast a shaft. Lower catches more of "
+			+ "the sky.",
+		position = 217,
+		section = godRaySection
+	)
+	default int godRayThreshold()
+	{
+		return 55;
+	}
+
+	@Range(
+		min = 5,
+		max = 150
+	)
+	@ConfigItem(
+		keyName = "godRayLength",
+		name = "Length",
+		description = "How far the shafts stretch from the sun.",
+		position = 218,
+		section = godRaySection
+	)
+	default int godRayLength()
 	{
 		return 60;
 	}
@@ -709,6 +796,22 @@ public interface GpuPluginConfig extends Config
 	default int cloudOpacity()
 	{
 		return 70;
+	}
+
+	@Range(
+		max = 100
+	)
+	@ConfigItem(
+		keyName = "cloudShadows",
+		name = "Cloud shadows",
+		description = "Drift cloud shadows across the world, matching the deck overhead. "
+			+ "0 disables.",
+		position = 110,
+		section = skySection
+	)
+	default int cloudShadows()
+	{
+		return 45;
 	}
 
 	@Range(

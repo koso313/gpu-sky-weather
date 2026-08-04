@@ -175,6 +175,10 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 		.add(GL_VERTEX_SHADER, "sky_vert.glsl")
 		.add(GL_FRAGMENT_SHADER, "weather_frag.glsl");
 
+	static final Shader GODRAY_PROGRAM = new Shader()
+		.add(GL_VERTEX_SHADER, "sky_vert.glsl")
+		.add(GL_FRAGMENT_SHADER, "godray_frag.glsl");
+
 	static int glProgram;
 	private int glUiProgram;
 	private int glSkyProgram;
@@ -206,6 +210,23 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 	private int uniWeatherLightning;
 	private int uniWeatherWind;
 	private int uniWeatherLight;
+
+	private int glGodrayProgram;
+	private int uniRaySrc;
+	private int uniRayPass;
+	private int uniRaySunUv;
+	private int uniRayThreshold;
+	private int uniRayDecay;
+	private int uniRayDensity;
+	private int uniRayIntensity;
+
+	/** Sun position in 0..1 screen space, filled by {@link #updateSunScreenPos}. */
+	private final float[] sunScreen = new float[2];
+	/** Fades shafts out as the sun sets. */
+	private float sunRayFade;
+	/** Camera angles in radians from the last scene draw, for projecting the sun. */
+	private float lastCameraPitchRad;
+	private float lastCameraYawRad;
 
 	private int uniSkyColor;
 	private int uniSkyNight;
@@ -386,6 +407,8 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 	private int uniLightSunDir;
 	private int uniGroundSnow;
 	private int uniGroundWet;
+	private int uniCloudShadow;
+	private int uniCloudShadowTime;
 	private int uniWaterFlags;
 	private int uniWaterStrength;
 	private int uniWaterChoppiness;
@@ -863,6 +886,7 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 		glSkyProgram = SKY_PROGRAM.compile(template);
 		glBloomProgram = BLOOM_PROGRAM.compile(template);
 		glWeatherProgram = WEATHER_PROGRAM.compile(template);
+		glGodrayProgram = GODRAY_PROGRAM.compile(template);
 
 		glBindVertexArray(0);
 
@@ -901,6 +925,8 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 		uniLightSunDir = glGetUniformLocation(glProgram, "lightSunDir");
 		uniGroundSnow = glGetUniformLocation(glProgram, "groundSnow");
 		uniGroundWet = glGetUniformLocation(glProgram, "groundWet");
+		uniCloudShadow = glGetUniformLocation(glProgram, "cloudShadow");
+		uniCloudShadowTime = glGetUniformLocation(glProgram, "cloudShadowTime");
 		uniWaterFlags = glGetUniformLocation(glProgram, "waterFlags");
 		uniWaterStrength = glGetUniformLocation(glProgram, "waterStrength");
 		uniWaterChoppiness = glGetUniformLocation(glProgram, "waterChoppiness");
@@ -941,6 +967,14 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 		uniWeatherWind = glGetUniformLocation(glWeatherProgram, "weatherWind");
 		uniWeatherLight = glGetUniformLocation(glWeatherProgram, "weatherLight");
 
+		uniRaySrc = glGetUniformLocation(glGodrayProgram, "src");
+		uniRayPass = glGetUniformLocation(glGodrayProgram, "rayPass");
+		uniRaySunUv = glGetUniformLocation(glGodrayProgram, "sunUv");
+		uniRayThreshold = glGetUniformLocation(glGodrayProgram, "threshold");
+		uniRayDecay = glGetUniformLocation(glGodrayProgram, "decay");
+		uniRayDensity = glGetUniformLocation(glGodrayProgram, "density");
+		uniRayIntensity = glGetUniformLocation(glGodrayProgram, "intensity");
+
 		uniSkyShowMoon = glGetUniformLocation(glSkyProgram, "showMoon");
 		uniSkyShowSun = glGetUniformLocation(glSkyProgram, "showSun");
 		uniSkyCloudAmount = glGetUniformLocation(glSkyProgram, "cloudAmount");
@@ -966,6 +1000,9 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 
 		glDeleteProgram(glWeatherProgram);
 		glWeatherProgram = 0;
+
+		glDeleteProgram(glGodrayProgram);
+		glGodrayProgram = 0;
 	}
 
 	private void initVao()
@@ -1429,6 +1466,11 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 		glDepthFunc(GL_GREATER);
 		glEnable(GL_DEPTH_TEST);
 
+		// Kept for the god-ray pass, which runs later and needs to project the sun using
+		// the same angles this frame was drawn with.
+		lastCameraPitchRad = cameraPitch;
+		lastCameraYawRad = cameraYaw;
+
 		drawSkybox(scene, sky, cameraX, cameraY, cameraZ, cameraPitch, cameraYaw);
 
 		checkGLErrors();
@@ -1474,10 +1516,10 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 		glUniform1f(uniSkyShowSun, config.showSun() ? 1f : 0f);
 		// Weather thickens the cloud deck as well as greying the sky.
 		float clouds = config.cloudAmount() / 100f;
-		WeatherMode weather = config.weather();
+		WeatherMode weather = activeWeather();
 		if (weather != WeatherMode.OFF)
 		{
-			clouds = Math.max(clouds, weather.overcast());
+			clouds = Math.max(clouds, weather.overcast() * weatherIntensity());
 		}
 		glUniform1f(uniSkyCloudAmount, clouds);
 		glUniform1f(uniSkyCloudOpacity, config.cloudOpacity() / 100f);
@@ -1488,7 +1530,7 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 
 		// Lightning bolt: same strike that drives the frame-wide flash, so they fire together.
 		float seconds = weatherSeconds();
-		float seed = config.weather().hasLightning() && config.lightning()
+		float seed = activeWeather().hasLightning() && config.lightning()
 			? lightningSeed(seconds)
 			: -1f;
 		if (seed < 0f)
@@ -1557,6 +1599,41 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 	}
 
 	/**
+	 * Weather in effect right now - either the manual selection or, with automatic
+	 * weather on, whatever the cycle has picked for this moment.
+	 */
+	private WeatherMode activeWeather()
+	{
+		if (!config.autoWeather())
+		{
+			return config.weather();
+		}
+		return WeatherCycle.modeAt(clockMinutes(), config.autoWeatherPeriod());
+	}
+
+	/**
+	 * Scales how strong the current weather is, 0..1. Always 1 for a manual selection -
+	 * only the automatic cycle ramps conditions in and out.
+	 */
+	private float weatherIntensity()
+	{
+		if (!config.autoWeather())
+		{
+			return config.weather() == WeatherMode.OFF ? 0f : 1f;
+		}
+		return WeatherCycle.intensityAt(clockMinutes(), config.autoWeatherPeriod());
+	}
+
+	/**
+	 * Minutes on the wall clock. Using real time rather than a counter means the cycle
+	 * keeps running across client restarts instead of resetting to calm every launch.
+	 */
+	private static double clockMinutes()
+	{
+		return System.currentTimeMillis() / 60000d;
+	}
+
+	/**
 	 * Presets are placeholders for now and write nothing.
 	 *
 	 * <p>The previous version wrote a shared baseline before each preset, which meant
@@ -1579,14 +1656,37 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 	 */
 	private void setupGroundWeatherUniforms()
 	{
-		WeatherMode weather = config.weather();
-		float amount = config.weatherAmount() / 100f;
+		WeatherMode weather = activeWeather();
+		// Ground effects follow the spell's intensity, so cover builds and thaws with it.
+		float amount = config.weatherAmount() / 100f * weatherIntensity();
 
 		boolean snowing = weather == WeatherMode.SNOW || weather == WeatherMode.BLIZZARD;
 		boolean raining = weather == WeatherMode.RAIN || weather == WeatherMode.STORM;
 
 		glUniform1f(uniGroundSnow, snowing ? config.groundSnow() / 100f * amount : 0f);
 		glUniform1f(uniGroundWet, raining ? config.groundWet() / 100f * amount : 0f);
+
+		/*
+		 * Cloud shadows track the cloud deck overhead, including the extra cover weather
+		 * brings, so an overcast sky darkens the ground. Only meaningful with the
+		 * procedural sky running - in game-sky mode there is no deck to cast them.
+		 */
+		float shadow = 0f;
+		if (config.cloudShadows() > 0 && config.skyMode() == SkyMode.TIME_OF_DAY)
+		{
+			float cover = config.cloudAmount() / 100f;
+			if (weather != WeatherMode.OFF)
+			{
+				cover = Math.max(cover, weather.overcast() * weatherIntensity());
+			}
+
+			// Fades out after dark - there is no sunlight left for clouds to block.
+			float day = 1f - SkyGradient.nightFactorAt(skyTime());
+			shadow = config.cloudShadows() / 100f * cover * day;
+		}
+
+		glUniform1f(uniCloudShadow, shadow);
+		glUniform1f(uniCloudShadowTime, (System.nanoTime() % 1_000_000_000_000L) / 1e9f);
 	}
 
 	/**
@@ -1725,7 +1825,7 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 
 		// Weather overcasts the sky, so rain doesn't fall out of clear blue. This also
 		// reaches the fog, which shares this colour.
-		WeatherMode weather = config.weather();
+		WeatherMode weather = activeWeather();
 		if (weather != WeatherMode.OFF)
 		{
 			int overcast = weather.overcastColor();
@@ -1738,7 +1838,9 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 				overcast = blendRgb(overcast, NIGHT_OVERCAST, night);
 			}
 
-			sky = blendRgb(sky, overcast, weather.overcast());
+			// Scaled by intensity so the sky greys over as weather arrives and clears as
+			// it passes, rather than switching overcast the instant the spell begins.
+			sky = blendRgb(sky, overcast, weather.overcast() * weatherIntensity());
 		}
 
 		return sky;
@@ -1782,7 +1884,7 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 			// since the bolt is drawn here.
 			if (config.skyMode() == SkyMode.TIME_OF_DAY
 				&& (config.nightSky() || config.showSun() || config.cloudAmount() > 0
-					|| (config.weather().hasLightning() && config.lightning())))
+					|| (activeWeather().hasLightning() && config.lightning())))
 			{
 				drawProceduralSky(sky, cameraPitch, cameraYaw);
 			}
@@ -1834,15 +1936,23 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 	 * Resolves the multisampled scene, extracts the bright parts, and blurs them into
 	 * texBloom[0], ready for {@link #compositeBloom}.
 	 */
-	private void renderBloom(int width, int height)
+	/**
+	 * Resolves the multisampled scene into a sampleable texture. Shared by bloom and god
+	 * rays so it only happens once per frame when both are on.
+	 *
+	 * <p>An MSAA blit cannot rescale, so this is full size; the effects downsample when
+	 * they read it.
+	 */
+	private void resolveScene(int width, int height)
 	{
-		// An MSAA blit cannot rescale, so this resolves at full size; the bright pass
-		// samples it down to half resolution.
 		glBindFramebuffer(GL_READ_FRAMEBUFFER, fboScene);
 		glBindFramebuffer(GL_DRAW_FRAMEBUFFER, fboResolve);
 		glBlitFramebuffer(0, 0, width, height, 0, 0, width, height,
 			GL_COLOR_BUFFER_BIT, GL_NEAREST);
+	}
 
+	private void renderBloom(int width, int height)
+	{
 		glUseProgram(glBloomProgram);
 		glBindVertexArray(vaoSkyHandle);
 		glDisable(GL_DEPTH_TEST);
@@ -1875,6 +1985,147 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 
 		glBindTexture(GL_TEXTURE_2D, 0);
 		glBindVertexArray(0);
+		glDepthMask(true);
+	}
+
+	/**
+	 * Projects the sun onto the screen, storing it in {@link #sunScreen}.
+	 *
+	 * <p>Inverts what the sky shader does: that reconstructs a world ray from a pixel,
+	 * this takes the sun's world direction forward through the same rotations and
+	 * projection to find its pixel.
+	 *
+	 * @return false when the sun is behind the camera or too far outside the view for
+	 *         shafts to make sense, in which case the pass is skipped entirely
+	 */
+	private boolean updateSunScreenPos()
+	{
+		if (config.skyMode() != SkyMode.TIME_OF_DAY)
+		{
+			// Without the procedural sky there is no sun on screen to radiate from.
+			return false;
+		}
+
+		LocalTime time = skyTime();
+		// No shafts after dark, and they ease off as the sun sets.
+		sunRayFade = 1f - SkyGradient.nightFactorAt(time);
+		if (sunRayFade < 0.02f)
+		{
+			return false;
+		}
+
+		computeSunDirection(time);
+
+		float cp = (float) Math.cos(lastCameraPitchRad);
+		float sp = (float) Math.sin(lastCameraPitchRad);
+		float cy = (float) Math.cos(lastCameraYawRad);
+		float sy = (float) Math.sin(lastCameraYawRad);
+
+		// Ry then Rx, the forward direction of the inverse used in the sky shader.
+		float ax = cy * sunDir[0] + sy * sunDir[2];
+		float ay = sunDir[1];
+		float az = -sy * sunDir[0] + cy * sunDir[2];
+
+		float bx = ax;
+		float by = cp * ay - sp * az;
+		float bz = sp * ay + cp * az;
+
+		if (bz <= 0.0001f)
+		{
+			// Behind the camera.
+			return false;
+		}
+
+		int vw = client.getViewportWidth();
+		int vh = client.getViewportHeight();
+		float scale = (float) client.getScale();
+		if (vw <= 0 || vh <= 0 || scale <= 0f)
+		{
+			return false;
+		}
+
+		float ndcX = scale * (2f / vw) * bx / bz;
+		float ndcY = -scale * (2f / vh) * by / bz;
+
+		sunScreen[0] = ndcX * 0.5f + 0.5f;
+		sunScreen[1] = ndcY * 0.5f + 0.5f;
+
+		// Well off-screen contributes nothing but still costs two full passes.
+		return sunScreen[0] > -0.6f && sunScreen[0] < 1.6f
+			&& sunScreen[1] > -0.6f && sunScreen[1] < 1.6f;
+	}
+
+	/**
+	 * Extracts light near the sun and smears it radially outward, leaving the result in
+	 * texBloom[0].
+	 */
+	private void renderGodRays()
+	{
+		glUseProgram(glGodrayProgram);
+		glBindVertexArray(vaoSkyHandle);
+		glDisable(GL_DEPTH_TEST);
+		glDepthMask(false);
+		glDisable(GL_BLEND);
+		glActiveTexture(GL_TEXTURE0);
+		glUniform1i(uniRaySrc, 0);
+		glUniform2f(uniRaySunUv, sunScreen[0], sunScreen[1]);
+		glViewport(0, 0, bloomW, bloomH);
+
+		// Bright extract near the sun: resolve -> bloom[1]
+		glBindFramebuffer(GL_FRAMEBUFFER, fboBloom[1]);
+		glBindTexture(GL_TEXTURE_2D, texResolve);
+		glUniform1i(uniRayPass, 0);
+		glUniform1f(uniRayThreshold, config.godRayThreshold() / 100f);
+		glDrawArrays(GL_TRIANGLES, 0, 3);
+
+		// Radial smear: bloom[1] -> bloom[0]
+		glBindFramebuffer(GL_FRAMEBUFFER, fboBloom[0]);
+		glBindTexture(GL_TEXTURE_2D, texBloom[1]);
+		glUniform1i(uniRayPass, 1);
+		glUniform1f(uniRayDecay, 0.92f);
+		glUniform1f(uniRayDensity, config.godRayLength() / 100f);
+		glUniform1f(uniRayIntensity, 1f);
+		glDrawArrays(GL_TRIANGLES, 0, 3);
+
+		glBindTexture(GL_TEXTURE_2D, 0);
+		glBindVertexArray(0);
+		glDepthMask(true);
+	}
+
+	/**
+	 * Adds a half-res buffer over the already-blitted scene with additive blending.
+	 * Shared by god rays; bloom has its own variant for its extra uniforms.
+	 */
+	private void compositeAdditive(int defaultFbo, int width, int height, int tex,
+		float intensity, int program)
+	{
+		glBindFramebuffer(GL_FRAMEBUFFER, defaultFbo);
+		glViewport(0, 0, width, height);
+
+		glUseProgram(program);
+		glBindVertexArray(vaoSkyHandle);
+		glDisable(GL_DEPTH_TEST);
+		glDepthMask(false);
+		glEnable(GL_BLEND);
+		glBlendFunc(GL_ONE, GL_ONE);
+
+		glActiveTexture(GL_TEXTURE0);
+		glBindTexture(GL_TEXTURE_2D, tex);
+		glUniform1i(uniRaySrc, 0);
+		// Pass 1 with the sun at the centre and no decay degenerates to a plain read,
+		// which is what compositing needs.
+		glUniform1i(uniRayPass, 1);
+		glUniform2f(uniRaySunUv, sunScreen[0], sunScreen[1]);
+		glUniform1f(uniRayDecay, 1f);
+		glUniform1f(uniRayDensity, 0f);
+		glUniform1f(uniRayIntensity, intensity * sunRayFade);
+		glDrawArrays(GL_TRIANGLES, 0, 3);
+
+		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+		glDisable(GL_BLEND);
+		glBindTexture(GL_TEXTURE_2D, 0);
+		glBindVertexArray(0);
+		glUseProgram(0);
 		glDepthMask(true);
 	}
 
@@ -2022,10 +2273,10 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 		glEnable(GL_BLEND);
 		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-		WeatherMode mode = config.weather();
+		WeatherMode mode = activeWeather();
 		glUniform1i(uniWeatherType, mode.isRainLike() ? 1 : 2);
 		glUniform1f(uniWeatherTime, weatherSeconds());
-		glUniform1f(uniWeatherAmount, config.weatherAmount() / 100f);
+		glUniform1f(uniWeatherAmount, config.weatherAmount() / 100f * weatherIntensity());
 		glUniform1f(uniWeatherHeavy, mode.heavy());
 		glUniform1f(uniWeatherWind, config.weatherWind() / 100f);
 
@@ -2061,11 +2312,25 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 
 		int defaultFbo = awtContext.getFramebuffer(false);
 
-		boolean bloom = config.bloomEnabled() && fboResolve != -1 && glBloomProgram != 0;
-		if (bloom)
+		boolean canPost = fboResolve != -1;
+		boolean bloom = canPost && config.bloomEnabled() && glBloomProgram != 0;
+		boolean rays = canPost && config.godRays() > 0 && glGodrayProgram != 0
+			&& updateSunScreenPos();
+
+		if (bloom || rays)
 		{
 			// Must run before the scene is blitted out, while fboScene still holds it.
-			renderBloom(width, height);
+			resolveScene(width, height);
+		}
+
+		/*
+		 * God rays go first because both effects ping-pong through the same two half-res
+		 * buffers. Rays blur, then composite after the blit; only then does bloom reuse
+		 * those buffers. Both read texResolve, which neither of them writes.
+		 */
+		if (rays)
+		{
+			renderGodRays();
 		}
 
 		glBindFramebuffer(GL_READ_FRAMEBUFFER, fboScene);
@@ -2073,14 +2338,21 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 		glBlitFramebuffer(0, 0, width, height, 0, 0, width, height,
 			GL_COLOR_BUFFER_BIT, GL_NEAREST);
 
+		if (rays)
+		{
+			compositeAdditive(defaultFbo, width, height, texBloom[0],
+				config.godRays() / 100f, glGodrayProgram);
+		}
+
 		if (bloom)
 		{
+			renderBloom(width, height);
 			compositeBloom(defaultFbo, width, height);
 		}
 
 		// After the scene is on the default framebuffer but before the UI is composited,
 		// so precipitation falls in front of the world and behind the interface.
-		if (config.weather() != WeatherMode.OFF && glWeatherProgram != 0)
+		if (activeWeather() != WeatherMode.OFF && glWeatherProgram != 0)
 		{
 			drawWeather(defaultFbo, width, height);
 		}
