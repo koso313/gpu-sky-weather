@@ -451,6 +451,23 @@ public interface GpuPluginConfig extends Config
 	}
 
 	@Range(
+		min = 1,
+		max = 3
+	)
+	@ConfigItem(
+		keyName = "auroraSpeed",
+		name = "Aurora speed",
+		description = "How fast the aurora churns. 1 is a slow lava-lamp drift, "
+			+ "3 is restless.",
+		position = 47,
+		section = skySection
+	)
+	default int auroraSpeed()
+	{
+		return 1;
+	}
+
+	@Range(
 		max = 100
 	)
 	@ConfigItem(

@@ -263,6 +263,7 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 	private int uniSkyCloudAmount;
 	private int uniSkyCloudOpacity;
 	private int uniSkyAuroraStrength;
+	private int uniSkyAuroraTime;
 	private int uniSkyBoltStrength;
 	private int uniSkyBoltSeed;
 	private int uniSkyBoltDirXZ;
@@ -1021,6 +1022,7 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 		uniSkyCloudAmount = glGetUniformLocation(glSkyProgram, "cloudAmount");
 		uniSkyCloudOpacity = glGetUniformLocation(glSkyProgram, "cloudOpacity");
 		uniSkyAuroraStrength = glGetUniformLocation(glSkyProgram, "auroraStrength");
+		uniSkyAuroraTime = glGetUniformLocation(glSkyProgram, "auroraTime");
 		uniSkyBoltStrength = glGetUniformLocation(glSkyProgram, "boltStrength");
 		uniSkyBoltSeed = glGetUniformLocation(glSkyProgram, "boltSeed");
 		uniSkyBoltDirXZ = glGetUniformLocation(glSkyProgram, "boltDirXZ");
@@ -1578,6 +1580,10 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 		// Aurora only on a clear night - cloud covers it, the same way it covers stars.
 		float aurora = config.aurora() ? config.auroraStrength() / 100f : 0f;
 		glUniform1f(uniSkyAuroraStrength, aurora * Math.max(0f, 1f - clouds * 1.2f));
+
+		// Its own clock, not the sky one: the aurora shouldn't speed up or slow down
+		// because the cloud speed changed, and it needs no tie to the hour.
+		glUniform1f(uniSkyAuroraTime, monotonicSeconds() * auroraSpeedMultiplier());
 		glUniform1f(uniSkyCloudOpacity, config.cloudOpacity() / 100f);
 
 		computeSunDirection(time);
@@ -1955,9 +1961,18 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 	 * a minute like the sky colour does. On a frozen preview hour it anchors to that hour
 	 * but keeps real time flowing, so the clouds still move while being looked at.
 	 */
+	/**
+	 * Seconds since the plugin started. Strictly increasing and free of wrapping, unlike
+	 * the free-running counter the stars twinkle on.
+	 */
+	private float monotonicSeconds()
+	{
+		return (System.nanoTime() - skyClockStartNanos) / 1e9f;
+	}
+
 	private float skySeconds()
 	{
-		float elapsed = (System.nanoTime() - skyClockStartNanos) / 1e9f;
+		float elapsed = monotonicSeconds();
 		int preview = config.previewHour();
 
 		// Anchor: the hour being previewed, or where the real clock was when we started.
@@ -1975,6 +1990,19 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 		 * push the noise hash into the range where its precision fails.
 		 */
 		return (base + elapsed) * cloudSpeedMultiplier();
+	}
+
+	private float auroraSpeedMultiplier()
+	{
+		switch (config.auroraSpeed())
+		{
+			case 3:
+				return 3.5f;
+			case 2:
+				return 2f;
+			default:
+				return 1f;
+		}
 	}
 
 	private float cloudSpeedMultiplier()

@@ -23,6 +23,7 @@ uniform float cloudOpacity;
 
 // Aurora. 0 disables.
 uniform float auroraStrength;
+uniform float auroraTime;   // monotonic seconds, already scaled by the speed setting
 
 // Lightning bolt drawn in the sky. boltStrength 0 disables it.
 uniform float boltStrength;
@@ -226,11 +227,39 @@ vec3 aurora(vec3 dir, float up, float night)
 	}
 
 	float bearing = atan(dxz.x, dxz.y);
+	float t = auroraTime;
 
-	// Two layers of curtain at different scales, drifting at different rates.
-	float c1 = valueNoise(vec2(bearing * 5.0 + starTime * 0.035, h * 7.0 - starTime * 0.05));
-	float c2 = valueNoise(vec2(bearing * 11.0 - starTime * 0.021, h * 13.0 - starTime * 0.08));
-	float curtain = pow(clamp(c1 * 0.65 + c2 * 0.35, 0.0, 1.0), 2.6);
+	/*
+	 * Lava-lamp motion. Scrolling noise slides a fixed pattern past and reads as streaks;
+	 * what makes a lava lamp is the field folding through itself, so blobs stretch, pinch
+	 * apart and merge rather than travelling.
+	 *
+	 * Two rounds of domain warping do that - each bends the coordinates by another noise
+	 * field moving at its own rate - with the second finer than the first so large masses
+	 * drift while their edges churn. The slow rise on top gives the upward creep.
+	 */
+	vec2 p = vec2(bearing * 3.2, h * 5.0);
+
+	vec2 w1 = vec2(
+		valueNoise(p * 0.7 + vec2(t * 0.030, 0.0)),
+		valueNoise(p * 0.7 + vec2(5.2, -t * 0.024))
+	) - 0.5;
+	p += w1 * 2.3;
+
+	vec2 w2 = vec2(
+		valueNoise(p * 1.6 + vec2(-t * 0.019, t * 0.013)),
+		valueNoise(p * 1.6 + vec2(9.1, t * 0.022))
+	) - 0.5;
+	p += w2 * 1.1;
+
+	// Blobs creep upward as they morph.
+	p.y -= t * 0.028;
+
+	float blob = valueNoise(p) + valueNoise(p * 2.1) * 0.5;
+	blob /= 1.5;
+
+	// Rounded masses with soft edges rather than thin streaks.
+	float curtain = smoothstep(0.40, 0.70, blob);
 
 	// Green at the base rising into violet, as real aurora does.
 	vec3 col = mix(vec3(0.18, 1.0, 0.55), vec3(0.45, 0.25, 0.95), smoothstep(0.05, 0.40, h));
