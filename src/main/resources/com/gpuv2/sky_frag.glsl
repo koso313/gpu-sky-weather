@@ -21,6 +21,9 @@ uniform float showSun;
 uniform float cloudAmount;   // 0 = clear, 1 = overcast
 uniform float cloudOpacity;
 
+// Aurora. 0 disables.
+uniform float auroraStrength;
+
 // Lightning bolt drawn in the sky. boltStrength 0 disables it.
 uniform float boltStrength;
 uniform float boltSeed;
@@ -184,6 +187,58 @@ float hash11(float x)
 }
 
 /*
+ * Aurora: shimmering curtains low in the northern sky.
+ *
+ * Confined to a compass sector rather than ringing the horizon, since an aurora that
+ * surrounds you reads as a screen effect rather than something in the distance. The
+ * curtain structure is noise sampled across bearing and height, scrolling in both, which
+ * gives the vertical streaking and the slow drift along the band.
+ */
+vec3 aurora(vec3 dir, float up, float night)
+{
+	if (auroraStrength < 0.001 || night < 0.25)
+	{
+		return vec3(0.0);
+	}
+
+	vec2 dxz = dir.xz;
+	float len = length(dxz);
+	if (len < 1e-5)
+	{
+		return vec3(0.0);
+	}
+	dxz /= len;
+
+	// Facing north, fading out to the sides.
+	float north = dxz.y;
+	if (north <= 0.0)
+	{
+		return vec3(0.0);
+	}
+	float sector = pow(north, 1.5);
+
+	float h = clamp(up, 0.0, 1.0);
+	// Sits low: from just above the horizon to partway up, tapering at both ends.
+	float vert = smoothstep(0.02, 0.10, h) * (1.0 - smoothstep(0.26, 0.55, h));
+	if (vert <= 0.0)
+	{
+		return vec3(0.0);
+	}
+
+	float bearing = atan(dxz.x, dxz.y);
+
+	// Two layers of curtain at different scales, drifting at different rates.
+	float c1 = valueNoise(vec2(bearing * 5.0 + starTime * 0.035, h * 7.0 - starTime * 0.05));
+	float c2 = valueNoise(vec2(bearing * 11.0 - starTime * 0.021, h * 13.0 - starTime * 0.08));
+	float curtain = pow(clamp(c1 * 0.65 + c2 * 0.35, 0.0, 1.0), 2.6);
+
+	// Green at the base rising into violet, as real aurora does.
+	vec3 col = mix(vec3(0.18, 1.0, 0.55), vec3(0.45, 0.25, 0.95), smoothstep(0.05, 0.40, h));
+
+	return col * curtain * vert * sector * night * auroraStrength;
+}
+
+/*
  * Horizontal wander of the bolt as it descends, as a signed angular offset.
  *
  * Built from straight segments with random endpoints rather than summed sines: real
@@ -309,6 +364,9 @@ void main()
 	float nightVis = night * horizonFade;
 	if (nightVis > 0.001)
 	{
+		// Drawn under the stars so they still read through it.
+		col += aurora(dir, up, night) * horizonFade;
+
 		col += vec3(1.0, 0.98, 0.92) * starField(dir) * nightVis;
 
 		if (showMoon > 0.5)

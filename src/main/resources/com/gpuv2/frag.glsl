@@ -59,6 +59,11 @@ uniform float groundWet;
 uniform float cloudShadow;
 uniform float cloudShadowTime;
 
+// Ground mist. 0 disables.
+uniform float heightFog;       // overall density
+uniform float heightFogTop;    // world Y the mist thins out at
+uniform float heightFogDepth;  // how far below that it takes to reach full density
+
 // Ambient + directional lighting. lightStrength 0 makes applyLighting a no-op.
 uniform float lightStrength;
 uniform vec3 lightAmbient;
@@ -166,6 +171,41 @@ vec3 applyCloudShadow(vec3 c)
   float shade = smoothstep(0.42, 0.72, n);
 
   return c * (1.0 - shade * cloudShadow);
+}
+
+/*
+ * Ground mist that pools in low terrain.
+ *
+ * World Y is negative-up, so a *larger* y is lower ground. Everything below heightFogTop
+ * accumulates mist, reaching full density heightFogDepth further down - which means dips
+ * and valley floors fill while raised ground stays clear.
+ *
+ * The level is anchored relative to the camera rather than to absolute world height,
+ * because absolute ground height varies enormously between regions and any fixed value
+ * would drown some areas and miss others entirely.
+ */
+vec3 applyHeightFog(vec3 c)
+{
+  float below = fWorldPos.y - heightFogTop;
+  if (below <= 0.0)
+  {
+    return c;
+  }
+
+  float depth = clamp(below / max(heightFogDepth, 1.0), 0.0, 1.0);
+
+  // Drifting patchiness, on the same slow scale the cloud shadows use - uniform mist
+  // reads as a flat wash rather than something lying on the ground.
+  float drift = gNoise(fWorldPos.xz * 0.0016 + vec2(cloudShadowTime * 0.0009, 0.0)) * 0.65
+    + gNoise(fWorldPos.xz * 0.0047 - vec2(0.0, cloudShadowTime * 0.0006)) * 0.35;
+  float patch = 0.55 + 0.45 * drift;
+
+  // Mist builds up over distance too, so nearby ground stays readable.
+  float dist = length(fWorldPos.xz - cameraPos.xz);
+  float far = smoothstep(200.0, 2600.0, dist);
+
+  float amount = clamp(depth * patch * (0.25 + 0.75 * far) * heightFog, 0.0, 0.92);
+  return mix(c, fogColor.rgb, amount);
 }
 
 /*
@@ -384,6 +424,12 @@ void main() {
 
   if (cloudShadow > 0.001) {
     shaded = applyCloudShadow(shaded);
+  }
+
+  // Before distance fog, so mist reads as lying on the ground rather than sitting on
+  // top of the haze.
+  if (heightFog > 0.001) {
+    shaded = applyHeightFog(shaded);
   }
 
   // Shadowed and lit before fog, so fogged distance blends toward the sky colour rather

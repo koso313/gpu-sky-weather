@@ -19,7 +19,11 @@ public enum WeatherMode
 	// Snow skies are bright and heavy rather than grey - the light bounces off the cloud
 	// base and the falling snow, so they read almost white.
 	SNOW("Snow", false, 0f, 0xD6DCE2, 0.75f),
-	BLIZZARD("Blizzard", false, 1f, 0xE6EBEF, 0.95f);
+	BLIZZARD("Blizzard", false, 1f, 0xE6EBEF, 0.95f),
+	/**
+	 * Nothing falls - fog works by thickening the distance haze and greying the sky.
+	 */
+	FOG("Fog", false, 0f, 0xC2C8CE, 0.80f);
 
 	private final String name;
 	private final boolean rainLike;
@@ -75,6 +79,24 @@ public enum WeatherMode
 	public boolean hasLightning()
 	{
 		return this == STORM;
+	}
+
+	/**
+	 * Whether anything actually falls. OFF and AUTO have nothing to draw, and fog is
+	 * atmosphere rather than precipitation - running the particle pass for it would cost
+	 * a fullscreen draw to render nothing.
+	 */
+	public boolean hasPrecipitation()
+	{
+		return this != OFF && this != AUTO && this != FOG;
+	}
+
+	/**
+	 * Extra distance fog this weather brings, as a fog-depth value, before intensity.
+	 */
+	public int fogDepth()
+	{
+		return this == FOG ? 55 : 0;
 	}
 
 	@Override

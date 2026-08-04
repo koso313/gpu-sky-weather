@@ -421,6 +421,68 @@ public interface GpuPluginConfig extends Config
 		return 1;
 	}
 
+	@ConfigItem(
+		keyName = "aurora",
+		name = "Aurora",
+		description = "Shimmering curtains low in the northern sky on clear nights. "
+			+ "Cloud cover hides it.",
+		position = 45,
+		section = skySection
+	)
+	default boolean aurora()
+	{
+		return false;
+	}
+
+	@Range(
+		min = 1,
+		max = 100
+	)
+	@ConfigItem(
+		keyName = "auroraStrength",
+		name = "Aurora strength",
+		description = "How bright the aurora is.",
+		position = 46,
+		section = skySection
+	)
+	default int auroraStrength()
+	{
+		return 50;
+	}
+
+	@Range(
+		max = 100
+	)
+	@ConfigItem(
+		keyName = "heightFog",
+		name = "Ground mist",
+		description = "Mist pooling in low ground and valleys. 0 disables. Fog weather "
+			+ "brings its own on top of this.",
+		position = 43,
+		section = skySection
+	)
+	default int heightFog()
+	{
+		return 0;
+	}
+
+	@Range(
+		min = 1,
+		max = 40
+	)
+	@ConfigItem(
+		keyName = "heightFogDepth",
+		name = "Ground mist depth",
+		description = "How deep the mist lies, in tiles. Lower keeps it hugging the "
+			+ "ground; higher fills valleys.",
+		position = 44,
+		section = skySection
+	)
+	default int heightFogDepth()
+	{
+		return 8;
+	}
+
 	@Range(
 		max = 100
 	)

@@ -235,6 +235,15 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 	/** Camera angles in radians from the last scene draw, for projecting the sun. */
 	private float lastCameraPitchRad;
 	private float lastCameraYawRad;
+	/** Camera height from the last scene draw, for anchoring the mist level. */
+	private float lastCameraY;
+
+	/**
+	 * How far above the camera the mist tops out. World Y is negative-up, so subtracting
+	 * raises it - putting the top above eye level, so standing in mist means being inside
+	 * it rather than looking down on a sheet.
+	 */
+	private static final float HEIGHT_FOG_EYE_OFFSET = 180f;
 
 	private int uniSkyColor;
 	private int uniSkyNight;
@@ -253,6 +262,7 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 	private int uniSkyShowSun;
 	private int uniSkyCloudAmount;
 	private int uniSkyCloudOpacity;
+	private int uniSkyAuroraStrength;
 	private int uniSkyBoltStrength;
 	private int uniSkyBoltSeed;
 	private int uniSkyBoltDirXZ;
@@ -426,6 +436,9 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 	private int uniGroundWet;
 	private int uniCloudShadow;
 	private int uniCloudShadowTime;
+	private int uniHeightFog;
+	private int uniHeightFogTop;
+	private int uniHeightFogDepth;
 	private int uniWaterFlags;
 	private int uniWaterStrength;
 	private int uniWaterChoppiness;
@@ -951,6 +964,9 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 		uniGroundWet = glGetUniformLocation(glProgram, "groundWet");
 		uniCloudShadow = glGetUniformLocation(glProgram, "cloudShadow");
 		uniCloudShadowTime = glGetUniformLocation(glProgram, "cloudShadowTime");
+		uniHeightFog = glGetUniformLocation(glProgram, "heightFog");
+		uniHeightFogTop = glGetUniformLocation(glProgram, "heightFogTop");
+		uniHeightFogDepth = glGetUniformLocation(glProgram, "heightFogDepth");
 		uniWaterFlags = glGetUniformLocation(glProgram, "waterFlags");
 		uniWaterStrength = glGetUniformLocation(glProgram, "waterStrength");
 		uniWaterChoppiness = glGetUniformLocation(glProgram, "waterChoppiness");
@@ -1004,6 +1020,7 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 		uniSkyShowSun = glGetUniformLocation(glSkyProgram, "showSun");
 		uniSkyCloudAmount = glGetUniformLocation(glSkyProgram, "cloudAmount");
 		uniSkyCloudOpacity = glGetUniformLocation(glSkyProgram, "cloudOpacity");
+		uniSkyAuroraStrength = glGetUniformLocation(glSkyProgram, "auroraStrength");
 		uniSkyBoltStrength = glGetUniformLocation(glSkyProgram, "boltStrength");
 		uniSkyBoltSeed = glGetUniformLocation(glSkyProgram, "boltSeed");
 		uniSkyBoltDirXZ = glGetUniformLocation(glSkyProgram, "boltDirXZ");
@@ -1433,7 +1450,10 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 
 		// Setup uniforms
 		final int drawDistance = getDrawDistance();
-		final int fogDepth = config.fogDepth();
+		// Fog weather thickens the haze on top of whatever the slider is set to, scaled by
+		// how far into the spell we are so it rolls in and lifts rather than appearing.
+		final int weatherFog = Math.round(activeWeather().fogDepth() * weatherIntensity());
+		final int fogDepth = Math.min(MAX_FOG_DEPTH, Math.max(config.fogDepth(), weatherFog));
 		// Feeds both the fog uniform below and drawSkybox() further down, so overriding it
 		// here keeps the sky and the fog it fades into the same colour.
 		final int sky = resolveSkyColor();
@@ -1493,6 +1513,7 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 		// the same angles this frame was drawn with.
 		lastCameraPitchRad = cameraPitch;
 		lastCameraYawRad = cameraYaw;
+		lastCameraY = cameraY;
 
 		drawSkybox(scene, sky, cameraX, cameraY, cameraZ, cameraPitch, cameraYaw);
 
@@ -1553,6 +1574,10 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 			clouds = Math.max(clouds, forced);
 		}
 		glUniform1f(uniSkyCloudAmount, clouds);
+
+		// Aurora only on a clear night - cloud covers it, the same way it covers stars.
+		float aurora = config.aurora() ? config.auroraStrength() / 100f : 0f;
+		glUniform1f(uniSkyAuroraStrength, aurora * Math.max(0f, 1f - clouds * 1.2f));
 		glUniform1f(uniSkyCloudOpacity, config.cloudOpacity() / 100f);
 
 		computeSunDirection(time);
@@ -1721,6 +1746,24 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 		glUniform1f(uniCloudShadow, shadow);
 		// Same clock as the sky deck, so the shadows belong to the clouds casting them.
 		glUniform1f(uniCloudShadowTime, skySeconds());
+
+		/*
+		 * Ground mist. Fog weather brings its own on top of the slider, so mist rolls in
+		 * with the weather and lifts as it passes.
+		 *
+		 * The mist level follows the camera because absolute ground height varies hugely
+		 * between regions - any fixed world Y would submerge some areas and miss others.
+		 * The offset puts the top a little above eye level, so standing in it you are
+		 * inside the mist rather than looking down on a flat sheet.
+		 */
+		float mist = config.heightFog() / 100f;
+		if (weather == WeatherMode.FOG)
+		{
+			mist = Math.max(mist, 0.85f * weatherIntensity());
+		}
+		glUniform1f(uniHeightFog, mist);
+		glUniform1f(uniHeightFogTop, lastCameraY - HEIGHT_FOG_EYE_OFFSET);
+		glUniform1f(uniHeightFogDepth, config.heightFogDepth() * Perspective.LOCAL_TILE_SIZE);
 	}
 
 	/**
@@ -2432,7 +2475,7 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 
 		// After the scene is on the default framebuffer but before the UI is composited,
 		// so precipitation falls in front of the world and behind the interface.
-		if (activeWeather() != WeatherMode.OFF && glWeatherProgram != 0)
+		if (activeWeather().hasPrecipitation() && glWeatherProgram != 0)
 		{
 			drawWeather(defaultFbo, width, height);
 		}
