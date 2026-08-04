@@ -62,7 +62,10 @@ import java.awt.Color;
 import java.time.LocalTime;
 import com.gpuv2.config.SkyMode;
 import net.runelite.api.ChatMessageType;
+import java.util.Set;
+import java.util.TreeSet;
 import net.runelite.api.Player;
+import net.runelite.api.SceneTileModel;
 import net.runelite.api.SceneTilePaint;
 import net.runelite.api.Tile;
 import net.runelite.api.coords.LocalPoint;
@@ -2683,8 +2686,10 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 	}
 
 	/**
-	 * Reports the texture id of the tile the player is standing on, so water texture ids
-	 * can be identified in-game rather than guessed.
+	 * Reports what the surrounding tiles are actually made of, so water can be identified
+	 * from real data rather than guessed. Covers both flat-painted and shaped tiles, and
+	 * reports overlay/underlay ids as well as texture ids - if water turns out to be
+	 * untextured, texture-id matching cannot work and detection has to move to overlays.
 	 */
 	private void reportTileTexture()
 	{
@@ -2692,25 +2697,74 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 		Player player = client.getLocalPlayer();
 		if (wv == null || player == null)
 		{
+			say("[GPU v2] Not logged in.");
 			return;
 		}
 
+		Scene scene = wv.getScene();
 		LocalPoint lp = player.getLocalLocation();
-		Tile tile = wv.getScene().getTiles()[wv.getPlane()][lp.getSceneX()][lp.getSceneY()];
-		SceneTilePaint paint = tile == null ? null : tile.getSceneTilePaint();
+		int plane = wv.getPlane();
+		int cx = lp.getSceneX();
+		int cy = lp.getSceneY();
 
-		String msg;
-		if (paint == null)
+		Tile[][][] tiles = scene.getTiles();
+		short[][][] overlays = scene.getOverlayIds();
+		short[][][] underlays = scene.getUnderlayIds();
+
+		Set<Integer> textureIds = new TreeSet<>();
+		Set<Integer> overlayIds = new TreeSet<>();
+		Set<Integer> underlayIds = new TreeSet<>();
+		int painted = 0;
+		int shaped = 0;
+
+		// Sample a patch around the player rather than a single tile - the tile you stand
+		// on is often the bank, not the water.
+		final int radius = 5;
+		for (int x = Math.max(0, cx - radius); x <= Math.min(tiles[plane].length - 1, cx + radius); ++x)
 		{
-			msg = "[GPU v2] This tile has no flat paint - stand on open water, not on a "
-				+ "bridge or shaped tile.";
-		}
-		else
-		{
-			msg = "[GPU v2] Tile texture id: " + paint.getTexture()
-				+ " (add it to 'Water texture ids' to treat it as water)";
+			for (int y = Math.max(0, cy - radius); y <= Math.min(tiles[plane][x].length - 1, cy + radius); ++y)
+			{
+				Tile tile = tiles[plane][x][y];
+				if (tile == null)
+				{
+					continue;
+				}
+
+				SceneTilePaint paint = tile.getSceneTilePaint();
+				if (paint != null)
+				{
+					++painted;
+					textureIds.add(paint.getTexture());
+				}
+
+				SceneTileModel model = tile.getSceneTileModel();
+				if (model != null)
+				{
+					++shaped;
+					int[] tri = model.getTriangleTextureId();
+					if (tri != null)
+					{
+						for (int t : tri)
+						{
+							textureIds.add(t);
+						}
+					}
+				}
+
+				overlayIds.add((int) overlays[plane][x][y]);
+				underlayIds.add((int) underlays[plane][x][y]);
+			}
 		}
 
+		say("[GPU v2] Within " + radius + " tiles: " + painted + " painted, " + shaped + " shaped");
+		say("[GPU v2] texture ids: " + textureIds);
+		say("[GPU v2] overlay ids: " + overlayIds);
+		say("[GPU v2] underlay ids: " + underlayIds);
+		say("[GPU v2] (texture id -1 means untextured - those tiles cannot be matched by texture)");
+	}
+
+	private void say(String msg)
+	{
 		log.info(msg);
 		client.addChatMessage(ChatMessageType.GAMEMESSAGE, "", msg, null);
 	}

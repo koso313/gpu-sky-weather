@@ -100,11 +100,25 @@ out vec4 FragColor;
  */
 vec3 applyWater(vec3 c)
 {
-  vec2 p = fWorldPos.xz * 0.018;
+  vec2 p = fWorldPos.xz;
   float t = waterTime;
 
-  float rx = sin(p.x * 1.7 + t * 1.3) + sin(p.y * 2.3 - t * 0.9) * 0.6;
-  float rz = cos(p.y * 1.9 + t * 1.1) + cos(p.x * 2.1 - t * 0.7) * 0.6;
+  /*
+   * Wave directions are rotated off the axes and the frequencies are non-harmonic, so
+   * the ripples don't resonate with the tile grid. World units are ~128 per tile, so
+   * these wavelengths span several tiles - axis-aligned waves near 1 cycle/tile print
+   * the tile grid back as a checkerboard.
+   */
+  vec2 d1 = vec2(0.80, 0.60);
+  vec2 d2 = vec2(-0.45, 0.89);
+  vec2 d3 = vec2(0.31, -0.95);
+
+  float w1 = sin(dot(p, d1) * 0.0031 + t * 0.9);
+  float w2 = sin(dot(p, d2) * 0.0053 - t * 0.7);
+  float w3 = sin(dot(p, d3) * 0.0087 + t * 1.3);
+
+  float rx = w1 * 0.6 + w2 * 0.32 + w3 * 0.16;
+  float rz = w1 * 0.34 - w2 * 0.58 + w3 * 0.21;
 
   // Larger vertical term = flatter water; choppiness scales the horizontal wobble.
   vec3 n = normalize(vec3(rx * waterChoppiness, -4.0, rz * waterChoppiness));
@@ -119,9 +133,11 @@ vec3 applyWater(vec3 c)
   vec3 surface = mix(body, fogColor.rgb, clamp(fresnel, 0.0, 0.85));
 
   // Sun glint. lightSunDir is uploaded regardless of whether scene lighting is on.
+  // Softer exponent than a true specular lobe: a tight highlight on these broad waves
+  // bands into hard edges rather than reading as glitter.
   vec3 h = normalize(normalize(lightSunDir) + v);
-  float spec = pow(clamp(dot(n, h), 0.0, 1.0), 64.0);
-  surface += vec3(1.0, 0.97, 0.9) * spec * 0.5;
+  float spec = pow(clamp(dot(n, h), 0.0, 1.0), 24.0);
+  surface += vec3(1.0, 0.97, 0.9) * spec * 0.30;
 
   return mix(c, surface, waterStrength);
 }
