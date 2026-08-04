@@ -129,6 +129,44 @@ public interface GpuPluginConfig extends Config
 	}
 
 	@ConfigSection(
+		name = "Retro / performance",
+		description = "Old-school stylisation. Approximates the look - it does not load "
+			+ "pre-2007 model data, which isn't in the modern cache.",
+		position = 300,
+		closedByDefault = true
+	)
+	String retroSection = "retroSection";
+
+	@ConfigItem(
+		keyName = "retroNoTextures",
+		name = "Disable textures",
+		description = "Render flat vertex colours instead of textures. Also a real "
+			+ "performance win on weak hardware.",
+		position = 301,
+		section = retroSection
+	)
+	default boolean retroNoTextures()
+	{
+		return false;
+	}
+
+	@Range(
+		max = 32
+	)
+	@ConfigItem(
+		keyName = "retroPosterize",
+		name = "Posterise",
+		description = "Colour levels per channel, for a low-colour-depth look. "
+			+ "0 or 1 disables; lower values are chunkier.",
+		position = 302,
+		section = retroSection
+	)
+	default int retroPosterize()
+	{
+		return 0;
+	}
+
+	@ConfigSection(
 		name = "Colour grading",
 		description = "Final image adjustments.",
 		position = 200,

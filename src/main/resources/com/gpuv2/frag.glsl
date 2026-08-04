@@ -41,6 +41,10 @@ uniform float gradeContrast;
 uniform float gradeSaturation;
 uniform float gradeTemperature;
 
+// Retro stylisation. 0 / <0.5 leaves the image untouched.
+uniform float retroNoTextures;
+uniform float retroPosterize;   // colour levels per channel; 0 disables
+
 in vec4 fColor;
 noperspective centroid in float fHsl;
 flat in int fTextureId;
@@ -66,7 +70,16 @@ vec3 applyGrade(vec3 c)
   float luma = dot(c, vec3(0.2126, 0.7152, 0.0722));
   c = mix(vec3(luma), c, gradeSaturation);
 
-  return clamp(c, 0.0, 1.0);
+  c = clamp(c, 0.0, 1.0);
+
+  // Posterise last, so it quantises the final graded image rather than being smeared
+  // back into a gradient by the grade.
+  if (retroPosterize > 1.5)
+  {
+    c = floor(c * retroPosterize + 0.5) / retroPosterize;
+  }
+
+  return c;
 }
 
 #include "hsl_to_rgb.glsl"
@@ -86,7 +99,13 @@ float linear_depth(float depth) {
 void main() {
   vec4 c;
 
-  if (fTextureId > 0) {
+  if (fTextureId > 0 && retroNoTextures > 0.5) {
+    // Textures off, but this is a textured face. Its fHsl is a 0-127 lightness rather
+    // than packed HSL, so the untextured decode below would render it flat grey -
+    // shade the vertex colour by that lightness instead.
+    float light = fHsl / 127.f;
+    c = vec4(fColor.rgb * (0.45f + 0.55f * light), fColor.a);
+  } else if (fTextureId > 0) {
     int textureIdx = fTextureId - 1;
 
     vec4 textureColor = texture(textures, vec3(fUv, float(textureIdx)));

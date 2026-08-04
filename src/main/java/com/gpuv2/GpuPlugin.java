@@ -309,6 +309,8 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 	private int uniGradeContrast;
 	private int uniGradeSaturation;
 	private int uniGradeTemperature;
+	private int uniRetroNoTextures;
+	private int uniRetroPosterize;
 	static int uniBase;
 
 	static final float[] IDENTITY = Mat4.identity();
@@ -792,6 +794,8 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 		uniGradeContrast = glGetUniformLocation(glProgram, "gradeContrast");
 		uniGradeSaturation = glGetUniformLocation(glProgram, "gradeSaturation");
 		uniGradeTemperature = glGetUniformLocation(glProgram, "gradeTemperature");
+		uniRetroNoTextures = glGetUniformLocation(glProgram, "retroNoTextures");
+		uniRetroPosterize = glGetUniformLocation(glProgram, "retroPosterize");
 
 		uniTex = glGetUniformLocation(glUiProgram, "tex");
 		uniTexTargetDimensions = glGetUniformLocation(glUiProgram, "targetDimensions");
@@ -1171,6 +1175,8 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 		glUniform1f(uniGradeContrast, config.gradeContrast() / 100f);
 		glUniform1f(uniGradeSaturation, config.gradeSaturation() / 100f);
 		glUniform1f(uniGradeTemperature, config.gradeTemperature() / 100f);
+		glUniform1f(uniRetroNoTextures, config.retroNoTextures() ? 1f : 0f);
+		glUniform1f(uniRetroPosterize, config.retroPosterize());
 
 		// Brightness happens to also be stored in the texture provider, so we use that
 		TextureProvider textureProvider = client.getTextureProvider();
