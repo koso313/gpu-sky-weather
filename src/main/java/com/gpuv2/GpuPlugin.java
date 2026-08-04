@@ -205,6 +205,8 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 	private int uniWeatherTime;
 	private int uniWeatherAmount;
 	private int uniWeatherAspect;
+	private int uniWeatherHeavy;
+	private int uniWeatherLightning;
 
 	private int uniSkyColor;
 	private int uniSkyNight;
@@ -918,6 +920,8 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 		uniWeatherTime = glGetUniformLocation(glWeatherProgram, "weatherTime");
 		uniWeatherAmount = glGetUniformLocation(glWeatherProgram, "weatherAmount");
 		uniWeatherAspect = glGetUniformLocation(glWeatherProgram, "aspect");
+		uniWeatherHeavy = glGetUniformLocation(glWeatherProgram, "weatherHeavy");
+		uniWeatherLightning = glGetUniformLocation(glWeatherProgram, "lightning");
 
 		uniSkyShowMoon = glGetUniformLocation(glSkyProgram, "showMoon");
 		uniSkyShowSun = glGetUniformLocation(glSkyProgram, "showSun");
@@ -1446,7 +1450,14 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 		glUniform1f(uniSkyStarTime, (System.nanoTime() % 1_000_000_000_000L) / 1e9f);
 		glUniform1f(uniSkyShowMoon, config.showMoon() ? 1f : 0f);
 		glUniform1f(uniSkyShowSun, config.showSun() ? 1f : 0f);
-		glUniform1f(uniSkyCloudAmount, config.cloudAmount() / 100f);
+		// Weather thickens the cloud deck as well as greying the sky.
+		float clouds = config.cloudAmount() / 100f;
+		WeatherMode weather = config.weather();
+		if (weather != WeatherMode.OFF)
+		{
+			clouds = Math.max(clouds, weather.overcast());
+		}
+		glUniform1f(uniSkyCloudAmount, clouds);
 		glUniform1f(uniSkyCloudOpacity, config.cloudOpacity() / 100f);
 
 		computeSunDirection(time);
@@ -1701,16 +1712,41 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 	 */
 	private int resolveSkyColor()
 	{
+		int sky;
 		switch (config.skyMode())
 		{
 			case CUSTOM:
-				return config.skyColor().getRGB() & 0xFFFFFF;
+				sky = config.skyColor().getRGB() & 0xFFFFFF;
+				break;
 			case TIME_OF_DAY:
-				return SkyGradient.colorAt(skyTime());
+				sky = SkyGradient.colorAt(skyTime());
+				break;
 			case GAME:
 			default:
-				return client.getSkyboxColor();
+				sky = client.getSkyboxColor();
+				break;
 		}
+
+		// Weather overcasts the sky, so rain doesn't fall out of clear blue. This also
+		// reaches the fog, which shares this colour.
+		WeatherMode weather = config.weather();
+		if (weather != WeatherMode.OFF)
+		{
+			sky = blendRgb(sky, weather.overcastColor(), weather.overcast());
+		}
+
+		return sky;
+	}
+
+	private static int blendRgb(int a, int b, float t)
+	{
+		t = Math.max(0f, Math.min(1f, t));
+		int ar = a >> 16 & 0xFF, ag = a >> 8 & 0xFF, ab = a & 0xFF;
+		int br = b >> 16 & 0xFF, bg = b >> 8 & 0xFF, bb = b & 0xFF;
+		int r = Math.round(ar + (br - ar) * t);
+		int g = Math.round(ag + (bg - ag) * t);
+		int bl = Math.round(ab + (bb - ab) * t);
+		return (r & 0xFF) << 16 | (g & 0xFF) << 8 | (bl & 0xFF);
 	}
 
 	/**
@@ -1864,6 +1900,43 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 		glDepthMask(true);
 	}
 
+	private static float weatherSeconds()
+	{
+		return (System.nanoTime() % 1_000_000_000_000L) / 1e9f;
+	}
+
+	/**
+	 * Lightning brightness for the given moment, 0..1.
+	 *
+	 * <p>Strikes fall on a fixed cadence but only fire on some of those slots, and each is
+	 * a fast double-flash with an exponential falloff - a single even pulse reads as a
+	 * screen glitch rather than lightning.
+	 */
+	private static float lightningFlash(float seconds)
+	{
+		final float period = 7f;
+		int slot = (int) (seconds / period);
+		float phase = seconds / period - slot;
+
+		// Skip roughly half the slots so strikes feel irregular.
+		float r = fract(slot * 0.6180339887f);
+		if (r < 0.45f)
+		{
+			return 0f;
+		}
+
+		float flash = (float) Math.exp(-phase * 55f);
+		// Second, weaker strike shortly after the first.
+		float second = phase > 0.045f ? (float) Math.exp(-(phase - 0.045f) * 45f) * 0.55f : 0f;
+
+		return Math.min(1f, (flash + second) * (0.6f + 0.4f * r));
+	}
+
+	private static float fract(float v)
+	{
+		return v - (float) Math.floor(v);
+	}
+
 	/**
 	 * Draws precipitation over the composed scene with normal alpha blending.
 	 */
@@ -1879,9 +1952,13 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 		glEnable(GL_BLEND);
 		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-		glUniform1i(uniWeatherType, config.weather() == WeatherMode.RAIN ? 1 : 2);
-		glUniform1f(uniWeatherTime, (System.nanoTime() % 1_000_000_000_000L) / 1e9f);
+		WeatherMode mode = config.weather();
+		glUniform1i(uniWeatherType, mode.isRainLike() ? 1 : 2);
+		glUniform1f(uniWeatherTime, weatherSeconds());
 		glUniform1f(uniWeatherAmount, config.weatherAmount() / 100f);
+		glUniform1f(uniWeatherHeavy, mode.heavy());
+		glUniform1f(uniWeatherLightning,
+			mode.hasLightning() && config.lightning() ? lightningFlash(weatherSeconds()) : 0f);
 		// Keeps drops and flakes from stretching with the window's aspect ratio.
 		glUniform1f(uniWeatherAspect, height > 0 ? (float) width / height : 1f);
 

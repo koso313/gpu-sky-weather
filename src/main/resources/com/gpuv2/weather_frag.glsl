@@ -3,9 +3,11 @@
 in vec2 fNdc;
 out vec4 FragColor;
 
-uniform int weatherType;      // 1 = rain, 2 = snow
+uniform int weatherType;      // 1 = rain family, 2 = snow family
 uniform float weatherTime;
 uniform float weatherAmount;  // 0..1
+uniform float weatherHeavy;   // 0 = calm, 1 = storm/blizzard
+uniform float lightning;      // 0..1 flash this frame
 uniform float aspect;         // viewport width / height
 
 float hash12(vec2 p)
@@ -18,61 +20,70 @@ float hash12(vec2 p)
 /*
  * Layered falling streaks. Each layer uses a different cell scale and fall speed, which
  * reads as depth without needing any actual depth information.
+ *
+ * uv.y increases upward, so falling means ADDING time to p.y: a droplet holding a fixed
+ * p.y then sits at a lower uv.y each frame.
  */
 float rain(vec2 uv, float t)
 {
 	float total = 0.0;
+	float speedUp = mix(1.0, 2.1, weatherHeavy);
+	float slant = mix(0.16, 0.42, weatherHeavy);
 
 	for (int layer = 0; layer < 3; ++layer)
 	{
 		float fl = float(layer);
-		float scale = 1.0 + fl * 0.8;
-		float speed = 1.0 + fl * 0.7;
+		float scale = 1.0 + fl * 0.7;
 
-		vec2 p = uv * vec2(70.0 * scale * aspect, 13.0 * scale);
-		p.x += p.y * 0.22;            // slant, so rain doesn't fall dead vertical
-		p.y -= t * speed * 14.0;
+		vec2 p = uv * vec2(52.0 * scale * aspect, 5.5 * scale);
+		p.x += uv.y * slant * 26.0;                       // wind-driven slant
+		p.y += t * (5.2 + fl * 2.4) * speedUp;            // + => falls downward
 
 		vec2 cell = floor(p);
 		float h = hash12(cell + fl * 31.7);
 
-		// Higher layers are sparser, so the near layer reads as the dominant one.
-		float density = 0.94 + fl * 0.015;
+		float density = mix(0.88, 0.72, weatherHeavy) + fl * 0.02;
 		if (h < density)
 		{
 			continue;
 		}
 
 		vec2 f = fract(p);
-		float across = 1.0 - smoothstep(0.0, 0.10, abs(f.x - 0.5));
-		float along = smoothstep(0.0, 0.55, f.y) * (1.0 - smoothstep(0.55, 1.0, f.y));
-		total += across * along * (0.35 + 0.65 * h) / (1.0 + fl);
+
+		// Narrow across, long along - a rain streak, not a dash.
+		float across = 1.0 - smoothstep(0.0, 0.055, abs(f.x - 0.5));
+		float along = smoothstep(0.0, 0.30, f.y) * (1.0 - smoothstep(0.45, 1.0, f.y));
+
+		total += across * along * (0.5 + 0.5 * h) / (1.0 + fl * 0.5);
 	}
 
 	return total;
 }
 
 /*
- * Drifting flakes: same cell approach, but round, slower, and swaying sideways.
+ * Drifting flakes: round, slower, swaying sideways, with per-flake size variation so they
+ * don't all read as identical dots.
  */
 float snow(vec2 uv, float t)
 {
 	float total = 0.0;
+	float speedUp = mix(1.0, 3.4, weatherHeavy);
+	float drift = mix(0.6, 3.2, weatherHeavy);
 
 	for (int layer = 0; layer < 3; ++layer)
 	{
 		float fl = float(layer);
-		float scale = 1.0 + fl * 0.9;
-		float speed = 0.35 + fl * 0.22;
+		float scale = 1.0 + fl * 0.85;
 
-		vec2 p = uv * vec2(26.0 * scale * aspect, 26.0 * scale);
-		p.y -= t * speed * 4.0;
-		p.x += sin(t * (0.5 + fl * 0.3) + p.y * 0.35) * 0.6;
+		vec2 p = uv * vec2(22.0 * scale * aspect, 22.0 * scale);
+		p.y += t * (1.15 + fl * 0.55) * speedUp;          // + => falls downward
+		p.x += sin(t * (0.6 + fl * 0.35) + uv.y * 7.0) * drift;
+		p.x += t * drift * 0.55 * weatherHeavy;           // blizzards blow sideways
 
 		vec2 cell = floor(p);
 		float h = hash12(cell + fl * 17.3);
 
-		float density = 0.965 + fl * 0.008;
+		float density = mix(0.945, 0.86, weatherHeavy) + fl * 0.01;
 		if (h < density)
 		{
 			continue;
@@ -80,9 +91,13 @@ float snow(vec2 uv, float t)
 
 		// Jitter within the cell so flakes don't sit on a visible lattice.
 		vec2 jitter = vec2(hash12(cell + 5.1), hash12(cell + 9.7)) - 0.5;
-		float d = length(fract(p) - 0.5 - jitter * 0.5);
+		float d = length(fract(p) - 0.5 - jitter * 0.55);
 
-		total += (1.0 - smoothstep(0.0, 0.22, d)) * (0.4 + 0.6 * h) / (1.0 + fl * 0.6);
+		// Vary flake size; the smaller ones read as further away.
+		float radius = mix(0.10, 0.26, hash12(cell + 3.3));
+
+		total += (1.0 - smoothstep(radius * 0.35, radius, d)) * (0.45 + 0.55 * h)
+			/ (1.0 + fl * 0.5);
 	}
 
 	return total;
@@ -99,13 +114,20 @@ void main()
 	if (weatherType == 1)
 	{
 		amount = rain(uv, t) * weatherAmount;
-		color = vec3(0.72, 0.78, 0.88);
+		color = vec3(0.78, 0.84, 0.94);
 	}
 	else
 	{
 		amount = snow(uv, t) * weatherAmount;
-		color = vec3(0.96, 0.97, 1.0);
+		color = vec3(0.97, 0.98, 1.0);
 	}
 
-	FragColor = vec4(color * amount, clamp(amount, 0.0, 1.0));
+	amount = clamp(amount, 0.0, 1.0);
+
+	// Lightning washes the whole frame, not just the droplets.
+	float flash = clamp(lightning, 0.0, 1.0);
+	vec3 rgb = color * amount + vec3(0.85, 0.88, 1.0) * flash;
+	float alpha = clamp(amount + flash * 0.65, 0.0, 1.0);
+
+	FragColor = vec4(rgb, alpha);
 }

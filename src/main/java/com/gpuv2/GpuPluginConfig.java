@@ -178,6 +178,18 @@ public interface GpuPluginConfig extends Config
 		return 55;
 	}
 
+	@ConfigItem(
+		keyName = "lightning",
+		name = "Lightning",
+		description = "Flashes of lightning during a storm.",
+		position = 208,
+		section = weatherSection
+	)
+	default boolean lightning()
+	{
+		return true;
+	}
+
 	@ConfigSection(
 		name = "Bloom",
 		description = "Glow around bright areas.",
