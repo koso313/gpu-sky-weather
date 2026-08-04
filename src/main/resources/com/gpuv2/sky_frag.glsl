@@ -12,7 +12,8 @@ uniform float cosPitch;
 uniform float sinPitch;
 uniform float cosYaw;
 uniform float sinYaw;
-uniform float starTime;   // seconds, drives twinkle and cloud drift
+uniform float starTime;   // seconds, drives star twinkle
+uniform float cloudTime;  // continuous seconds-of-day, drives cloud drift
 uniform vec3 sunDir;      // normalised world direction toward the sun
 uniform vec3 moonDir;     // normalised world direction toward the moon
 uniform float showMoon;
@@ -92,6 +93,40 @@ float fbm(vec2 p)
 	for (int i = 0; i < 5; ++i)
 	{
 		total += valueNoise(p) * amplitude;
+		p *= 2.02;
+		amplitude *= 0.5;
+	}
+	return total;
+}
+
+/*
+ * Cloud field that reshapes as well as travels.
+ *
+ * Scrolling a static fbm slides one fixed pattern past forever - the same clouds, in the
+ * same shapes, every time. Two things break that up:
+ *
+ *  - a slow domain warp, which bends the whole field and changes the large structures
+ *  - a different drift rate and direction per octave, so detail moves relative to the
+ *    shapes containing it rather than the deck translating rigidly
+ *
+ * Rates are kept low enough that offsets stay small over a day; large offsets would push
+ * the hash into the range where its precision falls apart and the noise turns to banding.
+ */
+float cloudFbm(vec2 p, float t)
+{
+	vec2 warp = vec2(
+		valueNoise(p * 0.35 + vec2(t * 0.0006, 0.0)),
+		valueNoise(p * 0.35 + vec2(17.3, -t * 0.0004))
+	) - 0.5;
+	p += warp * 1.6;
+
+	float total = 0.0;
+	float amplitude = 0.5;
+	for (int i = 0; i < 5; ++i)
+	{
+		float fi = float(i);
+		vec2 drift = vec2(t * (0.0007 + fi * 0.0004), t * (-0.0005 + fi * 0.0003));
+		total += valueNoise(p + drift) * amplitude;
 		p *= 2.02;
 		amplitude *= 0.5;
 	}
@@ -290,9 +325,13 @@ void main()
 	if (cloudAmount > 0.001 && up > 0.02)
 	{
 		vec2 uv = dir.xz / max(up, 0.06) * 0.55;
-		uv += vec2(starTime * 0.004, starTime * 0.002);
 
-		float n = fbm(uv * 1.4);
+		// Driven by the sky clock rather than a free-running timer, so the deck advances
+		// with the hour: dawn and dusk show a different sky, and scrubbing the preview
+		// hour moves the clouds along with the sun instead of leaving them put.
+		uv += vec2(cloudTime * 0.0012, cloudTime * 0.0006);
+
+		float n = cloudFbm(uv * 1.4, cloudTime);
 		float cover = mix(0.72, 0.28, cloudAmount);
 		float c = smoothstep(cover, cover + 0.22, n);
 

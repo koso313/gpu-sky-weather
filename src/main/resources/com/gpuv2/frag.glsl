@@ -124,13 +124,25 @@ vec3 faceNormal()
   return len < 1e-6 ? vec3(0.0) : n / len;
 }
 
-float gFbm(vec2 p)
+/*
+ * Mirrors the sky's cloudFbm - domain warp plus per-octave drift - so the shadows on the
+ * ground evolve the same way the deck casting them does.
+ */
+float gFbm(vec2 p, float t)
 {
+  vec2 warp = vec2(
+    gNoise(p * 0.35 + vec2(t * 0.0006, 0.0)),
+    gNoise(p * 0.35 + vec2(17.3, -t * 0.0004))
+  ) - 0.5;
+  p += warp * 1.6;
+
   float total = 0.0;
   float amp = 0.5;
   for (int i = 0; i < 4; ++i)
   {
-    total += gNoise(p) * amp;
+    float fi = float(i);
+    vec2 drift = vec2(t * (0.0007 + fi * 0.0004), t * (-0.0005 + fi * 0.0003));
+    total += gNoise(p + drift) * amp;
     p *= 2.03;
     amp *= 0.5;
   }
@@ -147,8 +159,11 @@ float gFbm(vec2 p)
  */
 vec3 applyCloudShadow(vec3 c)
 {
-  vec2 uv = fWorldPos.xz * 0.0011 + vec2(cloudShadowTime * 0.004, cloudShadowTime * 0.002);
-  float n = gFbm(uv * 1.4);
+  // Same drift rates as the sky deck, on the same clock, so the shadows travel and
+  // reshape with the clouds overhead rather than on their own schedule.
+  vec2 uv = fWorldPos.xz * 0.0011
+    + vec2(cloudShadowTime * 0.0012, cloudShadowTime * 0.0006);
+  float n = gFbm(uv * 1.4, cloudShadowTime);
 
   // Broad soft patches: most of the ground is lit, with shadow pooling under the thicker
   // parts of the deck.

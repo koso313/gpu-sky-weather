@@ -246,6 +246,7 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 	private int uniSkyCosYaw;
 	private int uniSkySinYaw;
 	private int uniSkyStarTime;
+	private int uniSkyCloudTime;
 	private int uniSkySunDir;
 	private int uniSkyMoonDir;
 	private int uniSkyShowMoon;
@@ -965,6 +966,7 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 		uniSkyCosYaw = glGetUniformLocation(glSkyProgram, "cosYaw");
 		uniSkySinYaw = glGetUniformLocation(glSkyProgram, "sinYaw");
 		uniSkyStarTime = glGetUniformLocation(glSkyProgram, "starTime");
+		uniSkyCloudTime = glGetUniformLocation(glSkyProgram, "cloudTime");
 		uniSkySunDir = glGetUniformLocation(glSkyProgram, "sunDir");
 		uniSkyMoonDir = glGetUniformLocation(glSkyProgram, "moonDir");
 		uniBloomSrc = glGetUniformLocation(glBloomProgram, "src");
@@ -1527,6 +1529,7 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 		glUniform1f(uniSkyCosYaw, (float) Math.cos(cameraYaw));
 		glUniform1f(uniSkySinYaw, (float) Math.sin(cameraYaw));
 		glUniform1f(uniSkyStarTime, (System.nanoTime() % 1_000_000_000_000L) / 1e9f);
+		glUniform1f(uniSkyCloudTime, skySeconds());
 		glUniform1f(uniSkyShowMoon, config.showMoon() ? 1f : 0f);
 		glUniform1f(uniSkyShowSun, config.showSun() ? 1f : 0f);
 		// Weather thickens the cloud deck as well as greying the sky.
@@ -1710,7 +1713,8 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 		}
 
 		glUniform1f(uniCloudShadow, shadow);
-		glUniform1f(uniCloudShadowTime, (System.nanoTime() % 1_000_000_000_000L) / 1e9f);
+		// Same clock as the sky deck, so the shadows belong to the clouds casting them.
+		glUniform1f(uniCloudShadowTime, skySeconds());
 	}
 
 	/**
@@ -1889,6 +1893,29 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 	{
 		int preview = config.previewHour();
 		return preview < 0 ? LocalTime.now() : LocalTime.of(preview % 24, 0);
+	}
+
+	/**
+	 * Continuous seconds-of-day for cloud drift.
+	 *
+	 * <p>Deliberately not the free-running timer the stars twinkle on: that wraps every
+	 * ~1000 seconds, which would jump the cloud deck, and it ignores the hour entirely so
+	 * scrubbing the preview hour left the clouds sitting still while the sun moved.
+	 *
+	 * <p>Seconds and nanos are included so it advances smoothly rather than stepping once
+	 * a minute like the sky colour does. On a frozen preview hour it anchors to that hour
+	 * but keeps real time flowing, so the clouds still move while being looked at.
+	 */
+	private float skySeconds()
+	{
+		int preview = config.previewHour();
+		if (preview < 0)
+		{
+			LocalTime now = LocalTime.now();
+			return now.getHour() * 3600f + now.getMinute() * 60f + now.getSecond()
+				+ now.getNano() / 1e9f;
+		}
+		return (preview % 24) * 3600f + (System.nanoTime() % 1_000_000_000_000L) / 1e9f;
 	}
 
 	private void drawSkybox(Scene scene, int sky, float cameraX, float cameraY, float cameraZ,
