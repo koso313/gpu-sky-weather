@@ -189,8 +189,9 @@ public interface GpuPluginConfig extends Config
 	@ConfigItem(
 		keyName = "smoothTextures",
 		name = "Smooth textures",
-		description = "Blend textures instead of showing hard pixels up close. A matter "
-			+ "of taste rather than quality.",
+		description = "Blend texture pixels instead of showing hard edges. Softens the "
+			+ "game's pixel art - taste rather than quality. Most visible on large flat "
+			+ "surfaces like floors and walls.",
 		position = 154,
 		section = displaySection
 	)

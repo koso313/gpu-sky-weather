@@ -1483,21 +1483,21 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 			glBindFramebuffer(GL_DRAW_FRAMEBUFFER, fboScene);
 		}
 
-		// Texture magnification filter, only reapplied when it actually changes.
-		final boolean smoothTextures = config.smoothTextures();
-		if (textureArrayId != -1 && lastSmoothTextures != (smoothTextures ? 1 : 0))
-		{
-			textureManager.setSmoothTextures(textureArrayId, smoothTextures);
-			lastSmoothTextures = smoothTextures ? 1 : 0;
-		}
-
-		// Setup anisotropic filtering
+		/*
+		 * Texture filtering. Both settings write the minification filter, so they are
+		 * applied together - applying them separately would mean whichever ran last won.
+		 */
 		final int anisotropicFilteringLevel = config.anisotropicFilteringLevel();
+		final int smoothTextures = config.smoothTextures() ? 1 : 0;
 
-		if (textureArrayId != -1 && lastAnisotropicFilteringLevel != anisotropicFilteringLevel)
+		if (textureArrayId != -1
+			&& (lastAnisotropicFilteringLevel != anisotropicFilteringLevel
+				|| lastSmoothTextures != smoothTextures))
 		{
-			textureManager.setAnisotropicFilteringLevel(textureArrayId, anisotropicFilteringLevel);
+			textureManager.setTextureFiltering(textureArrayId, anisotropicFilteringLevel,
+				smoothTextures == 1);
 			lastAnisotropicFilteringLevel = anisotropicFilteringLevel;
+			lastSmoothTextures = smoothTextures;
 		}
 
 		// Setup viewport

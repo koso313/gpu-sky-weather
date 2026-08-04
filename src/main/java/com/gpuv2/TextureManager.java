@@ -87,24 +87,40 @@ class TextureManager
 		return textureArrayId;
 	}
 
-	void setAnisotropicFilteringLevel(int textureArrayId, int level)
+	/**
+	 * Sets both filters and the anisotropy level together.
+	 *
+	 * <p>They have to be set as one: minification is what you actually see at normal
+	 * camera distance, since the game's 128px textures are nearly always drawn smaller
+	 * than their native size. Setting only the magnification filter changes almost
+	 * nothing, because magnification barely happens.
+	 *
+	 * @param level  0 = no mipmaps or anisotropy, 1 = mipmaps only, higher = anisotropy
+	 * @param smooth blend texels instead of showing hard pixel edges
+	 */
+	void setTextureFiltering(int textureArrayId, int level, boolean smooth)
 	{
 		glBindTexture(GL_TEXTURE_2D_ARRAY, textureArrayId);
 
-		//level = 0 means no mipmaps and no anisotropic filtering
+		int minFilter;
 		if (level == 0)
 		{
-			glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+			// No mipmaps.
+			minFilter = smooth ? GL_LINEAR : GL_NEAREST;
 		}
-		//level = 1 means with mipmaps but without anisotropic filtering GL_MAX_TEXTURE_MAX_ANISOTROPY_EXT defaults to 1.0 which is off
-		//level > 1 enables anisotropic filtering. It's up to the vendor what the values mean
-		//Even if anisotropic filtering isn't supported, mipmaps will be enabled with any level >= 1
 		else
 		{
-			// Set on GL_NEAREST_MIPMAP_LINEAR (bilinear filtering with mipmaps) since the pixel nature of the game means that nearest filtering
-			// looks best for objects up close but allows linear filtering to resolve possible aliasing and noise with mipmaps from far away objects.
-			glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MIN_FILTER, GL_NEAREST_MIPMAP_LINEAR);
+			/*
+			 * With mipmaps. Nearest between texels but linear between mip levels is the
+			 * stock choice: it keeps the pixel art crisp up close while still resolving
+			 * aliasing in the distance. Smooth blends texels as well.
+			 */
+			minFilter = smooth ? GL_LINEAR_MIPMAP_LINEAR : GL_NEAREST_MIPMAP_LINEAR;
 		}
+
+		glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MIN_FILTER, minFilter);
+		glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MAG_FILTER,
+			smooth ? GL_LINEAR : GL_NEAREST);
 
 		if (GL.getCapabilities().GL_EXT_texture_filter_anisotropic)
 		{
@@ -113,20 +129,6 @@ class TextureManager
 			final float anisoLevel = Math.max(1, Math.min(maxSamples, level));
 			glTexParameterf(GL_TEXTURE_2D_ARRAY, EXTTextureFilterAnisotropic.GL_TEXTURE_MAX_ANISOTROPY_EXT, anisoLevel);
 		}
-	}
-
-	/**
-	 * Magnification filter for the texture array.
-	 *
-	 * <p>Nearest is the default because the game's textures are low resolution and pixel
-	 * art - linear smooths them into mush up close for some, and looks softer and cleaner
-	 * to others, so it is a taste setting rather than a quality one.
-	 */
-	void setSmoothTextures(int textureArrayId, boolean smooth)
-	{
-		glBindTexture(GL_TEXTURE_2D_ARRAY, textureArrayId);
-		glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MAG_FILTER,
-			smooth ? GL_LINEAR : GL_NEAREST);
 	}
 
 	void freeTextureArray(int textureArrayId)
