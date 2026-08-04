@@ -9,6 +9,11 @@ package com.gpuv2.config;
 public enum WeatherMode
 {
 	OFF("Off", false, 0f, 0x000000, 0f),
+	/**
+	 * Resolved to one of the real conditions by the weather cycle. Never reaches the
+	 * renderer itself, so its values here are unused placeholders.
+	 */
+	AUTO("Automatic", false, 0f, 0x000000, 0f),
 	RAIN("Rain", true, 0f, 0x7C848C, 0.60f),
 	STORM("Storm", true, 1f, 0x4A5057, 0.88f),
 	// Snow skies are bright and heavy rather than grey - the light bounces off the cloud

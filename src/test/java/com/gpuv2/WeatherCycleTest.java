@@ -92,6 +92,20 @@ public class WeatherCycleTest
 		}
 	}
 
+	/**
+	 * AUTO is the user's selection, not a condition. If the cycle ever returned it the
+	 * renderer would try to draw it as real weather.
+	 */
+	@Test
+	public void cycleNeverReturnsAuto()
+	{
+		for (int i = 0; i < 2000; ++i)
+		{
+			assertTrue("cycle returned AUTO at slot " + i,
+				WeatherCycle.modeAt(i * (double) PERIOD, PERIOD) != WeatherMode.AUTO);
+		}
+	}
+
 	@Test
 	public void guardsAgainstZeroPeriod()
 	{

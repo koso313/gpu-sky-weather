@@ -269,6 +269,9 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 	/** What an overcast sky darkens to at full night. */
 	private static final int NIGHT_OVERCAST = 0x141922;
 
+	/** Ceiling on how much cloud weather may force, so the sky is never fully sealed. */
+	private static final float MAX_WEATHER_CLOUD = 0.70f;
+
 	/** Strike the current bearing was chosen for, so it is picked once and then held. */
 	private int lastLightningSlot = -1;
 	private float lightningBearing;
@@ -1519,7 +1522,14 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 		WeatherMode weather = activeWeather();
 		if (weather != WeatherMode.OFF)
 		{
-			clouds = Math.max(clouds, weather.overcast() * weatherIntensity());
+			/*
+			 * Weather thickens the deck but must not seal it. Overcast runs as high as
+			 * 0.95 for a blizzard, and at that cover the cloud layer covers essentially
+			 * the whole sky - which takes the sun, moon and stars with it. Capped so
+			 * there is always some sky left to see through.
+			 */
+			float forced = Math.min(weather.overcast() * weatherIntensity(), MAX_WEATHER_CLOUD);
+			clouds = Math.max(clouds, forced);
 		}
 		glUniform1f(uniSkyCloudAmount, clouds);
 		glUniform1f(uniSkyCloudOpacity, config.cloudOpacity() / 100f);
@@ -1604,9 +1614,10 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 	 */
 	private WeatherMode activeWeather()
 	{
-		if (!config.autoWeather())
+		WeatherMode selected = config.weather();
+		if (selected != WeatherMode.AUTO)
 		{
-			return config.weather();
+			return selected;
 		}
 		return WeatherCycle.modeAt(clockMinutes(), config.autoWeatherPeriod());
 	}
@@ -1617,9 +1628,10 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 	 */
 	private float weatherIntensity()
 	{
-		if (!config.autoWeather())
+		WeatherMode selected = config.weather();
+		if (selected != WeatherMode.AUTO)
 		{
-			return config.weather() == WeatherMode.OFF ? 0f : 1f;
+			return selected == WeatherMode.OFF ? 0f : 1f;
 		}
 		return WeatherCycle.intensityAt(clockMinutes(), config.autoWeatherPeriod());
 	}

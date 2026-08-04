@@ -151,16 +151,16 @@ public interface GpuPluginConfig extends Config
 	String weatherSection = "weatherSection";
 
 	@ConfigItem(
-		keyName = "autoWeather",
-		name = "Automatic weather",
-		description = "Let the weather change on its own over time. Overrides the manual "
-			+ "selection below.",
+		keyName = "weather",
+		name = "Weather",
+		description = "Precipitation drawn in front of the world and behind the interface. "
+			+ "'Automatic' lets it change on its own over time.",
 		position = 205,
 		section = weatherSection
 	)
-	default boolean autoWeather()
+	default WeatherMode weather()
 	{
-		return false;
+		return WeatherMode.OFF;
 	}
 
 	@Range(
@@ -169,28 +169,15 @@ public interface GpuPluginConfig extends Config
 	)
 	@ConfigItem(
 		keyName = "autoWeatherPeriod",
-		name = "Weather changes every",
-		description = "Minutes each spell of weather lasts, including the time it spends "
-			+ "building and easing off.",
-		position = 205,
+		name = "Automatic: changes every",
+		description = "Minutes each spell of weather lasts on 'Automatic', including the "
+			+ "time it spends building and easing off.",
+		position = 206,
 		section = weatherSection
 	)
 	default int autoWeatherPeriod()
 	{
 		return 12;
-	}
-
-	@ConfigItem(
-		keyName = "weather",
-		name = "Weather",
-		description = "Precipitation drawn in front of the world and behind the interface. "
-			+ "Ignored while automatic weather is on.",
-		position = 206,
-		section = weatherSection
-	)
-	default WeatherMode weather()
-	{
-		return WeatherMode.OFF;
 	}
 
 	@Range(
