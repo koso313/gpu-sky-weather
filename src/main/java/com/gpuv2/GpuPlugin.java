@@ -74,6 +74,7 @@ import net.runelite.api.Tile;
 import net.runelite.api.coords.LocalPoint;
 import net.runelite.api.events.CommandExecuted;
 import net.runelite.api.events.GameStateChanged;
+import net.runelite.api.events.GameTick;
 import net.runelite.api.events.PostClientTick;
 import net.runelite.api.hooks.DrawCallbacks;
 import net.runelite.client.callback.ClientThread;
@@ -242,6 +243,9 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 
 	/** Reused per-frame scratch for {@link #computeSunDirection}. */
 	private final float[] sunDir = new float[3];
+
+	/** Model-based weather, used instead of the screen-space pass when enabled. */
+	private ModelWeather modelWeather;
 
 	private int interfaceTexture;
 	private int interfacePbo;
@@ -662,6 +666,12 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 	{
 		clientThread.invoke(() ->
 		{
+			if (modelWeather != null)
+			{
+				modelWeather.clear();
+				modelWeather = null;
+			}
+
 			// Only tear down client renderer state if we actually own it. If we bailed out
 			// because another renderer was active, clearing these would break that renderer.
 			if (client.getDrawCallbacks() == this)
@@ -2060,7 +2070,8 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 
 		// After the scene is on the default framebuffer but before the UI is composited,
 		// so precipitation falls in front of the world and behind the interface.
-		if (config.weather() != WeatherMode.OFF && glWeatherProgram != 0)
+		// Skipped when 3D weather is on - that draws in the scene itself.
+		if (config.weather() != WeatherMode.OFF && !config.weatherUseModels() && glWeatherProgram != 0)
 		{
 			drawWeather(defaultFbo, width, height);
 		}
@@ -3159,6 +3170,25 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 
 			log.debug("glGetError:", new Exception(errStr));
 		}
+	}
+
+	@Subscribe
+	public void onGameTick(GameTick tick)
+	{
+		if (!config.weatherUseModels() || config.weather() == WeatherMode.OFF)
+		{
+			if (modelWeather != null)
+			{
+				modelWeather.clear();
+			}
+			return;
+		}
+
+		if (modelWeather == null)
+		{
+			modelWeather = new ModelWeather(client);
+		}
+		modelWeather.update(config.weather(), config.weatherModelRadius());
 	}
 
 	@Subscribe
