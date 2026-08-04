@@ -26,7 +26,6 @@ final class WeatherCycle
 		WeatherMode.OFF,
 		WeatherMode.RAIN,
 		WeatherMode.RAIN,
-		WeatherMode.FOG,
 		WeatherMode.SNOW,
 		WeatherMode.STORM,
 		WeatherMode.BLIZZARD,

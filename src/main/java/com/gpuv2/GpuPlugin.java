@@ -38,6 +38,7 @@ import java.nio.ByteBuffer;
 import java.nio.FloatBuffer;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import javax.inject.Inject;
@@ -65,7 +66,6 @@ import com.gpuv2.config.SkyMode;
 import com.gpuv2.config.WeatherMode;
 import net.runelite.client.config.ConfigManager;
 import net.runelite.api.ChatMessageType;
-import java.util.Set;
 import java.util.TreeSet;
 import net.runelite.api.Player;
 import net.runelite.api.SceneTileModel;
@@ -265,6 +265,18 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 	private int uniSkyMoonGlow;
 	private int uniSkyCloudAmount;
 	private int uniSkyCloudOpacity;
+	private int uniSkyMeteorActive;
+	private int uniSkyMeteorTravel;
+	private int uniSkyMeteorPath;
+
+	/** Seconds between candidate meteors; whether one flies is decided per slot. */
+	private static final float METEOR_SLOT = 3f;
+
+	private int lastMeteorSlot = -1;
+	private boolean meteorActive;
+	private float meteorTravel;
+	/** Start bearing, start height, bearing arc, height drop. */
+	private final float[] meteorPath = new float[4];
 	private int uniSkyAuroraStrength;
 	private int uniSkyAuroraTime;
 	private int uniSkyBoltStrength;
@@ -1027,6 +1039,9 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 		uniSkyMoonGlow = glGetUniformLocation(glSkyProgram, "moonGlow");
 		uniSkyCloudAmount = glGetUniformLocation(glSkyProgram, "cloudAmount");
 		uniSkyCloudOpacity = glGetUniformLocation(glSkyProgram, "cloudOpacity");
+		uniSkyMeteorActive = glGetUniformLocation(glSkyProgram, "meteorActive");
+		uniSkyMeteorTravel = glGetUniformLocation(glSkyProgram, "meteorTravel");
+		uniSkyMeteorPath = glGetUniformLocation(glSkyProgram, "meteorPath");
 		uniSkyAuroraStrength = glGetUniformLocation(glSkyProgram, "auroraStrength");
 		uniSkyAuroraTime = glGetUniformLocation(glSkyProgram, "auroraTime");
 		uniSkyBoltStrength = glGetUniformLocation(glSkyProgram, "boltStrength");
@@ -1458,10 +1473,7 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 
 		// Setup uniforms
 		final int drawDistance = getDrawDistance();
-		// Fog weather thickens the haze on top of whatever the slider is set to, scaled by
-		// how far into the spell we are so it rolls in and lifts rather than appearing.
-		final int weatherFog = Math.round(activeWeather().fogDepth() * weatherIntensity());
-		final int fogDepth = Math.min(MAX_FOG_DEPTH, Math.max(config.fogDepth(), weatherFog));
+		final int fogDepth = config.fogEnabled() ? config.fogDepth() : 0;
 		// Feeds both the fog uniform below and drawSkybox() further down, so overriding it
 		// here keeps the sky and the fog it fades into the same colour.
 		final int sky = resolveSkyColor();
@@ -1585,6 +1597,16 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 			clouds = Math.max(clouds, forced);
 		}
 		glUniform1f(uniSkyCloudAmount, clouds);
+
+		// Shooting stars need a clear night sky, for the same reason the stars do.
+		float clearSky = Math.max(0f, 1f - clouds * 1.2f);
+		boolean meteorsVisible = config.nightSky() && clearSky > 0.35f
+			&& SkyGradient.nightFactorAt(time) >= 0.35f;
+		updateMeteor(meteorsVisible ? config.shootingStars() : 0);
+
+		glUniform1f(uniSkyMeteorActive, meteorActive ? 1f : 0f);
+		glUniform1f(uniSkyMeteorTravel, meteorTravel);
+		glUniform4f(uniSkyMeteorPath, meteorPath[0], meteorPath[1], meteorPath[2], meteorPath[3]);
 
 		// Aurora only on a clear night - cloud covers it, the same way it covers stars.
 		float aurora = config.aurora() ? config.auroraStrength() / 100f : 0f;
@@ -1771,11 +1793,7 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 		 * The offset puts the top a little above eye level, so standing in it you are
 		 * inside the mist rather than looking down on a flat sheet.
 		 */
-		float mist = config.heightFog() / 100f;
-		if (weather == WeatherMode.FOG)
-		{
-			mist = Math.max(mist, 0.85f * weatherIntensity());
-		}
+		float mist = config.fogEnabled() ? config.heightFog() / 100f : 0f;
 		glUniform1f(uniHeightFog, mist);
 		glUniform1f(uniHeightFogTop, lastCameraY - HEIGHT_FOG_EYE_OFFSET);
 		glUniform1f(uniHeightFogDepth, config.heightFogDepth() * Perspective.LOCAL_TILE_SIZE);
@@ -1999,6 +2017,76 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 		 * push the noise hash into the range where its precision fails.
 		 */
 		return (base + elapsed) * cloudSpeedMultiplier();
+	}
+
+	/**
+	 * Decides whether a meteor is flying and advances it.
+	 *
+	 * <p>Time is cut into fixed slots and each slot is seeded from its own index, so the
+	 * flight is reproducible without storing anything between frames. Deciding it here
+	 * rather than in the shader is what lets a sound fire at the moment of spawn.
+	 *
+	 * @param mode 0 off, 1 rare, 2 showcase
+	 */
+	private void updateMeteor(int mode)
+	{
+		if (mode <= 0)
+		{
+			meteorActive = false;
+			// Forget the slot, so re-enabling mid-slot doesn't skip the next spawn.
+			lastMeteorSlot = -1;
+			return;
+		}
+
+		float seconds = monotonicSeconds();
+		int slot = (int) (seconds / METEOR_SLOT);
+
+		if (slot != lastMeteorSlot)
+		{
+			lastMeteorSlot = slot;
+
+			Random rng = new Random(slot * 0x9E3779B97F4A7C15L);
+			// Rare by default. Showcase fires nearly every slot so the speed setting can
+			// be judged without waiting minutes for a real one.
+			float chance = mode > 1 ? 0.9f : 0.001f;
+			meteorActive = rng.nextFloat() < chance;
+
+			if (meteorActive)
+			{
+				meteorPath[0] = rng.nextFloat() * (float) (2 * Math.PI);
+				meteorPath[1] = 0.30f + rng.nextFloat() * 0.45f;
+				meteorPath[2] = (rng.nextFloat() - 0.5f) * 1.5f;
+				meteorPath[3] = 0.18f + rng.nextFloat() * 0.22f;
+
+				if (config.shootingStarSound())
+				{
+					client.playSoundEffect(config.shootingStarSoundId());
+				}
+			}
+		}
+
+		if (meteorActive)
+		{
+			float phase = seconds / METEOR_SLOT - slot;
+			meteorTravel = phase * shootingStarSpeedMultiplier();
+		}
+	}
+
+	/**
+	 * Scales how fast a meteor crosses the sky. Higher means it covers its arc in less of
+	 * its time slot, so it streaks past rather than drifting.
+	 */
+	private float shootingStarSpeedMultiplier()
+	{
+		switch (config.shootingStarSpeed())
+		{
+			case 3:
+				return 5f;
+			case 2:
+				return 3f;
+			default:
+				return 1.7f;
+		}
 	}
 
 	private float auroraSpeedMultiplier()

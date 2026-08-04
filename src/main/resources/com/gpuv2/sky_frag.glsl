@@ -24,6 +24,15 @@ uniform float moonGlow;   // brightness of the moon disc and its halo
 uniform float cloudAmount;   // 0 = clear, 1 = overcast
 uniform float cloudOpacity;
 
+/*
+ * Shooting stars. Whether one is flying, and where, is decided on the CPU rather than
+ * hashed here - that way the plugin knows the moment one spawns and can play a sound for
+ * it, which it cannot do if the decision only ever exists inside the shader.
+ */
+uniform float meteorActive;
+uniform float meteorTravel;   // 0..1 along the flight; above 1 means finished
+uniform vec4 meteorPath;      // start bearing, start height, bearing arc, height drop
+
 // Aurora. 0 disables.
 uniform float auroraStrength;
 uniform float auroraTime;   // monotonic seconds, already scaled by the speed setting
@@ -337,6 +346,67 @@ vec3 moonSurface(vec3 dir, float discCos)
 }
 
 /*
+ * A world direction from a compass bearing and a height above the horizon.
+ */
+vec3 dirFromBearingHeight(float bearing, float height)
+{
+	float h = clamp(height, 0.0, 1.0);
+	float horiz = sqrt(max(0.0, 1.0 - h * h));
+	// World Y is negative-up, hence the negated vertical component.
+	return normalize(vec3(sin(bearing) * horiz, -h, cos(bearing) * horiz));
+}
+
+/*
+ * Shooting stars.
+ *
+ * Time is cut into fixed slots, and each slot is hashed to decide whether a meteor flies
+ * in it and where it goes - so every pixel independently agrees on the same meteor
+ * without any state being stored between frames.
+ *
+ * The trail is accumulated by sampling backwards along the flight path from the current
+ * head position, which gives the taper for free: earlier samples are both further back
+ * and weighted lower.
+ */
+vec3 shootingStar(vec3 dir, float night)
+{
+	float travel = meteorTravel;
+	if (meteorActive < 0.5 || night < 0.35 || travel > 1.0)
+	{
+		return vec3(0.0);
+	}
+
+	vec3 a = dirFromBearingHeight(meteorPath.x, meteorPath.y);
+	vec3 b = dirFromBearingHeight(meteorPath.x + meteorPath.z, meteorPath.y - meteorPath.w);
+
+	// Sample back along the path; nearer the head is brighter and tighter.
+	const int TAIL_SAMPLES = 14;
+	const float TAIL = 0.22;
+	float glow = 0.0;
+
+	for (int i = 0; i < TAIL_SAMPLES; ++i)
+	{
+		float f = float(i) / float(TAIL_SAMPLES - 1);
+		float tt = travel - f * TAIL;
+		if (tt < 0.0)
+		{
+			break;
+		}
+
+		vec3 p = normalize(mix(a, b, tt));
+		float ang = 1.0 - dot(dir, p);
+
+		float w = 1.0 - f;
+		// Head is a tight point; the trail widens and dims behind it.
+		glow += w * w * exp(-ang * mix(90000.0, 2200000.0, w));
+	}
+
+	// Fade in quickly, fade out over the last stretch of the flight.
+	float life = smoothstep(0.0, 0.06, travel) * (1.0 - smoothstep(0.62, 1.0, travel));
+
+	return vec3(1.0, 0.96, 0.88) * glow * life * night;
+}
+
+/*
  * Aurora: shimmering curtains low in the northern sky.
  *
  * Confined to a compass sector rather than ringing the horizon, since an aurora that
@@ -585,6 +655,9 @@ void main()
 		col += aurora(dir, up, night) * horizonFade;
 
 		col += vec3(1.0, 0.98, 0.92) * starField(dir) * nightVis;
+
+		// Above the starfield, so a meteor reads as passing in front of the stars.
+		col += shootingStar(dir, night) * horizonFade;
 
 		if (showMoon > 0.5)
 		{

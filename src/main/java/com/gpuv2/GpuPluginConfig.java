@@ -267,6 +267,25 @@ public interface GpuPluginConfig extends Config
 	String skySection = "skySection";
 
 	@ConfigSection(
+		name = "Fog",
+		description = "Distance haze and mist lying on the ground.",
+		position = 32
+	)
+	String fogSection = "fogSection";
+
+	@ConfigItem(
+		keyName = "fogEnabled",
+		name = "Enable fog",
+		description = "Master switch for both distance fog and ground mist.",
+		position = 320,
+		section = fogSection
+	)
+	default boolean fogEnabled()
+	{
+		return true;
+	}
+
+	@ConfigSection(
 		name = "Sun and moon",
 		description = "The sun and moon discs and the light they throw.",
 		position = 34
@@ -335,8 +354,8 @@ public interface GpuPluginConfig extends Config
 		keyName = "fogDepth",
 		name = "Fog depth",
 		description = "How far from the scene edge fog starts. Fades into the sky colour.",
-		position = 34,
-		section = skySection
+		position = 321,
+		section = fogSection
 	)
 	default int fogDepth()
 	{
@@ -487,6 +506,64 @@ public interface GpuPluginConfig extends Config
 		return 1;
 	}
 
+	@Range(
+		max = 2
+	)
+	@ConfigItem(
+		keyName = "shootingStars",
+		name = "Shooting stars",
+		description = "Meteors streaking across the night sky. 0 off, 1 rare (roughly one "
+			+ "every few minutes), 2 shows them constantly so the speed can be judged. "
+			+ "Needs stars enabled and a clear sky.",
+		position = 385,
+		section = starSection
+	)
+	default int shootingStars()
+	{
+		return 1;
+	}
+
+	@Range(
+		min = 1,
+		max = 3
+	)
+	@ConfigItem(
+		keyName = "shootingStarSpeed",
+		name = "Shooting star speed",
+		description = "How fast they cross the sky. 1 is a slow drift, 3 is a quick flash.",
+		position = 386,
+		section = starSection
+	)
+	default int shootingStarSpeed()
+	{
+		return 1;
+	}
+
+	@ConfigItem(
+		keyName = "shootingStarSound",
+		name = "Shooting star sound",
+		description = "Play a chime when a shooting star appears.",
+		position = 387,
+		section = starSection
+	)
+	default boolean shootingStarSound()
+	{
+		return false;
+	}
+
+	@ConfigItem(
+		keyName = "shootingStarSoundId",
+		name = "Sound effect id",
+		description = "Which game sound to play. 3924 is a coin tinkle; try other ids if "
+			+ "you would rather something else.",
+		position = 388,
+		section = starSection
+	)
+	default int shootingStarSoundId()
+	{
+		return 3924;
+	}
+
 	@ConfigItem(
 		keyName = "aurora",
 		name = "Aurora",
@@ -541,8 +618,8 @@ public interface GpuPluginConfig extends Config
 		name = "Ground mist",
 		description = "Mist pooling in low ground and valleys. 0 disables. Fog weather "
 			+ "brings its own on top of this.",
-		position = 43,
-		section = skySection
+		position = 322,
+		section = fogSection
 	)
 	default int heightFog()
 	{
@@ -558,8 +635,8 @@ public interface GpuPluginConfig extends Config
 		name = "Ground mist depth",
 		description = "How deep the mist lies, in tiles. Lower keeps it hugging the "
 			+ "ground; higher fills valleys.",
-		position = 44,
-		section = skySection
+		position = 323,
+		section = fogSection
 	)
 	default int heightFogDepth()
 	{
