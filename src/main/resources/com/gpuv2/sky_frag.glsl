@@ -188,6 +188,81 @@ float hash11(float x)
 }
 
 /*
+ * Impact craters at one scale: a bright raised rim around a darker floor.
+ *
+ * Returns a signed brightness offset, so craters can be layered by simply summing them.
+ */
+float craterField(vec2 p, float scale, float threshold)
+{
+	vec2 g = p * scale;
+	vec2 cell = floor(g);
+	float h = hash12(cell);
+	if (h < threshold)
+	{
+		return 0.0;
+	}
+
+	// Offset within the cell so craters don't sit on a visible grid.
+	vec2 jitter = vec2(hash12(cell + 7.1), hash12(cell + 13.3)) - 0.5;
+	float d = length(fract(g) - 0.5 - jitter * 0.55);
+	float radius = mix(0.13, 0.34, hash12(cell + 3.7));
+
+	float rim = (1.0 - smoothstep(radius * 0.72, radius, d))
+		* smoothstep(radius * 0.30, radius * 0.72, d);
+	float floor_ = 1.0 - smoothstep(0.0, radius * 0.72, d);
+
+	return rim * 0.30 - floor_ * 0.34;
+}
+
+/*
+ * The moon as a lit sphere rather than a flat disc.
+ *
+ * Each pixel inside the disc is projected back onto the sphere it represents, and the
+ * surface is sampled in those coordinates - which is what makes craters crowd together
+ * toward the limb instead of staying evenly spaced to the edge, the giveaway that a disc
+ * is flat.
+ */
+vec3 moonSurface(vec3 dir, float discCos)
+{
+	float md = dot(dir, moonDir);
+	if (md < discCos)
+	{
+		return vec3(0.0);
+	}
+
+	// Local frame on the disc. Moon elevation is shallow, so world up is never parallel
+	// to moonDir and this cannot degenerate.
+	vec3 right = normalize(cross(vec3(0.0, -1.0, 0.0), moonDir));
+	vec3 upv = cross(moonDir, right);
+
+	float discRadius = sqrt(max(1.0 - discCos * discCos, 1e-6));
+	float u = dot(dir, right) / discRadius;
+	float v = dot(dir, upv) / discRadius;
+
+	float r2 = clamp(u * u + v * v, 0.0, 1.0);
+	// Height of the sphere's surface above the disc plane - 1 at the centre, 0 at the limb.
+	float w = sqrt(1.0 - r2);
+
+	// Dividing by w would blow up at the limb, so this is a bounded approximation of the
+	// same compression.
+	vec2 suv = vec2(u, v) / (0.35 + 0.65 * w);
+
+	float surface = 1.0;
+	surface += craterField(suv, 5.0, 0.52);
+	surface += craterField(suv, 11.0, 0.62) * 0.7;
+	surface += craterField(suv, 23.0, 0.72) * 0.4;
+
+	// Maria: the broad dark plains.
+	surface -= smoothstep(0.42, 0.78, valueNoise(suv * 1.7 + 4.3)) * 0.20;
+
+	// Limb darkening, plus a soft edge so the disc doesn't alias against the sky.
+	surface *= 0.72 + 0.28 * w;
+	float edge = 1.0 - smoothstep(0.86, 1.0, sqrt(r2));
+
+	return vec3(0.96, 0.95, 0.88) * clamp(surface, 0.0, 1.4) * edge;
+}
+
+/*
  * Aurora: shimmering curtains low in the northern sky.
  *
  * Confined to a compass sector rather than ringing the horizon, since an aurora that
@@ -437,9 +512,16 @@ void main()
 
 		if (showMoon > 0.5)
 		{
-			vec2 m = celestial(dir, moonDir, 0.9985, 0.985);
-			col += vec3(0.40, 0.42, 0.50) * m.y * 0.5 * nightVis;
-			col = mix(col, vec3(0.96, 0.95, 0.88), m.x * nightVis);
+			const float MOON_DISC_COS = 0.9985;
+
+			// Halo first, so the disc sits on top of it.
+			float glow = smoothstep(0.985, 1.0, dot(dir, moonDir));
+			col += vec3(0.40, 0.42, 0.50) * glow * 0.5 * nightVis;
+
+			vec3 moon = moonSurface(dir, MOON_DISC_COS);
+			// Replaces the sky rather than adding to it, so the surface keeps its
+			// contrast instead of the maria being washed out by whatever is behind.
+			col = mix(col, moon, min(length(moon), 1.0) * nightVis);
 		}
 	}
 
