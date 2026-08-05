@@ -8,29 +8,40 @@ package com.gpuv2.config;
  */
 public enum WeatherMode
 {
-	OFF("Off", false, 0f, 0x000000, 0f),
+	OFF("Off", false, false, 0f, 0x000000, 0f),
 	/**
 	 * Resolved to one of the real conditions by the weather cycle. Never reaches the
 	 * renderer itself, so its values here are unused placeholders.
 	 */
-	AUTO("Automatic", false, 0f, 0x000000, 0f),
-	RAIN("Rain", true, 0f, 0x7C848C, 0.60f),
-	STORM("Storm", true, 1f, 0x4A5057, 0.88f),
+	AUTO("Automatic", false, false, 0f, 0x000000, 0f),
+	/**
+	 * Cloud and nothing else: a sealed deck, no precipitation.
+	 *
+	 * <p>The only mode that closes the sky over completely. Every other one is capped short
+	 * of that so the sun, moon and stars stay visible through the weather - here losing them
+	 * behind the cloud is the entire point, by day and by night alike.
+	 */
+	OVERCAST("Overcast", false, false, 0f, 0x8E969E, 0.95f),
+	RAIN("Rain", true, true, 0f, 0x7C848C, 0.60f),
+	STORM("Storm", true, true, 1f, 0x4A5057, 0.88f),
 	// Snow skies are bright and heavy rather than grey - the light bounces off the cloud
 	// base and the falling snow, so they read almost white.
-	SNOW("Snow", false, 0f, 0xD6DCE2, 0.75f),
-	BLIZZARD("Blizzard", false, 1f, 0xE6EBEF, 0.95f);
+	SNOW("Snow", false, true, 0f, 0xD6DCE2, 0.75f),
+	BLIZZARD("Blizzard", false, true, 1f, 0xE6EBEF, 0.95f);
 
 	private final String name;
 	private final boolean rainLike;
+	private final boolean precipitates;
 	private final float heavy;
 	private final int overcastColor;
 	private final float overcast;
 
-	WeatherMode(String name, boolean rainLike, float heavy, int overcastColor, float overcast)
+	WeatherMode(String name, boolean rainLike, boolean precipitates, float heavy,
+		int overcastColor, float overcast)
 	{
 		this.name = name;
 		this.rainLike = rainLike;
+		this.precipitates = precipitates;
 		this.heavy = heavy;
 		this.overcastColor = overcastColor;
 		this.overcast = overcast;
@@ -78,12 +89,28 @@ public enum WeatherMode
 	}
 
 	/**
-	 * Whether anything actually falls. OFF has nothing to draw and AUTO is a selection
-	 * rather than a condition, so neither should run the particle pass.
+	 * Whether anything actually falls, and so whether the particle pass runs at all.
+	 *
+	 * <p>Declared per mode rather than derived by excluding the ones that do not. The list
+	 * of exceptions was already OFF and AUTO before overcast joined them, and each addition
+	 * is a chance to forget one somewhere.
 	 */
 	public boolean hasPrecipitation()
 	{
-		return this != OFF && this != AUTO;
+		return precipitates;
+	}
+
+	/**
+	 * Whether the cloud deck closes over completely, taking the sun and moon with it.
+	 *
+	 * <p>Everything else is deliberately capped short of sealing: a blizzard sky at 0.95
+	 * cover would otherwise blot out the sun, moon and stars as a side effect of the snow,
+	 * which is not what anyone picking "blizzard" is asking for. Overcast is the one mode
+	 * where that is exactly the request.
+	 */
+	public boolean sealsSky()
+	{
+		return this == OVERCAST;
 	}
 
 	@Override

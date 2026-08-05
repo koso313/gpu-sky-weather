@@ -303,6 +303,7 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 	private static final double KNOWN_NEW_MOON_EPOCH_DAYS = 18219.0;
 	private int uniSkyCloudAmount;
 	private int uniSkyCloudOpacity;
+	private int uniSkyCloudSeal;
 	private int uniSkyMeteorSamples;
 	private int uniSkyCloudOctaves;
 	private int uniSkyMeteorActive;
@@ -1103,6 +1104,7 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 		uniSkyMoonPhase = glGetUniformLocation(glSkyProgram, "moonPhase");
 		uniSkyCloudAmount = glGetUniformLocation(glSkyProgram, "cloudAmount");
 		uniSkyCloudOpacity = glGetUniformLocation(glSkyProgram, "cloudOpacity");
+		uniSkyCloudSeal = glGetUniformLocation(glSkyProgram, "cloudSeal");
 		uniSkyMeteorSamples = glGetUniformLocation(glSkyProgram, "meteorSamples");
 		uniSkyCloudOctaves = glGetUniformLocation(glSkyProgram, "cloudOctaves");
 		uniSkyMeteorActive = glGetUniformLocation(glSkyProgram, "meteorActive");
@@ -1713,15 +1715,30 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 		if (weather != WeatherMode.OFF)
 		{
 			/*
-			 * Weather thickens the deck but must not seal it. Overcast runs as high as
-			 * 0.95 for a blizzard, and at that cover the cloud layer covers essentially
-			 * the whole sky - which takes the sun, moon and stars with it. Capped so
-			 * there is always some sky left to see through.
+			 * Weather thickens the deck but must not seal it. Cover runs as high as 0.95
+			 * for a blizzard, and at that thickness the cloud layer covers essentially the
+			 * whole sky - which takes the sun, moon and stars with it. Capped so there is
+			 * always some sky left to see through.
+			 *
+			 * Overcast is the exception, being the one condition whose entire purpose is to
+			 * put the sky away. It skips the cap and seals separately below.
 			 */
-			float forced = Math.min(weather.overcast() * weatherIntensity(), MAX_WEATHER_CLOUD);
+			float raw = weather.overcast() * weatherIntensity();
+			float forced = weather.sealsSky() ? raw : Math.min(raw, MAX_WEATHER_CLOUD);
 			clouds = Math.max(clouds, forced);
 		}
 		glUniform1f(uniSkyCloudAmount, clouds);
+
+		/*
+		 * Thickening the noise is not enough on its own - it only shifts the coverage
+		 * threshold, so gaps survive wherever the field falls below it and the sun comes
+		 * straight through one. Overcast lifts the whole deck toward solid instead.
+		 *
+		 * Scaled by intensity so it closes over as the weather arrives, and short of 1.0 so
+		 * the deck keeps some structure rather than becoming a flat grey ceiling.
+		 */
+		glUniform1f(uniSkyCloudSeal,
+			weather.sealsSky() ? 0.88f * weatherIntensity() : 0f);
 
 		// Shooting stars need a clear night sky, for the same reason the stars do.
 		float clearSky = Math.max(0f, 1f - clouds * 1.2f);
@@ -2392,10 +2409,13 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 
 			// Runs day and night now - it draws the sun, clouds and lightning bolts too,
 			// not just stars. A storm keeps the pass alive even with everything else off,
-			// since the bolt is drawn here.
+			// since the bolt is drawn here, and so does overcast, whose deck is the only
+			// thing it has to show.
+			WeatherMode skyWeather = activeWeather();
 			if (effectiveSkyMode() == SkyMode.TIME_OF_DAY
 				&& (config.nightSky() || config.showSun() || config.cloudAmount() > 0
-					|| (activeWeather().hasLightning() && config.lightning())))
+					|| skyWeather.overcast() > 0f
+					|| (skyWeather.hasLightning() && config.lightning())))
 			{
 				drawProceduralSky(sky, cameraPitch, cameraYaw);
 			}

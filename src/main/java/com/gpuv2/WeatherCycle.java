@@ -24,6 +24,10 @@ final class WeatherCycle
 		WeatherMode.OFF,
 		WeatherMode.OFF,
 		WeatherMode.OFF,
+		// Grey days are the commonest weather there is, and the cheapest to draw - no
+		// particle pass at all, just a thicker deck.
+		WeatherMode.OVERCAST,
+		WeatherMode.OVERCAST,
 		WeatherMode.RAIN,
 		WeatherMode.RAIN,
 		WeatherMode.SNOW,

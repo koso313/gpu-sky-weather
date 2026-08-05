@@ -4,6 +4,7 @@ import com.gpuv2.config.WeatherMode;
 import java.util.HashMap;
 import java.util.Map;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import org.junit.Test;
 
@@ -104,6 +105,47 @@ public class WeatherCycleTest
 			assertTrue("cycle returned AUTO at slot " + i,
 				WeatherCycle.modeAt(i * (double) PERIOD, PERIOD) != WeatherMode.AUTO);
 		}
+	}
+
+	/**
+	 * Overcast is cloud and nothing else. If it ever reported precipitation the particle
+	 * pass would run with nothing sensible to draw.
+	 */
+	@Test
+	public void overcastHasNoPrecipitation()
+	{
+		assertFalse(WeatherMode.OVERCAST.hasPrecipitation());
+		assertFalse(WeatherMode.OVERCAST.hasLightning());
+	}
+
+	/**
+	 * Only overcast closes the sky over. Everything else is capped short of it on purpose,
+	 * so picking blizzard does not blot out the sun and moon as a side effect of the snow.
+	 */
+	@Test
+	public void onlyOvercastSealsTheSky()
+	{
+		assertTrue(WeatherMode.OVERCAST.sealsSky());
+
+		for (WeatherMode m : WeatherMode.values())
+		{
+			if (m != WeatherMode.OVERCAST)
+			{
+				assertFalse(m + " should not seal the sky", m.sealsSky());
+			}
+		}
+	}
+
+	/** Every real condition must declare precipitation one way or the other, not by accident. */
+	@Test
+	public void onlyFallingWeatherPrecipitates()
+	{
+		assertFalse(WeatherMode.OFF.hasPrecipitation());
+		assertFalse(WeatherMode.AUTO.hasPrecipitation());
+		assertTrue(WeatherMode.RAIN.hasPrecipitation());
+		assertTrue(WeatherMode.STORM.hasPrecipitation());
+		assertTrue(WeatherMode.SNOW.hasPrecipitation());
+		assertTrue(WeatherMode.BLIZZARD.hasPrecipitation());
 	}
 
 	@Test

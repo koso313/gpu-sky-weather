@@ -25,6 +25,10 @@ uniform float moonGlow;   // brightness of the moon disc and its halo
 uniform float moonPhase;  // 0 and 1 new, 0.5 full
 uniform float cloudAmount;   // 0 = clear, 1 = overcast
 uniform float cloudOpacity;
+// Raises the whole deck toward solid, for overcast. Cloud amount alone only thickens the
+// noise, so gaps remain wherever it happens to fall below the coverage threshold - and the
+// sun shines straight through them.
+uniform float cloudSeal;
 
 /*
  * Shooting stars. Whether one is flying, and where, is decided on the CPU rather than
@@ -733,6 +737,11 @@ void main()
 		float n = cloudFbm(uv * 1.4, cloudTime);
 		float cover = mix(0.72, 0.28, cloudAmount);
 		float c = smoothstep(cover, cover + 0.22, n);
+
+		// Lifted toward solid rather than clamped to it, so an overcast sky keeps the
+		// texture of the deck instead of going flat grey - thick and unbroken, but still
+		// visibly cloud rather than a blank ceiling.
+		c = mix(c, 1.0, cloudSeal);
 
 		// Fade out at the horizon where the projection stretches into mush, and fade in
 		// with how far above the horizon we're looking.
