@@ -38,6 +38,9 @@ class ModelUploader
 	private final float[] modelProjectedX;
 	private final float[] modelProjectedY;
 
+	/** Packed vertex normals for the model being written, parallel to the position arrays. */
+	private final int[] modelNormals;
+
 	private final float[] modelLocalX;
 	private final float[] modelLocalY;
 	private final float[] modelLocalZ;
@@ -67,6 +70,7 @@ class ModelUploader
 		modelProjectedX = new float[MAX_VERTEX_COUNT];
 		modelProjectedY = new float[MAX_VERTEX_COUNT];
 
+		modelNormals = new int[MAX_VERTEX_COUNT];
 		modelLocalX = new float[MAX_VERTEX_COUNT];
 		modelLocalY = new float[MAX_VERTEX_COUNT];
 		modelLocalZ = new float[MAX_VERTEX_COUNT];
@@ -117,17 +121,31 @@ class ModelUploader
 		float[] p = proj.project(x, y, z, rt.tmp);
 		int zero = (int) p[2];
 
+		final int[] normalX = model.getVertexNormalsX();
+		final int[] normalY = model.getVertexNormalsY();
+		final int[] normalZ = model.getVertexNormalsZ();
+		final boolean haveNormals = normalX != null && normalY != null && normalZ != null;
+
 		for (int v = 0; v < vertexCount; ++v)
 		{
 			float vertexX = verticesX[v];
 			float vertexY = verticesY[v];
 			float vertexZ = verticesZ[v];
 
+			float nx = haveNormals ? normalX[v] : 0;
+			float ny = haveNormals ? normalY[v] : 0;
+			float nz = haveNormals ? normalZ[v] : 0;
+
 			if (orientation != 0)
 			{
 				float x0 = vertexX;
 				vertexX = vertexZ * orientSine + x0 * orientCosine;
 				vertexZ = vertexZ * orientCosine - x0 * orientSine;
+
+				// Directions turn with the model but are not moved with it.
+				float n0 = nx;
+				nx = nz * orientSine + n0 * orientCosine;
+				nz = nz * orientCosine - n0 * orientSine;
 			}
 
 			// move to local position
@@ -135,6 +153,7 @@ class ModelUploader
 			vertexY += y;
 			vertexZ += z;
 
+			modelNormals[v] = haveNormals ? NormalPacking.pack(nx, ny, nz) : NormalPacking.NONE;
 			modelLocalX[v] = vertexX;
 			modelLocalY[v] = vertexY;
 			modelLocalZ[v] = vertexZ;
@@ -240,21 +259,23 @@ class ModelUploader
 					vertexBuffer[vbOff++] = Float.floatToIntBits(modelLocalZ[v1]);
 					vertexBuffer[vbOff++] = alphaBias | color1;
 					vertexBuffer[vbOff++] = ((su0 & 0xffff) << 16 | (texture & 0xffff));
-					vertexBuffer[vbOff++] = sv0 & 0xffff;
+					// The normal shares this int with the v coordinate: v low, normal high,
+					// matching how put2222 packs the same pair on the other paths.
+					vertexBuffer[vbOff++] = (modelNormals[v1] & 0xffff) << 16 | (sv0 & 0xffff);
 
 					vertexBuffer[vbOff++] = Float.floatToIntBits(modelLocalX[v2]);
 					vertexBuffer[vbOff++] = Float.floatToIntBits(modelLocalY[v2]);
 					vertexBuffer[vbOff++] = Float.floatToIntBits(modelLocalZ[v2]);
 					vertexBuffer[vbOff++] = alphaBias | color2;
 					vertexBuffer[vbOff++] = ((su1 & 0xffff) << 16 | (texture & 0xffff));
-					vertexBuffer[vbOff++] = sv1 & 0xffff;
+					vertexBuffer[vbOff++] = (modelNormals[v2] & 0xffff) << 16 | (sv1 & 0xffff);
 
 					vertexBuffer[vbOff++] = Float.floatToIntBits(modelLocalX[v3]);
 					vertexBuffer[vbOff++] = Float.floatToIntBits(modelLocalY[v3]);
 					vertexBuffer[vbOff++] = Float.floatToIntBits(modelLocalZ[v3]);
 					vertexBuffer[vbOff++] = alphaBias | color3;
 					vertexBuffer[vbOff++] = ((su2 & 0xffff) << 16 | (texture & 0xffff));
-					vertexBuffer[vbOff++] = sv2 & 0xffff;
+					vertexBuffer[vbOff++] = (modelNormals[v3] & 0xffff) << 16 | (sv2 & 0xffff);
 				}
 			}
 		}
@@ -511,17 +532,38 @@ class ModelUploader
 			orientCosine = Perspective.COSINE[orientation] / 65536f;
 		}
 
+		/*
+		 * Animated models are the ones smooth lighting is most wanted on - players, NPCs,
+		 * anything that moves - so these are read here as well as in the scene uploader.
+		 * Null for models the client had no reason to compute them for; those pack the
+		 * reserved zero and fall back to flat shading.
+		 */
+		final int[] normalX = model.getVertexNormalsX();
+		final int[] normalY = model.getVertexNormalsY();
+		final int[] normalZ = model.getVertexNormalsZ();
+		final boolean haveNormals = normalX != null && normalY != null && normalZ != null;
+
 		for (int v = 0; v < vertexCount; ++v)
 		{
 			float vertexX = verticesX[v];
 			float vertexY = verticesY[v];
 			float vertexZ = verticesZ[v];
 
+			float nx = haveNormals ? normalX[v] : 0;
+			float ny = haveNormals ? normalY[v] : 0;
+			float nz = haveNormals ? normalZ[v] : 0;
+
 			if (orientation != 0)
 			{
 				float x0 = vertexX;
 				vertexX = vertexZ * orientSine + x0 * orientCosine;
 				vertexZ = vertexZ * orientCosine - x0 * orientSine;
+
+				// Normals turn with the model, or a character walking east would be lit as
+				// though still facing the way it was modelled.
+				float n0 = nx;
+				nx = nz * orientSine + n0 * orientCosine;
+				nz = nz * orientCosine - n0 * orientSine;
 			}
 
 			vertexX += x;
@@ -531,6 +573,7 @@ class ModelUploader
 			modelLocalX[v] = vertexX;
 			modelLocalY[v] = vertexY;
 			modelLocalZ[v] = vertexZ;
+			modelNormals[v] = haveNormals ? NormalPacking.pack(nx, ny, nz) : NormalPacking.NONE;
 		}
 
 		int len = 0;
@@ -593,13 +636,13 @@ class ModelUploader
 			int texture = faceTextures != null ? faceTextures[face] + 1 : 0;
 
 			putfff4(buffer, vx1, vy1, vz1, alphaBias | color1);
-			put2222(buffer, texture, su0, sv0, 0);
+			put2222(buffer, texture, su0, sv0, modelNormals[triangleA]);
 
 			putfff4(buffer, vx2, vy2, vz2, alphaBias | color2);
-			put2222(buffer, texture, su1, sv1, 0);
+			put2222(buffer, texture, su1, sv1, modelNormals[triangleB]);
 
 			putfff4(buffer, vx3, vy3, vz3, alphaBias | color3);
-			put2222(buffer, texture, su2, sv2, 0);
+			put2222(buffer, texture, su2, sv2, modelNormals[triangleC]);
 
 			len += 3;
 		}
