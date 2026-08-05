@@ -45,6 +45,8 @@ uniform float gradeTemperature;
 uniform float toneMap;
 // 1 to light with interpolated vertex normals, 0 for flat per-face normals.
 uniform float smoothLighting;
+// Lightning flash brightening the world, 0..1. Independent of lightStrength on purpose.
+uniform float lightningFlash;
 
 
 // Still needed by wet-ground puddles, height fog and aerial perspective.
@@ -451,6 +453,23 @@ void main() {
 
   shaded = applyLighting(shaded, n);
   shaded = applyPointLights(shaded, n);
+
+  /*
+   * Lightning lights the world, not just the screen.
+   *
+   * The flash was drawn as a wash over the finished frame, so the sky lit up while the
+   * ground it was supposedly illuminating stayed exactly as dark - which reads as a screen
+   * effect rather than as something happening in the world.
+   *
+   * Applied outside applyLighting rather than folded into its ambient term, because that
+   * term is scaled by the lighting strength setting - at a low setting a strike would
+   * barely register, and a lightning strike should be visible whatever the ambient
+   * lighting is set to. Cool-tinted, since the light is blue-white rather than neutral.
+   */
+  if (lightningFlash > 0.001)
+  {
+    shaded += shaded * vec3(0.55, 0.65, 0.95) * lightningFlash;
+  }
 
   if (cloudShadow > 0.001) {
     shaded = applyCloudShadow(shaded);

@@ -349,6 +349,7 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 	private int uniSkyToneMap;
 	private int uniToneMap;
 	private int uniSmoothLighting;
+	private int uniLightningFlash;
 	private int uniSkyMeteorSamples;
 	private int uniSkyCloudOctaves;
 	private int uniSkyMeteorActive;
@@ -1098,6 +1099,7 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 		uniGradeTemperature = glGetUniformLocation(glProgram, "gradeTemperature");
 		uniToneMap = glGetUniformLocation(glProgram, "toneMap");
 		uniSmoothLighting = glGetUniformLocation(glProgram, "smoothLighting");
+		uniLightningFlash = glGetUniformLocation(glProgram, "lightningFlash");
 		uniLightStrength = glGetUniformLocation(glProgram, "lightStrength");
 		uniLightAmbient = glGetUniformLocation(glProgram, "lightAmbient");
 		uniLightSunColor = glGetUniformLocation(glProgram, "lightSunColor");
@@ -1722,6 +1724,17 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 		}
 		glUniform1f(uniGradeTemperature, temperature);
 		glUniform1f(uniToneMap, fx ? config.toneMapping() / 100f : 0f);
+		/*
+		 * The same flash value the weather pass draws, so the wash over the screen and the
+		 * light on the ground come from one strike rather than two effects that happen to
+		 * fire near each other.
+		 */
+		WeatherMode flashWeather = activeWeather();
+		float flash = fx && flashWeather.hasLightning() && config.lightning()
+			? lightningFlash(weatherSeconds())
+			: 0f;
+		glUniform1f(uniLightningFlash, flash);
+
 		boolean smooth = config.smoothLighting();
 		glUniform1f(uniSmoothLighting, smooth ? 1f : 0f);
 		// Mirrored to the uploaders so they can skip computing normals the shader is about
