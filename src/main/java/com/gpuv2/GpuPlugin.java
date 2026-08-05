@@ -175,6 +175,11 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 	@Inject
 	private GpuMonitor gpuMonitor;
 
+	@Inject
+	private AdaptiveQuality adaptiveQuality;
+
+	private long lastAdaptNanos;
+
 	private Canvas canvas;
 	private AWTContext awtContext;
 	private Callback debugCallback;
@@ -1796,7 +1801,8 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 	 */
 	private void drawSkyPass(int sky, float cameraPitch, float cameraYaw)
 	{
-		if (!config.lowResSky() || fboSky == -1 || glUpscaleProgram == 0)
+		boolean lowRes = config.lowResSky() || !adaptiveQuality.fullResolutionSkyAllowed();
+		if (!lowRes || fboSky == -1 || glUpscaleProgram == 0)
 		{
 			drawProceduralSky(sky, cameraPitch, cameraYaw);
 			return;
@@ -2351,7 +2357,8 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 		int search = config.lightSearchDistance() > 0
 			? config.lightSearchDistance()
 			: getDrawDistance();
-		lightScanner.scan(config.lightRadius(), config.maxLights(), search);
+		lightScanner.scan(config.lightRadius(),
+			adaptiveQuality.lightBudget(config.maxLights()), search);
 	}
 
 	/**
@@ -3197,7 +3204,8 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 		int defaultFbo = awtContext.getFramebuffer(false);
 
 		// One switch to bypass every post pass, for comparing what they actually cost.
-		boolean canPost = fboResolve != -1 && enhancements() && config.postProcessing();
+		boolean canPost = fboResolve != -1 && enhancements() && config.postProcessing()
+			&& adaptiveQuality.postProcessingAllowed();
 		boolean bloom = canPost && config.bloomEnabled() && glBloomProgram != 0;
 		boolean rays = canPost && config.godRays() > 0 && glGodrayProgram != 0
 			&& updateSunScreenPos();
@@ -3652,7 +3660,9 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 	{
 		// Timed here, at the end of a frame's work, so what is measured is the interval the
 		// player actually sees rather than any one stage of producing it.
-		frameStats.frame(System.nanoTime());
+		long frameNanos = System.nanoTime();
+		frameStats.frame(frameNanos);
+		updateAdaptiveQuality(frameNanos);
 
 		final GameState gameState = client.getGameState();
 		if (gameState == GameState.STARTING)
@@ -4323,6 +4333,44 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 	private int getScaledValue(final double scale, final int value)
 	{
 		return (int) (value * scale);
+	}
+
+	/**
+	 * Steps the adaptive quality controller once per frame.
+	 *
+	 * <p>Fed the rate over the last half second rather than the frame that just happened.
+	 * One slow frame is a scene load or a garbage collection, not a reason to start turning
+	 * effects off.
+	 */
+	private void updateAdaptiveQuality(long nowNanos)
+	{
+		int target = config.adaptiveQuality();
+		if (target <= 0)
+		{
+			// Reset rather than freeze, so turning it off restores everything at once
+			// instead of leaving whatever it had shed still shed.
+			adaptiveQuality.reset();
+			lastAdaptNanos = nowNanos;
+			return;
+		}
+
+		if (lastAdaptNanos == 0)
+		{
+			lastAdaptNanos = nowNanos;
+			return;
+		}
+
+		double delta = (nowNanos - lastAdaptNanos) / 1e9;
+		lastAdaptNanos = nowNanos;
+
+		// A pause is not a slow frame. Charging its whole duration to the timer would shed
+		// every level at once on the far side of a scene load.
+		if (delta <= 0 || delta > 1.0)
+		{
+			return;
+		}
+
+		adaptiveQuality.update(frameStats.recentFps(500_000_000L), target, delta);
 	}
 
 	/** Render scale as a percentage, clamped to the range the setting offers. */

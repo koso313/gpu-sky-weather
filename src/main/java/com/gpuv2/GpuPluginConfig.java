@@ -285,6 +285,25 @@ public interface GpuPluginConfig extends Config
 	)
 	String performanceSection = "performanceSection";
 
+	@Range(
+		max = 240
+	)
+	@ConfigItem(
+		keyName = "adaptiveQuality",
+		name = "Adaptive quality",
+		description = "Frame rate to protect. Below it, effects are dropped one at a time "
+			+ "until it is met - post-processing first, then the sky drops to half "
+			+ "resolution, then the light budget is cut - and given back once there is "
+			+ "comfortable headroom again. 0 disables, and your settings are never changed: "
+			+ "this overrides them while it is needed and stops when it is not.",
+		position = 28,
+		section = performanceSection
+	)
+	default int adaptiveQuality()
+	{
+		return 0;
+	}
+
 	@ConfigItem(
 		keyName = "perfOverlay",
 		name = "Performance overlay",
