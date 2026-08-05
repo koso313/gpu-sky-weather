@@ -140,6 +140,9 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 	private Client client;
 
 	@Inject
+	private ConfigManager configManager;
+
+	@Inject
 	private ClientUI clientUI;
 
 	@Inject
@@ -595,6 +598,7 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 		skyClockStartSeconds = now.getHour() * 3600f + now.getMinute() * 60f
 			+ now.getSecond() + now.getNano() / 1e9f;
 
+		logWeather("startup");
 		sceneryFilter.configure(config.hideTrees(), config.hideClutter());
 		overlayManager.add(performanceOverlay);
 		if (config.perfOverlay() && config.perfShowGpu())
@@ -931,6 +935,12 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 	{
 		if (configChanged.getGroup().equals(GpuPluginConfig.GROUP))
 		{
+			if (configChanged.getKey().equals("weather") || configChanged.getKey().equals("preset"))
+			{
+				logWeather("changed " + configChanged.getKey()
+					+ " -> '" + configChanged.getNewValue() + "'");
+			}
+
 			if (configChanged.getKey().equals("unlockFps")
 				|| configChanged.getKey().equals("vsyncMode")
 				|| configChanged.getKey().equals("fpsTarget"))
@@ -4420,6 +4430,23 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 	{
 		return (int) (value * scale);
 	}
+
+	/**
+	 * Reports what the weather setting actually holds, raw and resolved.
+	 *
+	 * <p>Temporary. The setting is reported as reverting to rain, and reading the code has
+	 * not explained how: nothing writes config back, the stored value on disk disagrees with
+	 * what the plugin reads, and the automatic cycle draws rain only a tenth of the time.
+	 * This prints the stored string beside the enum it deserialised to, which distinguishes
+	 * a storage problem from a resolution one.
+	 */
+	private void logWeather(String when)
+	{
+		String raw = configManager.getConfiguration(GpuPluginConfig.GROUP, "weather");
+		log.info("gpu-v2 weather [{}]: stored={} config.weather()={} active={} preset={}",
+			when, raw, config.weather(), activeWeather(), config.preset());
+	}
+
 
 	/** Render scale as a percentage, clamped to the range the setting offers. */
 	private int renderScalePercent()

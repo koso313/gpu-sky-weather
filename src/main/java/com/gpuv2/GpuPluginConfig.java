@@ -87,7 +87,7 @@ public interface GpuPluginConfig extends Config
 	)
 	default int drawDistance()
 	{
-		return 50;
+		return 70;
 	}
 
 	@Range(
@@ -164,7 +164,7 @@ public interface GpuPluginConfig extends Config
 	)
 	default AntiAliasingMode antiAliasingMode()
 	{
-		return AntiAliasingMode.MSAA_2;
+		return AntiAliasingMode.MSAA_4;
 	}
 
 	@Range(
@@ -179,7 +179,7 @@ public interface GpuPluginConfig extends Config
 	)
 	default int anisotropicFilteringLevel()
 	{
-		return 1;
+		return 0;
 	}
 
 	@ConfigItem(
@@ -208,7 +208,7 @@ public interface GpuPluginConfig extends Config
 	)
 	default int sharpen()
 	{
-		return 0;
+		return 10;
 	}
 
 	@Range(
@@ -235,7 +235,7 @@ public interface GpuPluginConfig extends Config
 	)
 	default UIScalingMode uiScalingMode()
 	{
-		return UIScalingMode.HYBRID;
+		return UIScalingMode.CATMULL_ROM;
 	}
 
 	@ConfigItem(
@@ -254,7 +254,7 @@ public interface GpuPluginConfig extends Config
 	)
 	default boolean smoothLighting()
 	{
-		return true;
+		return false;
 	}
 
 	@ConfigItem(
@@ -361,7 +361,7 @@ public interface GpuPluginConfig extends Config
 	)
 	default boolean perfShowFrameTime()
 	{
-		return false;
+		return true;
 	}
 
 	@ConfigItem(
@@ -373,7 +373,7 @@ public interface GpuPluginConfig extends Config
 	)
 	default boolean perfShowAverage()
 	{
-		return false;
+		return true;
 	}
 
 	@ConfigItem(
@@ -386,7 +386,7 @@ public interface GpuPluginConfig extends Config
 	)
 	default boolean perfShowLows()
 	{
-		return false;
+		return true;
 	}
 
 	@ConfigItem(
@@ -402,7 +402,7 @@ public interface GpuPluginConfig extends Config
 	)
 	default boolean perfShowGpu()
 	{
-		return false;
+		return true;
 	}
 
 	@ConfigItem(
@@ -457,7 +457,7 @@ public interface GpuPluginConfig extends Config
 	)
 	default int fpsTarget()
 	{
-		return 60;
+		return 300;
 	}
 
 	@Range(
@@ -580,7 +580,7 @@ public interface GpuPluginConfig extends Config
 	)
 	default SkyMode skyMode()
 	{
-		return SkyMode.GAME;
+		return SkyMode.TIME_OF_DAY;
 	}
 
 	@ConfigItem(
@@ -648,7 +648,7 @@ public interface GpuPluginConfig extends Config
 	)
 	default int fogDepth()
 	{
-		return 0;
+		return 24;
 	}
 
 	@ConfigItem(
@@ -690,7 +690,7 @@ public interface GpuPluginConfig extends Config
 	)
 	default int sunGlare()
 	{
-		return 90;
+		return 50;
 	}
 
 	@ConfigItem(
@@ -715,7 +715,7 @@ public interface GpuPluginConfig extends Config
 	)
 	default boolean moonPhases()
 	{
-		return false;
+		return true;
 	}
 
 	@Range(
@@ -733,7 +733,7 @@ public interface GpuPluginConfig extends Config
 	)
 	default int moonCycleDays()
 	{
-		return 8;
+		return 29;
 	}
 
 	@Range(
@@ -765,7 +765,7 @@ public interface GpuPluginConfig extends Config
 	)
 	default int moonGlow()
 	{
-		return 100;
+		return 110;
 	}
 
 	@ConfigItem(
@@ -793,7 +793,7 @@ public interface GpuPluginConfig extends Config
 	)
 	default int starDensity()
 	{
-		return 15;
+		return 100;
 	}
 
 	@Range(
@@ -808,7 +808,7 @@ public interface GpuPluginConfig extends Config
 	)
 	default int cloudAmount()
 	{
-		return 45;
+		return 50;
 	}
 
 	@Range(
@@ -823,7 +823,7 @@ public interface GpuPluginConfig extends Config
 	)
 	default int cloudOpacity()
 	{
-		return 70;
+		return 100;
 	}
 
 	@Range(
@@ -840,7 +840,7 @@ public interface GpuPluginConfig extends Config
 	)
 	default int cloudSpeed()
 	{
-		return 1;
+		return 3;
 	}
 
 	@Range(
@@ -857,7 +857,7 @@ public interface GpuPluginConfig extends Config
 	)
 	default int shootingStars()
 	{
-		return 1;
+		return 2;
 	}
 
 	@Range(
@@ -873,7 +873,7 @@ public interface GpuPluginConfig extends Config
 	)
 	default int shootingStarSpeed()
 	{
-		return 1;
+		return 2;
 	}
 
 	@ConfigItem(
@@ -911,7 +911,7 @@ public interface GpuPluginConfig extends Config
 	)
 	default boolean aurora()
 	{
-		return false;
+		return true;
 	}
 
 	@Range(
@@ -927,7 +927,7 @@ public interface GpuPluginConfig extends Config
 	)
 	default int auroraStrength()
 	{
-		return 50;
+		return 100;
 	}
 
 	@Range(
@@ -944,7 +944,7 @@ public interface GpuPluginConfig extends Config
 	)
 	default int auroraSpeed()
 	{
-		return 1;
+		return 3;
 	}
 
 	@Range(
@@ -960,7 +960,7 @@ public interface GpuPluginConfig extends Config
 	)
 	default int heightFog()
 	{
-		return 0;
+		return 50;
 	}
 
 	@Range(
@@ -977,7 +977,7 @@ public interface GpuPluginConfig extends Config
 	)
 	default int heightFogDepth()
 	{
-		return 8;
+		return 40;
 	}
 
 	@Range(
@@ -993,7 +993,7 @@ public interface GpuPluginConfig extends Config
 	)
 	default int cloudShadows()
 	{
-		return 45;
+		return 60;
 	}
 
 	// ----------------------------------------------------------------- Weather
@@ -1032,7 +1032,7 @@ public interface GpuPluginConfig extends Config
 	)
 	default int autoWeatherPeriod()
 	{
-		return 12;
+		return 30;
 	}
 
 	@Range(
@@ -1048,7 +1048,7 @@ public interface GpuPluginConfig extends Config
 	)
 	default int weatherAmount()
 	{
-		return 55;
+		return 93;
 	}
 
 	@Range(
@@ -1064,7 +1064,7 @@ public interface GpuPluginConfig extends Config
 	)
 	default int weatherWind()
 	{
-		return 60;
+		return 58;
 	}
 
 	@Range(
@@ -1080,7 +1080,7 @@ public interface GpuPluginConfig extends Config
 	)
 	default int groundSnow()
 	{
-		return 70;
+		return 100;
 	}
 
 	@Range(
@@ -1096,7 +1096,7 @@ public interface GpuPluginConfig extends Config
 	)
 	default int groundWet()
 	{
-		return 70;
+		return 100;
 	}
 
 	@ConfigItem(
@@ -1125,7 +1125,7 @@ public interface GpuPluginConfig extends Config
 	)
 	default int lightningFrequency()
 	{
-		return 1;
+		return 3;
 	}
 
 	// ---------------------------------------------------------------- Lighting
@@ -1150,7 +1150,7 @@ public interface GpuPluginConfig extends Config
 	)
 	default int lightStrength()
 	{
-		return 0;
+		return 5;
 	}
 
 	@ConfigItem(
@@ -1177,7 +1177,7 @@ public interface GpuPluginConfig extends Config
 	)
 	default int lightAmbientStrength()
 	{
-		return 75;
+		return 70;
 	}
 
 	@ConfigItem(
@@ -1204,7 +1204,7 @@ public interface GpuPluginConfig extends Config
 	)
 	default int lightSunStrength()
 	{
-		return 45;
+		return 70;
 	}
 
 	@Range(
@@ -1221,7 +1221,7 @@ public interface GpuPluginConfig extends Config
 	)
 	default int dynamicLights()
 	{
-		return 0;
+		return 5;
 	}
 
 	@ConfigItem(
@@ -1299,7 +1299,7 @@ public interface GpuPluginConfig extends Config
 	)
 	default int maxLights()
 	{
-		return 32;
+		return 64;
 	}
 
 	@Range(
@@ -1317,7 +1317,7 @@ public interface GpuPluginConfig extends Config
 	)
 	default int lightSearchDistance()
 	{
-		return 0;
+		return 60;
 	}
 
 	@Range(
@@ -1348,7 +1348,7 @@ public interface GpuPluginConfig extends Config
 	)
 	default int undergroundDarkening()
 	{
-		return 0;
+		return 1;
 	}
 
 	@ConfigItem(
@@ -1463,7 +1463,7 @@ public interface GpuPluginConfig extends Config
 	)
 	default int godRayLength()
 	{
-		return 60;
+		return 80;
 	}
 
 	@Range(
