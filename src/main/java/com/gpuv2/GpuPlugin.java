@@ -2246,11 +2246,26 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 	 *
 	 * <p>Advanced once per frame by the caller rather than on read, since easing that runs
 	 * per call would settle at a different rate depending on how many things asked.
+	 *
+	 * <p>Asymmetric on purpose. Going in is instant: entering a cave is a hard cut in the
+	 * game itself, and a second of daylight bleeding through the ceiling afterwards reads as
+	 * the effect failing to keep up rather than as a transition. Coming out eases, where the
+	 * same second reads as stepping into the light.
 	 */
 	private float undergroundSkyFade()
 	{
 		float target = !config.undergroundSky() && isUnderground() ? 1f : 0f;
-		skyBlackout += (target - skyBlackout) * 0.02f;
+
+		if (target > skyBlackout)
+		{
+			skyBlackout = target;
+		}
+		else
+		{
+			// Roughly a second to settle at 50fps.
+			skyBlackout += (target - skyBlackout) * 0.02f;
+		}
+
 		return skyBlackout;
 	}
 
