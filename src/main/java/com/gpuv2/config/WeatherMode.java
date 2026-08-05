@@ -8,12 +8,12 @@ package com.gpuv2.config;
  */
 public enum WeatherMode
 {
-	OFF("Off", false, false, 0f, 0x000000, 0f, 0f, 0f),
+	OFF("Off", false, false, 0f, 0x000000, 0f, 0f, 0f, 0f),
 	/**
 	 * Resolved to one of the real conditions by the weather cycle. Never reaches the
 	 * renderer itself, so its values here are unused placeholders.
 	 */
-	AUTO("Automatic", false, false, 0f, 0x000000, 0f, 0f, 0f),
+	AUTO("Automatic", false, false, 0f, 0x000000, 0f, 0f, 0f, 0f),
 	/**
 	 * Cloud and nothing else: a sealed deck, no precipitation.
 	 *
@@ -21,19 +21,24 @@ public enum WeatherMode
 	 * of that so the sun, moon and stars stay visible through the weather - here losing them
 	 * behind the cloud is the entire point, by day and by night alike.
 	 */
-	OVERCAST("Overcast", false, false, 0f, 0x8E969E, 0.95f, 1f, 0f),
+	OVERCAST("Overcast", false, false, 0f, 0x8E969E, 0.95f, 1f, 0f, 0.88f),
 	/*
 	 * Rain hides the sun almost completely rather than merely dimming it. 0.7 was tried and
 	 * was not nearly enough: the disc is drawn incandescent, so 30% of very bright is still
 	 * a bright white spot in the sky, and the result read as a sunny day with rain falling
 	 * through it. A storm takes it away outright.
 	 */
-	RAIN("Rain", true, true, 0f, 0x7C848C, 0.60f, 0.92f, 0.20f),
-	STORM("Storm", true, true, 1f, 0x4A5057, 0.88f, 1f, 0.34f),
-	// Snow skies are bright and heavy rather than grey - the light bounces off the cloud
-	// base and the falling snow, so they read almost white.
-	SNOW("Snow", false, true, 0f, 0xD6DCE2, 0.75f, 0f, 0f),
-	BLIZZARD("Blizzard", false, true, 1f, 0xE6EBEF, 0.95f, 0f, 0f);
+	RAIN("Rain", true, true, 0f, 0x7C848C, 0.60f, 0.92f, 0.20f, 0.18f),
+	STORM("Storm", true, true, 1f, 0x363C44, 0.90f, 1f, 0.34f, 0.42f),
+	/*
+	 * Snow skies are pale rather than grey - light bounces off the cloud base and the
+	 * falling snow. Pale is not the same as bright, though, and the first attempt at these
+	 * was near-white with the sun blazing through, which washed the whole scene out. They
+	 * are heavily overcast days that happen to be light in colour: the sun goes, the deck
+	 * closes up, and the sky settles a good way below white.
+	 */
+	SNOW("Snow", false, true, 0f, 0xBFC7D2, 0.86f, 0.88f, 0.12f, 0.48f),
+	BLIZZARD("Blizzard", false, true, 1f, 0xC9D2DC, 0.95f, 0.96f, 0.20f, 0.72f);
 
 	private final String name;
 	private final boolean rainLike;
@@ -43,9 +48,10 @@ public enum WeatherMode
 	private final float overcast;
 	private final float sunHiding;
 	private final float gloom;
+	private final float cloudSealing;
 
 	WeatherMode(String name, boolean rainLike, boolean precipitates, float heavy,
-		int overcastColor, float overcast, float sunHiding, float gloom)
+		int overcastColor, float overcast, float sunHiding, float gloom, float cloudSealing)
 	{
 		this.name = name;
 		this.rainLike = rainLike;
@@ -55,6 +61,23 @@ public enum WeatherMode
 		this.overcast = overcast;
 		this.sunHiding = sunHiding;
 		this.gloom = gloom;
+		this.cloudSealing = cloudSealing;
+	}
+
+	/**
+	 * How far the cloud deck is closed up, 0 broken to 1 solid.
+	 *
+	 * <p>Separate from {@link #overcast()}, which only shifts the coverage threshold of the
+	 * noise - thickening it that way leaves gaps wherever the field happens to fall short,
+	 * and it cannot exceed the general cap on weather cloud. This lifts the deck toward
+	 * solid instead, so a mode that should look properly socked in can be.
+	 *
+	 * <p>Anything above zero also opts the mode out of that cap, since a mode asking for a
+	 * closed deck has already said what it wants the sky to look like.
+	 */
+	public float cloudSealing()
+	{
+		return cloudSealing;
 	}
 
 	/**
@@ -142,16 +165,11 @@ public enum WeatherMode
 	}
 
 	/**
-	 * Whether the cloud deck closes over completely, taking the sun and moon with it.
-	 *
-	 * <p>Everything else is deliberately capped short of sealing: a blizzard sky at 0.95
-	 * cover would otherwise blot out the sun, moon and stars as a side effect of the snow,
-	 * which is not what anyone picking "blizzard" is asking for. Overcast is the one mode
-	 * where that is exactly the request.
+	 * Whether the deck is closed enough to take the sun and moon with it.
 	 */
 	public boolean sealsSky()
 	{
-		return this == OVERCAST;
+		return cloudSealing >= 0.8f;
 	}
 
 	@Override

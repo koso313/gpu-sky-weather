@@ -146,21 +146,39 @@ public class WeatherCycleTest
 	}
 
 	/**
-	 * Only overcast closes the sky over. Everything else is capped short of it on purpose,
-	 * so picking blizzard does not blot out the sun and moon as a side effect of the snow.
+	 * The deck closes up with severity. Clear weather must never seal, or a sunny day would
+	 * arrive with a lid on it.
 	 */
 	@Test
-	public void onlyOvercastSealsTheSky()
+	public void theDeckClosesUpWithSeverity()
 	{
-		assertTrue(WeatherMode.OVERCAST.sealsSky());
+		assertEquals(0f, WeatherMode.OFF.cloudSealing(), 1e-6);
+		assertFalse(WeatherMode.OFF.sealsSky());
+
+		assertTrue("overcast should seal", WeatherMode.OVERCAST.sealsSky());
+		assertTrue("a blizzard should be more closed in than snow",
+			WeatherMode.BLIZZARD.cloudSealing() > WeatherMode.SNOW.cloudSealing());
+		assertTrue("a storm should be more closed in than rain",
+			WeatherMode.STORM.cloudSealing() > WeatherMode.RAIN.cloudSealing());
 
 		for (WeatherMode m : WeatherMode.values())
 		{
-			if (m != WeatherMode.OVERCAST)
-			{
-				assertFalse(m + " should not seal the sky", m.sealsSky());
-			}
+			assertTrue(m + " seals past solid", m.cloudSealing() <= 1f);
 		}
+	}
+
+	/**
+	 * Snow and blizzard were first shipped with the sun untouched, on the reasoning that
+	 * their skies are bright rather than dark. In game that came out blown white with the
+	 * sun blazing through it. Pale is not the same as bright: they are heavily overcast days
+	 * that happen to be light in colour.
+	 */
+	@Test
+	public void snowSkiesArePaleNotSunlit()
+	{
+		assertTrue("snow should hide the sun", WeatherMode.SNOW.sunHiding() > 0.8f);
+		assertTrue("a blizzard should hide it further",
+			WeatherMode.BLIZZARD.sunHiding() > WeatherMode.SNOW.sunHiding());
 	}
 
 	/** Every real condition must declare precipitation one way or the other, not by accident. */

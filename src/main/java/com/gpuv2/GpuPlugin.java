@@ -1736,7 +1736,7 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 			 * put the sky away. It skips the cap and seals separately below.
 			 */
 			float raw = weather.overcast() * weatherIntensity();
-			float forced = weather.sealsSky() ? raw : Math.min(raw, MAX_WEATHER_CLOUD);
+			float forced = weather.cloudSealing() > 0f ? raw : Math.min(raw, MAX_WEATHER_CLOUD);
 			clouds = Math.max(clouds, forced);
 		}
 		glUniform1f(uniSkyCloudAmount, clouds);
@@ -1749,8 +1749,7 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 		 * Scaled by intensity so it closes over as the weather arrives, and short of 1.0 so
 		 * the deck keeps some structure rather than becoming a flat grey ceiling.
 		 */
-		glUniform1f(uniSkyCloudSeal,
-			weather.sealsSky() ? 0.88f * weatherIntensity() : 0f);
+		glUniform1f(uniSkyCloudSeal, weather.cloudSealing() * weatherIntensity());
 		glUniform1f(uniSkyDim, skyBlackout);
 		// Scaled by intensity so the sun goes behind the cloud as the weather rolls in
 		// rather than snapping out the moment the spell begins.
