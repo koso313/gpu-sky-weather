@@ -92,6 +92,28 @@ public class LightScannerTest
 		assertEquals(1f, LightScanner.fadeAt(6f, 25f), 1e-6);
 	}
 
+	/**
+	 * The regression this cost: a fixed-width band is wider than the whole kept region once
+	 * the budget edge comes in close, so it reaches past the player and dims every light in
+	 * the scene rather than just the outermost ones. A torch you are standing next to must
+	 * be at full brightness no matter how tight the edge is.
+	 */
+	@Test
+	public void aCloseEdgeDoesNotDimTheLightsBesideYou()
+	{
+		for (float edge : new float[]{1f, 2f, 3f, 5f, 8f})
+		{
+			assertEquals("edge " + edge, 1f, LightScanner.fadeAt(0.5f, edge), 1e-6);
+			assertEquals("edge " + edge + " at the edge", 0f, LightScanner.fadeAt(edge, edge), 1e-6);
+		}
+	}
+
+	@Test
+	public void aZeroEdgeIsNotADivideByZero()
+	{
+		assertEquals(0f, LightScanner.fadeAt(0f, 0f), 1e-6);
+	}
+
 	/** The budget has to match the shader's array, or lights past it are silently dropped. */
 	@Test
 	public void lightBudgetIsWhatTheShaderDeclares()

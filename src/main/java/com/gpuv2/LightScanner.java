@@ -328,7 +328,28 @@ class LightScanner
 	 */
 	static float fadeAt(float tilesAway, float edgeTiles)
 	{
-		return Math.max(0f, Math.min(1f, (edgeTiles - tilesAway) / FADE_BAND));
+		if (edgeTiles <= 0f)
+		{
+			return 0f;
+		}
+
+		/*
+		 * The band has to fit inside the region it is fading, or it dims everything.
+		 *
+		 * A fixed 5 tile band is fine against the 25 tile scan radius, but the edge can be
+		 * much closer than that when the light budget is what binds - somewhere dense it may
+		 * be 3 tiles, at which point a fixed band reaches past the player and a torch at
+		 * arm's length comes out at 0.4 brightness. Capping it at a share of the radius
+		 * keeps the fade where it belongs: on the outermost lights, the ones about to be
+		 * dropped, and nowhere near the ones you are standing next to.
+		 */
+		float band = Math.min(FADE_BAND, edgeTiles * 0.35f);
+		if (band <= 0f)
+		{
+			return tilesAway < edgeTiles ? 1f : 0f;
+		}
+
+		return Math.max(0f, Math.min(1f, (edgeTiles - tilesAway) / band));
 	}
 
 	/**
