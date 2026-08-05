@@ -1045,6 +1045,22 @@ public interface GpuPluginConfig extends Config
 	}
 
 	@ConfigItem(
+		keyName = "daytimeLights",
+		name = "Lights during the day",
+		description = "Keep dynamic lights on around the clock - torches, fires and glowing "
+			+ "attacks alike. Off follows the sky clock instead, fading them in through dusk "
+			+ "and out again at dawn, since firelight on the ground under a midday sun is "
+			+ "what gives the effect away. Has no effect unless the sky is set to time of "
+			+ "day, because nothing else has a clock to follow.",
+		position = 557,
+		section = lightSection
+	)
+	default boolean daytimeLights()
+	{
+		return false;
+	}
+
+	@ConfigItem(
 		keyName = "effectLights",
 		name = "Attacks and spells light up",
 		description = "Let fire spells, boss attacks and other burning effects cast light "

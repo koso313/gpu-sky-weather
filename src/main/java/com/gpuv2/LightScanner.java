@@ -133,6 +133,19 @@ class LightScanner
 		return scanRadius;
 	}
 
+	/**
+	 * Forgets the scenery lights without touching effects.
+	 *
+	 * <p>Needed because the frame collection keeps running when the scan does not. Clearing
+	 * only the combined count would leave the last scan's torches in place, so they would be
+	 * copied back in on the very next frame - lights would go on skipping the scan but never
+	 * actually go out.
+	 */
+	void clearScenery()
+	{
+		staticCount = 0;
+	}
+
 	/** Flattened xyz per light, rebuilt each frame by {@link #collectFrame}. */
 	final float[] positions = new float[MAX_LIGHTS * 3];
 

@@ -1939,6 +1939,28 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 	}
 
 	/**
+	 * How much firelight the time of day allows, 0..1.
+	 *
+	 * <p>Torches lighting up the ground under a midday sun is the thing that gives dynamic
+	 * lighting away as an effect, so by default they follow the sky clock and fade in
+	 * through dusk. Reuses the same night curve the scene lighting does, so the two arrive
+	 * together instead of on separate schedules.
+	 *
+	 * <p>Returns 1 whenever there is no clock to follow - the game sky and a fixed custom
+	 * colour have no time of day, and guessing one would leave lights off with nothing on
+	 * screen to explain why.
+	 */
+	private float pointLightTimeFactor()
+	{
+		if (config.daytimeLights() || effectiveSkyMode() != SkyMode.TIME_OF_DAY)
+		{
+			return 1f;
+		}
+
+		return SkyGradient.nightFactorAt(skyTime());
+	}
+
+	/**
 	 * Camera position, used by wet-ground puddles, height fog and aerial perspective.
 	 */
 	private void setupCameraUniform(float cameraX, float cameraY, float cameraZ)
@@ -2062,11 +2084,17 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 	 */
 	private void updateLights()
 	{
-		if (config.dynamicLights() <= 0)
+		/*
+		 * Broad daylight skips the walk entirely. The scan is the expensive half of this
+		 * feature - thousands of tiles every tick - and in full sun nothing it finds will be
+		 * drawn. Uses a threshold rather than exactly zero so the scan is already running
+		 * before dusk brings the lights up.
+		 */
+		if (config.dynamicLights() <= 0 || pointLightTimeFactor() < 0.02f)
 		{
 			if (lightScanner != null)
 			{
-				lightScanner.count = 0;
+				lightScanner.clearScenery();
 			}
 			return;
 		}
@@ -2092,7 +2120,10 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 	 */
 	private void setupPointLights()
 	{
-		boolean on = enhancements() && config.dynamicLights() > 0 && lightScanner != null;
+		// Everything follows the same clock, so full daylight skips the pass outright rather
+		// than uploading a set of lights whose colour has been multiplied to nothing.
+		boolean on = enhancements() && config.dynamicLights() > 0 && lightScanner != null
+			&& pointLightTimeFactor() >= 0.02f;
 		if (on)
 		{
 			// Per frame, not per tick: projectiles cross the screen inside a single tick,
@@ -2109,7 +2140,9 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 
 		Color tint = config.lightColour();
 		// 0-10 scale, where 10 matches the brightest the old 0-200 scale reached.
-		float strength = config.dynamicLights() / 5f;
+		// Torches and spell effects follow the same clock - one rule, so there is never a
+		// time of day where some things glow and others do not for no visible reason.
+		float strength = config.dynamicLights() / 5f * pointLightTimeFactor();
 		float radius = config.lightRadius() * Perspective.LOCAL_TILE_SIZE;
 
 		for (int i = 0; i < count; ++i)
@@ -4246,9 +4279,15 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 		 * more lights here than can be drawn" - which look identical in game and need
 		 * opposite fixes.
 		 */
+		float timeFactor = pointLightTimeFactor();
 		if (config.dynamicLights() <= 0)
 		{
 			say("[GPU v2] Dynamic lights is 0 - nothing will light regardless of what follows.");
+		}
+		else if (timeFactor < 0.02f)
+		{
+			say("[GPU v2] Daylight - dynamic lights are off until dusk. Tick 'Lights during "
+				+ "the day' to keep them on, or use Preview hour to test at night.");
 		}
 		else
 		{
@@ -4259,7 +4298,8 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 				+ lightScanner.lastCandidates + " found within " + lightScanner.scanRadiusTiles()
 				+ " tiles, cap " + config.maxLights()
 				+ ", fade edge " + String.format("%.1f", lightScanner.lastEdgeTiles)
-				+ " tiles" + budgetNote);
+				+ " tiles, time factor " + String.format("%.2f", timeFactor)
+				+ budgetNote);
 		}
 
 		say("[GPU v2] Within " + radius + " tiles - lighting: " + (lit.isEmpty() ? "none" : lit));
