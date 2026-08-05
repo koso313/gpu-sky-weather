@@ -18,35 +18,15 @@ package com.gpuv2;
  */
 final class NormalPacking
 {
-	/** Packed value meaning the vertex has no usable normal. */
-	static final int NONE = 0;
-
-	/*
-	 * Counters, so whether normals are actually arriving can be read off the log rather than
-	 * judged by eye from two screenshots. Comparing shaded images is exactly the kind of
-	 * question people cannot answer reliably, and it had already cost several rounds.
-	 */
-	static final java.util.concurrent.atomic.AtomicLong MODELS_WITH_NORMALS =
-		new java.util.concurrent.atomic.AtomicLong();
-	static final java.util.concurrent.atomic.AtomicLong MODELS_WITHOUT_NORMALS =
-		new java.util.concurrent.atomic.AtomicLong();
-
 	/**
-	 * How many of a model's vertices ended up with a normal distinct from its neighbours'.
+	 * Packed value meaning the vertex has no usable normal, which the shader answers by
+	 * falling back to the flat face normal.
 	 *
-	 * <p>The number that actually matters. OSRS models often do not share vertices between
-	 * faces, and where that is so a "vertex normal" is just the face normal - smooth shading
-	 * then produces the identical picture to flat, with no bug involved and nothing to fix.
+	 * <p>Reached by roughly one vertex in eight: those whose surrounding face normals cancel
+	 * out, which is what paper-thin geometry with two faces pointing opposite ways produces.
+	 * Flat shading is the right answer for those anyway.
 	 */
-	static final java.util.concurrent.atomic.AtomicLong DISTINCT_NORMALS =
-		new java.util.concurrent.atomic.AtomicLong();
-
-	static void reset()
-	{
-		MODELS_WITH_NORMALS.set(0);
-		MODELS_WITHOUT_NORMALS.set(0);
-		DISTINCT_NORMALS.set(0);
-	}
+	static final int NONE = 0;
 
 	private NormalPacking()
 	{

@@ -633,37 +633,6 @@ class SceneUploader
 			normalAccZ[c] += nz;
 		}
 
-		/*
-		 * Instrumentation, measuring the thing that actually matters: how many faces ended
-		 * up with three different vertex normals. A face whose three normals match is one
-		 * smooth shading cannot improve on, so this number is the difference between the
-		 * feature working and it being inert - which is exactly what could not be judged
-		 * from screenshots.
-		 */
-		for (int f = 0; f < triangleCount; ++f)
-		{
-			int a = indices1[f];
-			int b = indices2[f];
-			int c = indices3[f];
-
-			if (normalAccX[a] != normalAccX[b] || normalAccY[a] != normalAccY[b]
-				|| normalAccX[a] != normalAccX[c] || normalAccY[a] != normalAccY[c])
-			{
-				NormalPacking.DISTINCT_NORMALS.incrementAndGet();
-			}
-		}
-
-		for (int v = 0; v < vertexCount; ++v)
-		{
-			if (normalAccX[v] == 0 && normalAccY[v] == 0 && normalAccZ[v] == 0)
-			{
-				NormalPacking.MODELS_WITHOUT_NORMALS.incrementAndGet();
-			}
-			else
-			{
-				NormalPacking.MODELS_WITH_NORMALS.incrementAndGet();
-			}
-		}
 	}
 
 	private int uploadStaticModel(Model model, int orient, int x, int y, int z, GpuIntBuffer vb, GpuIntBuffer ab)
