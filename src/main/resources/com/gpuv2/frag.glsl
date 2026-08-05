@@ -41,6 +41,8 @@ uniform float gradeGamma;
 uniform float gradeContrast;
 uniform float gradeSaturation;
 uniform float gradeTemperature;
+// Highlight roll-off, 0 off. See tonemap.glsl.
+uniform float toneMap;
 
 
 // Still needed by wet-ground puddles, height fog and aerial perspective.
@@ -359,6 +361,7 @@ vec3 applyGrade(vec3 c)
   return clamp(c, 0.0, 1.0);
 }
 
+#include "tonemap.glsl"
 #include "hsl_to_rgb.glsl"
 
 #if COLORBLIND_MODE > 0
@@ -461,7 +464,13 @@ void main() {
   // Shadowed and lit before fog, so fogged distance blends toward the sky colour rather
   // than having those terms applied on top of it.
   vec3 mixedColor = mix(shaded, fogColor.rgb, fFogAmount);
-  FragColor = vec4(applyGrade(mixedColor), c.a);
+
+  /*
+   * Tone mapped before grading, not after. The roll-off is what brings out-of-range values
+   * back into 0..1; grading afterwards then works on a picture that has no clipped areas in
+   * it, rather than trying to pull contrast out of a region that is already flat white.
+   */
+  FragColor = vec4(applyGrade(applyToneMap(mixedColor, toneMap)), c.a);
 
 #ifdef FRAG_UVS
   if (fTextureId > 0) {

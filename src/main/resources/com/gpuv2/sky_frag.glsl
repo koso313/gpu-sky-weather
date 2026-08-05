@@ -33,6 +33,10 @@ uniform float cloudSeal;
 uniform float skyDim;
 // How far weather has hidden the sun, 0 clear to 1 gone entirely.
 uniform float sunOcclusion;
+// Highlight roll-off, 0 off. See tonemap.glsl.
+uniform float toneMap;
+
+#include "tonemap.glsl"
 
 /*
  * Shooting stars. Whether one is flying, and where, is decided on the CPU rather than
@@ -787,6 +791,13 @@ void main()
 	 * random hash: it is a fixed function of pixel position, so it holds still as the camera
 	 * moves instead of crawling, and it costs three instructions.
 	 */
+	/*
+	 * Rolled off before the dither. The sun disc and its glare are the brightest things
+	 * drawn anywhere, so this is where clipping shows worst - a white shape with a hard
+	 * edge instead of something that falls away.
+	 */
+	col = applyToneMap(col, toneMap);
+
 	float ign = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))));
 	col += (ign - 0.5) / 255.0;
 

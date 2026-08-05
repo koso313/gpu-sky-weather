@@ -136,6 +136,25 @@ public interface GpuPluginConfig extends Config
 		return 100;
 	}
 
+	@Range(
+		max = 100
+	)
+	@ConfigItem(
+		keyName = "toneMapping",
+		name = "Tone mapping",
+		description = "Rolls bright areas off instead of letting them clip. Sunlit ground, "
+			+ "the sun itself and heavy snow skies all go past what the screen can show and "
+			+ "are currently cut flat white; this compresses them back into range so they "
+			+ "keep their shape. 0 disables. It does darken midtones slightly on the way, "
+			+ "which is why it is a slider rather than a switch.",
+		position = 136,
+		section = displaySection
+	)
+	default int toneMapping()
+	{
+		return 0;
+	}
+
 	@ConfigItem(
 		keyName = "antiAliasingMode",
 		name = "Anti aliasing",

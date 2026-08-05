@@ -346,6 +346,8 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 	private int uniSkyCloudSeal;
 	private int uniSkyDim;
 	private int uniSkySunOcclusion;
+	private int uniSkyToneMap;
+	private int uniToneMap;
 	private int uniSkyMeteorSamples;
 	private int uniSkyCloudOctaves;
 	private int uniSkyMeteorActive;
@@ -1093,6 +1095,7 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 		uniGradeContrast = glGetUniformLocation(glProgram, "gradeContrast");
 		uniGradeSaturation = glGetUniformLocation(glProgram, "gradeSaturation");
 		uniGradeTemperature = glGetUniformLocation(glProgram, "gradeTemperature");
+		uniToneMap = glGetUniformLocation(glProgram, "toneMap");
 		uniLightStrength = glGetUniformLocation(glProgram, "lightStrength");
 		uniLightAmbient = glGetUniformLocation(glProgram, "lightAmbient");
 		uniLightSunColor = glGetUniformLocation(glProgram, "lightSunColor");
@@ -1175,6 +1178,7 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 		uniSkyCloudSeal = glGetUniformLocation(glSkyProgram, "cloudSeal");
 		uniSkyDim = glGetUniformLocation(glSkyProgram, "skyDim");
 		uniSkySunOcclusion = glGetUniformLocation(glSkyProgram, "sunOcclusion");
+		uniSkyToneMap = glGetUniformLocation(glSkyProgram, "toneMap");
 		uniSkyMeteorSamples = glGetUniformLocation(glSkyProgram, "meteorSamples");
 		uniSkyCloudOctaves = glGetUniformLocation(glSkyProgram, "cloudOctaves");
 		uniSkyMeteorActive = glGetUniformLocation(glSkyProgram, "meteorActive");
@@ -1715,6 +1719,7 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 				temperature + SkyGradient.temperatureAt(skyTime())));
 		}
 		glUniform1f(uniGradeTemperature, temperature);
+		glUniform1f(uniToneMap, fx ? config.toneMapping() / 100f : 0f);
 
 		glUniform1f(uniAerial, fx ? config.aerialPerspective() / 100f : 0f);
 		glUniform1f(uniUnderground, fx ? undergroundFactor() : 0f);
@@ -1942,6 +1947,9 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 		// Scaled by intensity so the sun goes behind the cloud as the weather rolls in
 		// rather than snapping out the moment the spell begins.
 		glUniform1f(uniSkySunOcclusion, weather.sunHiding() * weatherIntensity());
+		// Same value as the scene, so the sky and the world it sits behind roll off together
+		// rather than meeting at a visible seam on the horizon.
+		glUniform1f(uniSkyToneMap, config.toneMapping() / 100f);
 
 		// Shooting stars need a clear night sky, for the same reason the stars do.
 		float clearSky = Math.max(0f, 1f - clouds * 1.2f);
