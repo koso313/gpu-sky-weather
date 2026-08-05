@@ -1045,17 +1045,17 @@ public interface GpuPluginConfig extends Config
 	}
 
 	@ConfigItem(
-		keyName = "lightObjectIds",
-		name = "Extra light ids",
-		description = "Optional. Comma-separated object ids to light in addition to the "
-			+ "ones found by name, for anything unusual the names miss. ::lightids lists "
-			+ "what is nearby.",
+		keyName = "effectLights",
+		name = "Attacks and spells light up",
+		description = "Let fire spells, boss attacks and other burning effects cast light "
+			+ "while they are on screen. They take priority over scenery when more lights "
+			+ "are in range than can be drawn at once.",
 		position = 558,
 		section = lightSection
 	)
-	default String lightObjectIds()
+	default boolean effectLights()
 	{
-		return "";
+		return true;
 	}
 
 	@ConfigItem(

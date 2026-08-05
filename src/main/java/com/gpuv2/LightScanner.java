@@ -10,25 +10,40 @@ import java.util.Map;
 import java.util.Set;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.Client;
+import net.runelite.api.DecorativeObject;
+import net.runelite.api.DynamicObject;
 import net.runelite.api.GameObject;
+import net.runelite.api.GraphicsObject;
+import net.runelite.api.GroundObject;
+import net.runelite.api.Model;
 import net.runelite.api.ObjectComposition;
 import net.runelite.api.Player;
+import net.runelite.api.Projectile;
+import net.runelite.api.Renderable;
 import net.runelite.api.Tile;
 import net.runelite.api.TileObject;
+import net.runelite.api.WallObject;
 import net.runelite.api.WorldView;
 import net.runelite.api.coords.LocalPoint;
 
 /**
  * Finds nearby objects that should cast light.
  *
- * <p>Objects are matched on their names rather than a list of ids. Nothing in the game
- * data marks an object as emitting light - the stock client has no dynamic lighting, so
- * it never needed such a flag - but names are exposed, and anything that glows is
- * generally called what it is: a fire, a torch, a brazier. That works across the whole
- * game without shipping an id database or asking anyone to compile one.
+ * <p>Nothing in the game data marks an object as emitting light - the stock client has no
+ * dynamic lighting, so it never needed such a flag. Two tests stand in for it, and between
+ * them they need no id database and no list for anyone to maintain:
  *
- * <p>Name lookups are cached per object id, since the same handful of ids recur across
- * every tile in a scene.
+ * <ol>
+ *   <li><b>The name.</b> Anything you can click is generally called what it is: a fire, a
+ *       torch, a brazier.
+ *   <li><b>The model.</b> Names run out fast - most scenery has none at all, since the
+ *       cache stores the literal string "null" for anything not interactable, and a wall
+ *       torch is pure decoration. So an object that is animated and painted like fire
+ *       counts too, whatever it is or is not called. See {@link FlameDetector}.
+ * </ol>
+ *
+ * <p>Verdicts are cached per object id, since the same handful of ids recur across every
+ * tile in a scene and the model test is the expensive one.
  */
 @Slf4j
 class LightScanner
@@ -82,7 +97,15 @@ class LightScanner
 	/** Object id to whether it lights, so each id is looked up once. */
 	private final Map<Integer, Boolean> lightCache = new HashMap<>();
 
-	/** Flattened xyz per light, filled by {@link #scan}. */
+	/**
+	 * Scenery lights, from {@link #scan}. Held separately because the tile walk that finds
+	 * them only runs on the game tick, while the combined list below is rebuilt every frame.
+	 */
+	private final float[] staticPositions = new float[MAX_LIGHTS * 3];
+	private final float[] staticFade = new float[MAX_LIGHTS];
+	private int staticCount;
+
+	/** Flattened xyz per light, rebuilt each frame by {@link #collectFrame}. */
 	final float[] positions = new float[MAX_LIGHTS * 3];
 
 	/** Per-light 0..1 multiplier that dims lights approaching the edge of the scan. */
@@ -96,13 +119,15 @@ class LightScanner
 	}
 
 	/**
-	 * Rebuilds the light list. Must run on the client thread.
+	 * Rebuilds the scenery light list. Must run on the client thread.
 	 *
-	 * @param extraIds ids always treated as lights, for anything the names miss
+	 * <p>On the game tick rather than per frame - the tile walk is the expensive half, and
+	 * scenery does not move. Live effects are picked up separately by
+	 * {@link #collectFrame()}.
 	 */
-	void scan(Set<Integer> extraIds)
+	void scan()
 	{
-		count = 0;
+		staticCount = 0;
 
 		WorldView wv = client.getTopLevelWorldView();
 		Player player = client.getLocalPlayer();
@@ -137,7 +162,7 @@ class LightScanner
 				Tile tile = tiles[plane][x][y];
 				if (tile != null)
 				{
-					collect(found, seen, extraIds, tile);
+					collect(found, seen, tile);
 				}
 			}
 		}
@@ -159,7 +184,7 @@ class LightScanner
 
 		for (TileObject obj : found)
 		{
-			if (count >= MAX_LIGHTS)
+			if (staticCount >= MAX_LIGHTS)
 			{
 				break;
 			}
@@ -170,13 +195,112 @@ class LightScanner
 				continue;
 			}
 
-			positions[count * 3] = lp.getX();
+			staticPositions[staticCount * 3] = lp.getX();
 			// Lifted off the floor so the light sits in the flame rather than under it.
-			positions[count * 3 + 1] = obj.getZ() - TILE * 0.4f;
-			positions[count * 3 + 2] = lp.getY();
+			staticPositions[staticCount * 3 + 1] = obj.getZ() - TILE * 0.4f;
+			staticPositions[staticCount * 3 + 2] = lp.getY();
 
-			fade[count] = fadeAt((float) Math.sqrt(distanceSq(obj, origin)) / TILE);
+			staticFade[staticCount] = fadeAt((float) Math.sqrt(distanceSq(obj, origin)) / TILE);
+			++staticCount;
+		}
+	}
+
+	/**
+	 * Builds the light list for this frame: live effects first, then scenery.
+	 *
+	 * <p>Split from {@link #scan()} because the two move at different rates. A projectile
+	 * crosses the screen inside a single tick, so a fireball's light sampled on the tick
+	 * would jump along in strides behind the fireball itself.
+	 *
+	 * <p>Effects take the budget first. A boss winding up an attack is the thing worth
+	 * lighting; a torch three buildings away that loses its slot to it will not be missed.
+	 *
+	 * @param includeEffects whether spell and attack effects light the scene
+	 */
+	void collectFrame(boolean includeEffects)
+	{
+		count = 0;
+
+		if (includeEffects)
+		{
+			collectEffects();
+		}
+
+		for (int i = 0; i < staticCount && count < MAX_LIGHTS; ++i)
+		{
+			positions[count * 3] = staticPositions[i * 3];
+			positions[count * 3 + 1] = staticPositions[i * 3 + 1];
+			positions[count * 3 + 2] = staticPositions[i * 3 + 2];
+			fade[count] = staticFade[i];
 			++count;
+		}
+	}
+
+	/**
+	 * Fire from spells, attacks and boss specials.
+	 *
+	 * <p>Projectiles are the attack in flight, graphics objects the impact and the spot
+	 * animations that go with it. Neither is scenery, so the tile walk never saw them - a
+	 * fireball crossing a dark room lit nothing at all.
+	 *
+	 * <p>No animation test here, unlike scenery: these only exist while something is
+	 * happening, so being transient is a given and the colour is the whole question.
+	 */
+	private void collectEffects()
+	{
+		for (Projectile p : client.getProjectiles())
+		{
+			if (count >= MAX_LIGHTS)
+			{
+				return;
+			}
+
+			if (isFlameModel(p))
+			{
+				positions[count * 3] = (float) p.getX();
+				positions[count * 3 + 1] = (float) p.getZ();
+				positions[count * 3 + 2] = (float) p.getY();
+				fade[count] = 1f;
+				++count;
+			}
+		}
+
+		for (GraphicsObject g : client.getGraphicsObjects())
+		{
+			if (count >= MAX_LIGHTS)
+			{
+				return;
+			}
+
+			LocalPoint lp = g.getLocation();
+			if (g.finished() || lp == null || !isFlameModel(g))
+			{
+				continue;
+			}
+
+			positions[count * 3] = lp.getX();
+			positions[count * 3 + 1] = g.getZ();
+			positions[count * 3 + 2] = lp.getY();
+			fade[count] = 1f;
+			++count;
+		}
+	}
+
+	/**
+	 * Whether a renderable's model is painted like fire. Not cached - effect models change
+	 * shape frame to frame, and there is no stable id to key a cache on.
+	 */
+	private static boolean isFlameModel(Renderable renderable)
+	{
+		try
+		{
+			Model model = renderable.getModel();
+			return model != null && FlameDetector.looksLikeFlame(model.getUnlitFaceColors());
+		}
+		catch (RuntimeException ex)
+		{
+			log.debug("could not read effect model", ex);
+			return false;
 		}
 	}
 
@@ -207,14 +331,14 @@ class LightScanner
 		return dx * dx + dy * dy;
 	}
 
-	private void collect(List<TileObject> out, Set<Long> seen, Set<Integer> extraIds, Tile tile)
+	private void collect(List<TileObject> out, Set<Long> seen, Tile tile)
 	{
 		GameObject[] gameObjects = tile.getGameObjects();
 		if (gameObjects != null)
 		{
 			for (GameObject obj : gameObjects)
 			{
-				if (obj != null && isLight(obj.getId(), extraIds))
+				if (obj != null && isLight(obj.getId(), obj.getRenderable()))
 				{
 					/*
 					 * A multi-tile object is referenced from every tile it covers, so a
@@ -231,27 +355,29 @@ class LightScanner
 			}
 		}
 
-		if (tile.getWallObject() != null && isLight(tile.getWallObject().getId(), extraIds))
+		WallObject wall = tile.getWallObject();
+		if (wall != null && (isLight(wall.getId(), wall.getRenderable1())
+			|| isLight(wall.getId(), wall.getRenderable2())))
 		{
-			out.add(tile.getWallObject());
+			out.add(wall);
 		}
-		if (tile.getGroundObject() != null && isLight(tile.getGroundObject().getId(), extraIds))
+
+		GroundObject ground = tile.getGroundObject();
+		if (ground != null && isLight(ground.getId(), ground.getRenderable()))
 		{
-			out.add(tile.getGroundObject());
+			out.add(ground);
 		}
-		if (tile.getDecorativeObject() != null && isLight(tile.getDecorativeObject().getId(), extraIds))
+
+		DecorativeObject dec = tile.getDecorativeObject();
+		if (dec != null && (isLight(dec.getId(), dec.getRenderable())
+			|| isLight(dec.getId(), dec.getRenderable2())))
 		{
-			out.add(tile.getDecorativeObject());
+			out.add(dec);
 		}
 	}
 
-	private boolean isLight(int id, Set<Integer> extraIds)
+	private boolean isLight(int id, Renderable renderable)
 	{
-		if (extraIds.contains(id))
-		{
-			return true;
-		}
-
 		Boolean cached = lightCache.get(id);
 		if (cached != null)
 		{
@@ -269,9 +395,22 @@ class LightScanner
 			return false;
 		}
 
-		boolean light = nameSuggestsLight(name);
+		// Name first, since it is far cheaper than building a model.
+		boolean light = nameSuggestsLight(name) || isBurning(renderable);
 		lightCache.put(id, light);
 		return light;
+	}
+
+	/**
+	 * Whether an object is visibly on fire: animated, and painted like a flame.
+	 *
+	 * <p>Both halves are load-bearing. Colour alone catches yellow banners and gilded trim;
+	 * animation alone catches windmills and spinning wheels. Something that flickers *and*
+	 * is bright saturated orange is a fire.
+	 */
+	static boolean isBurning(Renderable renderable)
+	{
+		return renderable instanceof DynamicObject && isFlameModel(renderable);
 	}
 
 	/**

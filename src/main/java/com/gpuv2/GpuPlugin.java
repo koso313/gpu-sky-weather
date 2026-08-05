@@ -69,6 +69,7 @@ import com.gpuv2.config.SkyMode;
 import com.gpuv2.config.WeatherMode;
 import net.runelite.client.config.ConfigManager;
 import net.runelite.api.ChatMessageType;
+import java.util.TreeMap;
 import java.util.TreeSet;
 import net.runelite.api.Player;
 import net.runelite.api.SceneTileModel;
@@ -508,7 +509,6 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 
 	private LightScanner lightScanner;
 	/** Object ids treated as lights, rebuilt from config rather than parsed per frame. */
-	private Set<Integer> lightIds;
 	private final float[] lightColours = new float[LightScanner.MAX_LIGHTS * 3];
 	private final float[] lightRadii = new float[LightScanner.MAX_LIGHTS];
 
@@ -886,10 +886,6 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 			}
 			// No "preset" case: it is read every frame rather than applied, which is what
 			// makes it a flip switch instead of an edit to the user's settings.
-			else if (configChanged.getKey().equals("lightObjectIds"))
-			{
-				lightIds = null;
-			}
 			else if (configChanged.getKey().equals("removeVertexSnapping"))
 			{
 				log.debug("Toggle {}", configChanged.getKey());
@@ -2078,44 +2074,7 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 		{
 			lightScanner = new LightScanner(client);
 		}
-		if (lightIds == null)
-		{
-			// Optional extras only - the scanner finds lights by name on its own.
-			lightIds = parseIds(config.lightObjectIds());
-		}
-
-		lightScanner.scan(lightIds);
-	}
-
-	/**
-	 * Parses a comma-separated id list, ignoring anything unparseable rather than
-	 * throwing - this comes straight from a text box.
-	 */
-	private static Set<Integer> parseIds(String csv)
-	{
-		Set<Integer> ids = new TreeSet<>();
-		if (csv == null)
-		{
-			return ids;
-		}
-
-		for (String part : csv.split(","))
-		{
-			String trimmed = part.trim();
-			if (trimmed.isEmpty())
-			{
-				continue;
-			}
-			try
-			{
-				ids.add(Integer.parseInt(trimmed));
-			}
-			catch (NumberFormatException ex)
-			{
-				log.warn("ignoring unparseable light object id: '{}'", trimmed);
-			}
-		}
-		return ids;
+		lightScanner.scan();
 	}
 
 	/**
@@ -2127,8 +2086,15 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 	 */
 	private void setupPointLights()
 	{
-		int count = enhancements() && config.dynamicLights() > 0 && lightScanner != null
-			? lightScanner.count : 0;
+		boolean on = enhancements() && config.dynamicLights() > 0 && lightScanner != null;
+		if (on)
+		{
+			// Per frame, not per tick: projectiles cross the screen inside a single tick,
+			// so a fireball's light would otherwise stride along behind the fireball.
+			lightScanner.collectFrame(config.effectLights());
+		}
+
+		int count = on ? lightScanner.count : 0;
 		glUniform1i(uniLightCount, count);
 		if (count <= 0)
 		{
@@ -4159,7 +4125,9 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 			return;
 		}
 
-		Set<Integer> ids = new TreeSet<>();
+		// Renderable kept alongside the id: the model test is now what decides most objects,
+		// and it cannot be re-derived from an id alone.
+		Map<Integer, Renderable> ids = new TreeMap<>();
 		final int radius = 4;
 		int cx = origin.getSceneX();
 		int cy = origin.getSceneY();
@@ -4180,30 +4148,30 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 					{
 						if (obj != null)
 						{
-							ids.add(obj.getId());
+							ids.put(obj.getId(), obj.getRenderable());
 						}
 					}
 				}
 				if (tile.getWallObject() != null)
 				{
-					ids.add(tile.getWallObject().getId());
+					ids.put(tile.getWallObject().getId(), tile.getWallObject().getRenderable1());
 				}
 				if (tile.getGroundObject() != null)
 				{
-					ids.add(tile.getGroundObject().getId());
+					ids.put(tile.getGroundObject().getId(), tile.getGroundObject().getRenderable());
 				}
 				if (tile.getDecorativeObject() != null)
 				{
-					ids.add(tile.getDecorativeObject().getId());
+					ids.put(tile.getDecorativeObject().getId(), tile.getDecorativeObject().getRenderable());
 				}
 			}
 		}
 
 		/*
-		 * Ids alone were not enough to explain a torch staying dark - the question is always
-		 * what name detection saw and what it made of it. Resolved through the scanner's own
-		 * lookup, impostors and all, so this reports the judgement rather than a re-creation
-		 * of it that might differ.
+		 * Ids alone never explained a torch staying dark - the question is always what
+		 * detection saw and what it made of it. Both tests are run through the scanner's own
+		 * code, so this reports the actual judgement rather than a re-creation that could
+		 * drift away from it.
 		 */
 		if (lightScanner == null)
 		{
@@ -4212,23 +4180,21 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 
 		List<String> lit = new ArrayList<>();
 		List<String> dark = new ArrayList<>();
-		for (int id : ids)
+		for (Map.Entry<Integer, Renderable> e : ids.entrySet())
 		{
-			String name = lightScanner.resolveName(id);
-			String entry = id + "=" + (name == null ? "<unresolved>" : name);
-			if (name != null && LightScanner.nameSuggestsLight(name))
-			{
-				lit.add(entry);
-			}
-			else
-			{
-				dark.add(entry);
-			}
+			String name = lightScanner.resolveName(e.getKey());
+			boolean byName = name != null && LightScanner.nameSuggestsLight(name);
+			boolean byModel = LightScanner.isBurning(e.getValue());
+
+			String entry = e.getKey() + "=" + (name == null ? "<unresolved>" : name)
+				+ (byName ? "(name)" : "") + (byModel ? "(model)" : "");
+			(byName || byModel ? lit : dark).add(entry);
 		}
 
 		say("[GPU v2] Within " + radius + " tiles - lighting: " + (lit.isEmpty() ? "none" : lit));
 		say("[GPU v2] not lighting: " + dark);
-		say("[GPU v2] Anything above that should light, add its id to 'Light object ids'.");
+		say("[GPU v2] 'null' means the object genuinely has no name, so only its model can "
+			+ "identify it - that needs it to be animated and painted like fire.");
 	}
 
 	private void say(String msg)
