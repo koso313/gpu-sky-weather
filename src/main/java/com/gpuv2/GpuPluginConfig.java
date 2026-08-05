@@ -70,7 +70,8 @@ public interface GpuPluginConfig extends Config
 
 	@ConfigSection(
 		name = "Display",
-		description = "Draw distance, anti-aliasing and image quality.",
+		description = "Draw distance, anti-aliasing, image quality and what gets left out of "
+			+ "the scene.",
 		position = 10
 	)
 	String displaySection = "displaySection";
@@ -81,7 +82,12 @@ public interface GpuPluginConfig extends Config
 	@ConfigItem(
 		keyName = "drawDistance",
 		name = "Draw distance",
-		description = "How far into the distance the world is drawn, in tiles.",
+		description = "How far into the distance the world is drawn, in tiles. The game "
+			+ "itself draws 25; anything beyond that is scenery vanilla would have hidden."
+			+ "<br><br>"
+			+ "The single biggest cost in the plugin, since everything drawn has to be built "
+			+ "and sent to the card every frame. Turn this down first if you are short of "
+			+ "frames.",
 		position = 11,
 		section = displaySection
 	)
@@ -96,7 +102,12 @@ public interface GpuPluginConfig extends Config
 	@ConfigItem(
 		keyName = "expandedMapLoadingChunks",
 		name = "Extended map loading",
-		description = "Extra map area to load, in 8 tile chunks.",
+		description = "Extra map area to keep loaded around you, in 8 tile chunks."
+			+ "<br><br>"
+			+ "Draw distance can only show what the client has loaded. Without this, a long "
+			+ "draw distance runs out of map and the world ends in mid-air at the edge of the "
+			+ "loaded area. Raise it if you can see that edge; it costs memory and loading "
+			+ "time rather than frame rate.",
 		position = 12,
 		section = displaySection
 	)
@@ -108,7 +119,12 @@ public interface GpuPluginConfig extends Config
 	@ConfigItem(
 		keyName = "hideUnrelatedMaps",
 		name = "Hide unrelated maps",
-		description = "Hide unrelated map areas you shouldn't see.",
+		description = "Hide map areas that are not really next to you."
+			+ "<br><br>"
+			+ "The game packs unrelated places side by side in the world map - the inside of "
+			+ "a dungeon may sit directly beside a town. A long draw distance can see across "
+			+ "that join, so you get a chunk of somewhere else floating in the distance. This "
+			+ "leaves those out. Best left on.",
 		position = 13,
 		section = displaySection
 	)
@@ -158,7 +174,12 @@ public interface GpuPluginConfig extends Config
 	@ConfigItem(
 		keyName = "antiAliasingMode",
 		name = "Anti aliasing",
-		description = "Smooths jagged edges. Higher costs more.",
+		description = "Smooths the stair-stepping along the edges of walls, roofs and scenery."
+			+ "<br><br>"
+			+ "Higher numbers sample each pixel more times and look cleaner, at a cost that "
+			+ "rises with them. x4 is the usual sweet spot. This only fixes edges where one "
+			+ "piece of geometry meets another - for the aurora, clouds and lightning, which "
+			+ "are drawn by shaders rather than built from triangles, use FXAA instead.",
 		position = 14,
 		section = displaySection
 	)
@@ -173,7 +194,11 @@ public interface GpuPluginConfig extends Config
 	@ConfigItem(
 		keyName = "anisotropicFilteringLevel",
 		name = "Anisotropic filtering",
-		description = "Sharpens textures viewed at a steep angle.",
+		description = "Keeps textures sharp when you are looking along them rather than at "
+			+ "them - floors stretching away, long walls, roads running to the horizon, which "
+			+ "otherwise blur into mush in the distance."
+			+ "<br><br>"
+			+ "0 disables. Cheap on any card made this decade.",
 		position = 15,
 		section = displaySection
 	)
@@ -202,7 +227,11 @@ public interface GpuPluginConfig extends Config
 	@ConfigItem(
 		keyName = "sharpen",
 		name = "Sharpening",
-		description = "Crispens edges. 0 disables. Pairs well with FXAA, which softens.",
+		description = "Crispens edges and picks detail back out of textures. 0 disables."
+			+ "<br><br>"
+			+ "Pairs well with FXAA and with a render scale below 100, both of which soften "
+			+ "the image - this puts the bite back. Push it too far and edges grow bright "
+			+ "outlines.",
 		position = 152,
 		section = displaySection
 	)
@@ -217,7 +246,11 @@ public interface GpuPluginConfig extends Config
 	@ConfigItem(
 		keyName = "vignette",
 		name = "Vignette",
-		description = "Darkens the corners of the screen. 0 disables.",
+		description = "Darkens the corners of the screen, drawing the eye toward the middle "
+			+ "and giving the picture a lens-like framing. 0 disables."
+			+ "<br><br>"
+			+ "A matter of taste rather than accuracy, and it works against you in dark "
+			+ "places where the corners are already hard to read.",
 		position = 153,
 		section = displaySection
 	)
@@ -229,7 +262,12 @@ public interface GpuPluginConfig extends Config
 	@ConfigItem(
 		keyName = "uiScalingMode",
 		name = "UI scaling mode",
-		description = "Sampling function to use for the UI in stretched mode.",
+		description = "How the interface is resampled when Stretched Mode is on. Has no "
+			+ "effect otherwise, and never touches the world - only the UI on top of it."
+			+ "<br><br>"
+			+ "Nearest Neighbor keeps hard pixel edges and stays faithful to the original "
+			+ "art. Bilinear is soft. The Bicubic modes are sharper than bilinear without the "
+			+ "blockiness, and xBR tries to redraw the art smoothly at the larger size.",
 		position = 16,
 		section = displaySection
 	)
@@ -292,7 +330,11 @@ public interface GpuPluginConfig extends Config
 	@ConfigItem(
 		keyName = "smoothBanding",
 		name = "Remove colour banding",
-		description = "Smooths out the colour banding present in the CPU renderer.",
+		description = "Blends shading smoothly across each face instead of stepping through "
+			+ "the limited set of shades the original software renderer had."
+			+ "<br><br>"
+			+ "Removes the visible bands on large lit surfaces such as ground and walls. "
+			+ "Untick it if you would rather keep the original stepped look.",
 		position = 17,
 		section = displaySection
 	)
@@ -304,7 +346,12 @@ public interface GpuPluginConfig extends Config
 	@ConfigItem(
 		keyName = "brightTextures",
 		name = "Bright textures",
-		description = "Use a brighter texture lighting model.",
+		description = "Light textured surfaces the brighter way the game used before its "
+			+ "texture lighting was changed."
+			+ "<br><br>"
+			+ "Mainly affects floors, walls and anything else drawn with a texture rather "
+			+ "than a flat colour. Nostalgic rather than correct - it can wash out textures "
+			+ "that are already brightly lit.",
 		position = 18,
 		section = displaySection
 	)
@@ -330,7 +377,8 @@ public interface GpuPluginConfig extends Config
 
 	@ConfigSection(
 		name = "Performance",
-		description = "Frame rate and threading.",
+		description = "Frame rate, threading and the quality/cost trade-offs. Also where the "
+			+ "performance overlay lives.",
 		position = 20,
 		closedByDefault = true
 	)
@@ -367,7 +415,8 @@ public interface GpuPluginConfig extends Config
 	@ConfigItem(
 		keyName = "perfShowAverage",
 		name = "  Average FPS",
-		description = "Mean frame rate over the last thousand frames.",
+		description = "Mean frame rate over the last thousand frames. Steadier than the live "
+			+ "reading, and the fair number to compare against after changing a setting.",
 		position = 32,
 		section = performanceSection
 	)
@@ -423,7 +472,11 @@ public interface GpuPluginConfig extends Config
 	@ConfigItem(
 		keyName = "unlockFps",
 		name = "Unlock FPS",
-		description = "Draw more frames than the game's own 50 fps cap.",
+		description = "Draw more frames than the game's own 50 fps cap, so motion and camera "
+			+ "movement are smooth."
+			+ "<br><br>"
+			+ "Only affects how often the picture is drawn. The game still ticks every 0.6 "
+			+ "seconds, so this changes nothing about how the game plays.",
 		position = 21,
 		section = performanceSection
 	)
@@ -435,7 +488,11 @@ public interface GpuPluginConfig extends Config
 	@ConfigItem(
 		keyName = "vsyncMode",
 		name = "Vsync mode",
-		description = "Synchronise frames to the monitor's refresh rate.",
+		description = "Synchronise frames to the monitor's refresh rate, which removes the "
+			+ "horizontal tearing you get when a frame arrives mid-refresh."
+			+ "<br><br>"
+			+ "The cost is a little input latency, and frames are capped at your refresh rate "
+			+ "whatever the FPS target says. Off leaves the FPS target in charge.",
 		position = 22,
 		section = performanceSection
 	)
@@ -451,7 +508,11 @@ public interface GpuPluginConfig extends Config
 	@ConfigItem(
 		keyName = "fpsTarget",
 		name = "FPS target",
-		description = "Frame rate cap when vsync is off and FPS is unlocked.",
+		description = "Frame rate cap. Only applies with Unlock FPS on and vsync off."
+			+ "<br><br>"
+			+ "A ceiling, not a goal - setting it high does not make the client work harder, "
+			+ "it just stops holding frames back. Capping near your monitor's refresh rate "
+			+ "keeps the card cool and quiet for no visible loss.",
 		position = 23,
 		section = performanceSection
 	)
@@ -513,7 +574,12 @@ public interface GpuPluginConfig extends Config
 	@ConfigItem(
 		keyName = "numThreads",
 		name = "Threads",
-		description = "Number of render threads to use.",
+		description = "How many background threads prepare scenery for the card each frame."
+			+ "<br><br>"
+			+ "This is the work of sorting and packing everything in view, and it is the part "
+			+ "a long draw distance makes expensive. If your 1% lows are poor while the card "
+			+ "sits half idle, raising this is what helps. 0 does the work on the main thread. "
+			+ "There is nothing to gain past your core count.",
 		position = 24,
 		section = performanceSection
 	)
@@ -541,7 +607,10 @@ public interface GpuPluginConfig extends Config
 	@ConfigItem(
 		keyName = "fogEnabled",
 		name = "Enable fog",
-		description = "Master switch for both distance fog and ground mist.",
+		description = "Master switch for distance fog, ground mist and aerial perspective."
+			+ "<br><br>"
+			+ "Fog fades the far edge of the scene into the sky colour, which hides the hard "
+			+ "line where drawing stops and makes a short draw distance far less obvious.",
 		position = 320,
 		section = fogSection
 	)
@@ -559,7 +628,8 @@ public interface GpuPluginConfig extends Config
 
 	@ConfigSection(
 		name = "Stars and aurora",
-		description = "Night sky detail.",
+		description = "Stars, shooting stars and the aurora. All of it is night-only and "
+			+ "hidden by cloud cover.",
 		position = 38
 	)
 	String starSection = "starSection";
@@ -574,7 +644,15 @@ public interface GpuPluginConfig extends Config
 	@ConfigItem(
 		keyName = "skyMode",
 		name = "Sky colour",
-		description = "Where the sky - and the fog that fades into it - takes its colour from.",
+		description = "Where the sky - and the fog that fades into it - takes its colour from."
+			+ "<br><br>"
+			+ "'Game default' uses whatever the area itself specifies, as vanilla does. "
+			+ "'Custom colour' holds the single colour you pick below. 'Time of day' runs a "
+			+ "full day cycle from your system clock, shifting continuously through dawn, "
+			+ "midday, dusk and night."
+			+ "<br><br>"
+			+ "Several other settings - god rays, lights following time, auto colour "
+			+ "temperature - need 'Time of day', since the others have no clock to follow.",
 		position = 31,
 		section = skySection
 	)
@@ -642,7 +720,11 @@ public interface GpuPluginConfig extends Config
 	@ConfigItem(
 		keyName = "fogDepth",
 		name = "Fog depth",
-		description = "How far from the scene edge fog starts. Fades into the sky colour.",
+		description = "How far in from the edge of the drawn world the fog begins, in tiles."
+			+ "<br><br>"
+			+ "Higher brings the haze closer and hides more of the distance; 0 disables it. "
+			+ "Because it fades to the sky colour, it changes through the day along with the "
+			+ "sky rather than staying a fixed grey.",
 		position = 321,
 		section = fogSection
 	)
@@ -654,7 +736,11 @@ public interface GpuPluginConfig extends Config
 	@ConfigItem(
 		keyName = "showSun",
 		name = "Sun",
-		description = "Draw a sun that arcs east to west across the day.",
+		description = "Draw a sun that rises in the east, crosses the sky through the day and "
+			+ "sets in the west, matching the game's own compass."
+			+ "<br><br>"
+			+ "Its height drives the sky colour, the direction of the lighting and the god "
+			+ "rays, so this is the anchor the rest of the time-of-day effects hang off.",
 		position = 340,
 		section = sunMoonSection
 	)
@@ -669,7 +755,11 @@ public interface GpuPluginConfig extends Config
 	@ConfigItem(
 		keyName = "sunGlow",
 		name = "Sun brightness",
-		description = "How fiercely the sun's disc burns.",
+		description = "How fiercely the sun's disc burns. 0 leaves it a plain pale circle; "
+			+ "high makes it too bright to look at, with the glow bleeding into the sky "
+			+ "around it."
+			+ "<br><br>"
+			+ "Weather that hides the sun overrides this.",
 		position = 341,
 		section = sunMoonSection
 	)
@@ -684,7 +774,11 @@ public interface GpuPluginConfig extends Config
 	@ConfigItem(
 		keyName = "sunGlare",
 		name = "Sun glare",
-		description = "Halo and streaks radiating from the sun. 0 disables.",
+		description = "Halo and streaks radiating from the sun, as a camera lens or a squint "
+			+ "would give you. 0 disables."
+			+ "<br><br>"
+			+ "Strongest when the sun is low and pointed at, and hidden by weather that takes "
+			+ "the sun away.",
 		position = 342,
 		section = sunMoonSection
 	)
@@ -696,7 +790,11 @@ public interface GpuPluginConfig extends Config
 	@ConfigItem(
 		keyName = "showMoon",
 		name = "Moon",
-		description = "Draw a moon, opposite the sun so it is up at night.",
+		description = "Draw a moon. It rides opposite the sun, so it rises as the sun sets "
+			+ "and is up through the night."
+			+ "<br><br>"
+			+ "Its position tracks the phase as a real moon does - a crescent sits near the "
+			+ "sun and follows it down, a full moon is high at midnight.",
 		position = 343,
 		section = sunMoonSection
 	)
@@ -708,8 +806,11 @@ public interface GpuPluginConfig extends Config
 	@ConfigItem(
 		keyName = "moonPhases",
 		name = "Moon phases",
-		description = "Let the moon wax and wane between nights. Off keeps it permanently "
-			+ "full.",
+		description = "Let the moon wax and wane from night to night rather than staying "
+			+ "permanently full."
+			+ "<br><br>"
+			+ "The phase also decides where the moon sits and how much light it throws, so a "
+			+ "new moon leaves genuinely darker nights than a full one.",
 		position = 345,
 		section = sunMoonSection
 	)
@@ -759,7 +860,11 @@ public interface GpuPluginConfig extends Config
 	@ConfigItem(
 		keyName = "moonGlow",
 		name = "Moon brightness",
-		description = "How brightly the moon's disc and halo shine.",
+		description = "How brightly the moon's disc and its halo shine. 0 leaves the moon "
+			+ "drawn but unlit."
+			+ "<br><br>"
+			+ "Only the lit crescent is affected, so a thin moon stays dim however high this "
+			+ "goes.",
 		position = 344,
 		section = sunMoonSection
 	)
@@ -771,7 +876,11 @@ public interface GpuPluginConfig extends Config
 	@ConfigItem(
 		keyName = "nightSky",
 		name = "Stars at night",
-		description = "Draw a starfield after dark.",
+		description = "Draw a starfield after dark. Fades in as the sky darkens and out again "
+			+ "at dawn, and cloud cover and weather hide it."
+			+ "<br><br>"
+			+ "The field is fixed to the sky rather than the camera, so stars hold their "
+			+ "places as you turn.",
 		position = 380,
 		section = starSection
 	)
@@ -787,7 +896,8 @@ public interface GpuPluginConfig extends Config
 	@ConfigItem(
 		keyName = "starDensity",
 		name = "Star density",
-		description = "How many stars fill the sky.",
+		description = "How many stars fill the sky. Low gives a handful of bright ones, high "
+			+ "gives a dense field with faint stars between them.",
 		position = 381,
 		section = starSection
 	)
@@ -802,7 +912,12 @@ public interface GpuPluginConfig extends Config
 	@ConfigItem(
 		keyName = "cloudAmount",
 		name = "Cloud cover",
-		description = "How much of the sky is covered by cloud. 0 disables clouds entirely.",
+		description = "How much of the sky is covered by cloud. 0 disables clouds entirely, "
+			+ "low gives scattered fair-weather puffs, high gives a broken deck with only "
+			+ "gaps of blue."
+			+ "<br><br>"
+			+ "Weather raises this on its own while it runs, so an overcast day closes over "
+			+ "whatever you set here.",
 		position = 420,
 		section = cloudSection
 	)
@@ -817,7 +932,11 @@ public interface GpuPluginConfig extends Config
 	@ConfigItem(
 		keyName = "cloudOpacity",
 		name = "Cloud strength",
-		description = "How solid the clouds look against the sky.",
+		description = "How solid the clouds look against the sky. Low gives thin haze you can "
+			+ "see through, high gives opaque cloud with definite edges."
+			+ "<br><br>"
+			+ "Separate from cloud cover, which is how much sky they take up rather than how "
+			+ "dense they are.",
 		position = 421,
 		section = cloudSection
 	)
@@ -879,7 +998,8 @@ public interface GpuPluginConfig extends Config
 	@ConfigItem(
 		keyName = "shootingStarSound",
 		name = "Shooting star sound",
-		description = "Play a chime when a shooting star appears.",
+		description = "Play a sound when a shooting star appears. Off by default, since a "
+			+ "chime with no in-game cause behind it can be misleading.",
 		position = 387,
 		section = starSection
 	)
@@ -921,7 +1041,8 @@ public interface GpuPluginConfig extends Config
 	@ConfigItem(
 		keyName = "auroraStrength",
 		name = "Aurora strength",
-		description = "How bright the aurora is.",
+		description = "How bright the aurora burns. Low is a faint green suggestion near the "
+			+ "horizon, high is unmistakable curtains reaching up the sky.",
 		position = 383,
 		section = starSection
 	)
@@ -1008,8 +1129,16 @@ public interface GpuPluginConfig extends Config
 	@ConfigItem(
 		keyName = "weather",
 		name = "Weather",
-		description = "Precipitation drawn in front of the world and behind the interface. "
-			+ "'Automatic' lets it change on its own over time.",
+		description = "What the weather is doing. Precipitation is drawn in front of the "
+			+ "world and behind the interface, and each condition also settles the sky to "
+			+ "match - there is no raining out of a clear blue sky."
+			+ "<br><br>"
+			+ "'Off' and 'Sunny' both leave the sky exactly as you configured it. 'Overcast' "
+			+ "seals the deck over without anything falling. Rain, storm, snow and blizzard "
+			+ "each take the sun away and darken the light beneath them."
+			+ "<br><br>"
+			+ "'Automatic' changes it on its own over time, keeping clear skies roughly two "
+			+ "thirds of the time so that weather stays worth noticing.",
 		position = 41,
 		section = weatherSection
 	)
@@ -1042,7 +1171,11 @@ public interface GpuPluginConfig extends Config
 	@ConfigItem(
 		keyName = "weatherAmount",
 		name = "Amount",
-		description = "How heavy the rain or snow is.",
+		description = "How much rain or snow falls. Low is a light scattering, high is a "
+			+ "downpour thick enough to see through."
+			+ "<br><br>"
+			+ "Storm and blizzard already fall harder than rain and snow, so this scales on "
+			+ "top of whichever condition is running rather than replacing it.",
 		position = 43,
 		section = weatherSection
 	)
@@ -1073,8 +1206,10 @@ public interface GpuPluginConfig extends Config
 	@ConfigItem(
 		keyName = "groundSnow",
 		name = "Snow on the ground",
-		description = "Settles snow on upward-facing surfaces while it is snowing. "
-			+ "0 disables.",
+		description = "Settles snow on upward-facing surfaces while it is snowing - ground, "
+			+ "rooftops and the tops of scenery, but not walls. 0 disables."
+			+ "<br><br>"
+			+ "Builds up as the snow falls and melts away again once it stops.",
 		position = 45,
 		section = weatherSection
 	)
@@ -1102,7 +1237,10 @@ public interface GpuPluginConfig extends Config
 	@ConfigItem(
 		keyName = "lightning",
 		name = "Lightning",
-		description = "Flashes and bolts of lightning during a storm.",
+		description = "Flashes and bolts of lightning during a storm."
+			+ "<br><br>"
+			+ "Each strike lights the world as well as the sky, so the ground and everything "
+			+ "on it flares for the instant the bolt is out. Storms only.",
 		position = 47,
 		section = weatherSection
 	)
@@ -1132,7 +1270,8 @@ public interface GpuPluginConfig extends Config
 
 	@ConfigSection(
 		name = "Lighting",
-		description = "Ambient and directional light over the game's own shading.",
+		description = "Ambient and directional light layered over the game's own shading, "
+			+ "plus the dynamic lights cast by fires, torches and lanterns.",
 		position = 50,
 		closedByDefault = true
 	)
@@ -1144,7 +1283,11 @@ public interface GpuPluginConfig extends Config
 	@ConfigItem(
 		keyName = "lightStrength",
 		name = "Lighting strength",
-		description = "How strongly the lighting below is applied. 0 disables it entirely.",
+		description = "Master strength for the ambient and sun lighting below. 0 disables "
+			+ "them entirely and leaves the game's own shading untouched."
+			+ "<br><br>"
+			+ "This lighting is layered over vanilla shading rather than replacing it, so a "
+			+ "little goes a long way - high values wash out the original art.",
 		position = 51,
 		section = lightSection
 	)
@@ -1156,7 +1299,10 @@ public interface GpuPluginConfig extends Config
 	@ConfigItem(
 		keyName = "lightAmbientColor",
 		name = "Ambient colour",
-		description = "Colour of the light filling shadowed faces.",
+		description = "Colour of the light filling faces the sun does not reach."
+			+ "<br><br>"
+			+ "Stands in for skylight, so a cool blue reads as a clear day and a warm tone as "
+			+ "firelit or overcast. This is what sets the colour of your shadows.",
 		position = 52,
 		section = lightSection
 	)
@@ -1171,7 +1317,11 @@ public interface GpuPluginConfig extends Config
 	@ConfigItem(
 		keyName = "lightAmbientStrength",
 		name = "Ambient strength",
-		description = "Brightness of the ambient fill.",
+		description = "How much ambient light there is. Raise it to lift shadows and flatten "
+			+ "the scene, lower it for deeper contrast between lit and unlit faces."
+			+ "<br><br>"
+			+ "Balance this against Sun strength: ambient sets the floor, the sun sets how "
+			+ "far above it the lit side rises.",
 		position = 53,
 		section = lightSection
 	)
@@ -1183,7 +1333,11 @@ public interface GpuPluginConfig extends Config
 	@ConfigItem(
 		keyName = "lightSunColor",
 		name = "Sun colour",
-		description = "Colour of the directional light.",
+		description = "Colour of the light thrown by the sun onto faces angled toward it."
+			+ "<br><br>"
+			+ "Warm tones read as low sun and late afternoon, near-white as midday. Works "
+			+ "against the ambient colour - the wider apart the two, the more the shading "
+			+ "reads as sunlight rather than brightness.",
 		position = 54,
 		section = lightSection
 	)
@@ -1198,7 +1352,11 @@ public interface GpuPluginConfig extends Config
 	@ConfigItem(
 		keyName = "lightSunStrength",
 		name = "Sun strength",
-		description = "Brightness of the directional light on faces angled toward the sun.",
+		description = "How hard the sun lights faces turned toward it."
+			+ "<br><br>"
+			+ "This is what gives objects a lit side and a shaded side, so it does most of "
+			+ "the work of making things look solid. Turn it up when judging whether Smooth "
+			+ "lighting is doing anything.",
 		position = 55,
 		section = lightSection
 	)
@@ -1241,11 +1399,14 @@ public interface GpuPluginConfig extends Config
 	@ConfigItem(
 		keyName = "daytimeLights",
 		name = "Lights during the day",
-		description = "Keep dynamic lights on around the clock - torches, fires and glowing "
-			+ "attacks alike. Off follows the sky clock instead, fading them in through dusk "
-			+ "and out again at dawn, since firelight on the ground under a midday sun is "
-			+ "what gives the effect away. Has no effect unless the sky is set to time of "
-			+ "day, because nothing else has a clock to follow.",
+		description = "Keep dynamic lights burning around the clock."
+			+ "<br><br>"
+			+ "Off follows the sky clock instead, fading them in through dusk and out again "
+			+ "at dawn - firelight pooling on the ground under a midday sun is what gives the "
+			+ "effect away."
+			+ "<br><br>"
+			+ "Has no effect unless the sky is set to time of day, since nothing else has a "
+			+ "clock to follow. Underground is always treated as night either way.",
 		position = 557,
 		section = lightSection
 	)
@@ -1257,7 +1418,9 @@ public interface GpuPluginConfig extends Config
 	@ConfigItem(
 		keyName = "lightColour",
 		name = "Light colour",
-		description = "Colour cast by dynamic lights.",
+		description = "Colour cast by dynamic lights onto the ground and nearby scenery. "
+			+ "Warm orange reads as firelight; cooler tones suit lanterns and magical "
+			+ "sources.",
 		position = 559,
 		section = lightSection
 	)
@@ -1326,7 +1489,11 @@ public interface GpuPluginConfig extends Config
 	@ConfigItem(
 		keyName = "lightFlicker",
 		name = "Light flicker",
-		description = "How much firelight wavers. 0 is a steady glow.",
+		description = "How much firelight wavers and breathes. 0 is a steady glow, high is a "
+			+ "guttering flame."
+			+ "<br><br>"
+			+ "Each light flickers on its own rhythm, so a row of torches does not pulse in "
+			+ "unison.",
 		position = 561,
 		section = lightSection
 	)
@@ -1354,8 +1521,11 @@ public interface GpuPluginConfig extends Config
 	@ConfigItem(
 		keyName = "lightFollowsTime",
 		name = "Follow time of day",
-		description = "Dim the world at night in step with the sky. Only applies when sky "
-			+ "colour is set to 'Time of day'.",
+		description = "Dim and cool the world at night in step with the sky, so dusk falls on "
+			+ "the ground as well as overhead."
+			+ "<br><br>"
+			+ "Only applies when sky colour is set to 'Time of day' - the other modes have no "
+			+ "clock to follow. Off keeps the world lit the same however late it is.",
 		position = 56,
 		section = lightSection
 	)
@@ -1409,7 +1579,9 @@ public interface GpuPluginConfig extends Config
 	@ConfigItem(
 		keyName = "bloomIntensity",
 		name = "Bloom intensity",
-		description = "Strength of the glow added back over the scene.",
+		description = "Strength of the glow added back over the scene. Low is a subtle "
+			+ "softening around bright edges; high is a dreamy haze over everything that "
+			+ "passed the threshold.",
 		position = 73,
 		section = postSection
 	)
@@ -1457,7 +1629,8 @@ public interface GpuPluginConfig extends Config
 	@ConfigItem(
 		keyName = "godRayLength",
 		name = "God ray length",
-		description = "How far the shafts stretch from the sun.",
+		description = "How far the shafts stretch out from the sun. Short keeps them a halo "
+			+ "close around it; long reaches them across the sky.",
 		position = 76,
 		section = postSection
 	)
@@ -1489,7 +1662,8 @@ public interface GpuPluginConfig extends Config
 	@ConfigItem(
 		keyName = "gradeContrast",
 		name = "Contrast",
-		description = "Separation between lights and darks. 100 is neutral.",
+		description = "Separation between lights and darks. 100 is neutral; higher deepens "
+			+ "shadows and brightens highlights, lower flattens the image toward grey.",
 		position = 78,
 		section = postSection
 	)
@@ -1504,7 +1678,9 @@ public interface GpuPluginConfig extends Config
 	@ConfigItem(
 		keyName = "gradeSaturation",
 		name = "Saturation",
-		description = "Colour intensity. 100 is neutral, 0 is greyscale.",
+		description = "Colour intensity. 100 is neutral, 0 is greyscale, and above 100 pushes "
+			+ "colours harder - useful for bringing the original art's palette back after "
+			+ "heavy lighting has washed it out.",
 		position = 79,
 		section = postSection
 	)
@@ -1546,7 +1722,9 @@ public interface GpuPluginConfig extends Config
 	@ConfigItem(
 		keyName = "colorBlindMode",
 		name = "Colourblindness correction",
-		description = "Adjusts colours to account for colourblindness.",
+		description = "Shifts colours apart so they stay distinguishable with colour vision "
+			+ "deficiency. Pick the type that matches: protanopia is red-weak, deuteranopia "
+			+ "green-weak, tritanopia blue-weak.",
 		position = 81,
 		section = postSection
 	)
@@ -1561,7 +1739,8 @@ public interface GpuPluginConfig extends Config
 	@ConfigItem(
 		keyName = "colorBlindIntensity",
 		name = "Colourblindness intensity",
-		description = "How strongly the colourblindness correction is applied.",
+		description = "How strongly the colourblindness correction is applied. 0 is off, 100 "
+			+ "is the full shift - lower it if the corrected colours look unnatural.",
 		position = 82,
 		section = postSection
 	)
