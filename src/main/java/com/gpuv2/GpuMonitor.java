@@ -6,6 +6,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import javax.inject.Singleton;
 import lombok.extern.slf4j.Slf4j;
 
 /**
@@ -20,8 +21,15 @@ import lombok.extern.slf4j.Slf4j;
  * could report - and would corrupt the frame times being measured beside it.
  */
 @Slf4j
+@Singleton
 class GpuMonitor
 {
+	/*
+	 * Singleton for the same reason FrameStats is: the plugin starts the sampler, the
+	 * overlay reads the readings, and separate instances means starting one and reading
+	 * another that never samples anything.
+	 */
+
 	/**
 	 * Seconds between samples. Temperature moves slowly and a process launch is not cheap,
 	 * so there is nothing to gain from going faster.

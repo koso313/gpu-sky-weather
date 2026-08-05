@@ -1,6 +1,7 @@
 package com.gpuv2;
 
 import java.util.Arrays;
+import javax.inject.Singleton;
 
 /**
  * Rolling frame-time statistics for the performance overlay.
@@ -13,8 +14,15 @@ import java.util.Arrays;
  * at 500fps and 20fps average to 260fps by that arithmetic, when the honest answer is the
  * 38fps you would actually have felt. Times average correctly and convert at the end.
  */
+@Singleton
 class FrameStats
 {
+	/*
+	 * Singleton, and it has to be. Guice hands out a fresh instance per injection point by
+	 * default, so without this the renderer recorded frames into one object while the
+	 * overlay read an empty second one and drew nothing at all.
+	 */
+
 	/**
 	 * How many frames the window covers. At a few hundred fps this is a handful of seconds
 	 * - long enough for the numbers to sit still, short enough that a stutter you just felt

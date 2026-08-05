@@ -7,6 +7,7 @@ import java.awt.Graphics2D;
 import java.util.ArrayList;
 import java.util.List;
 import javax.inject.Inject;
+import javax.inject.Singleton;
 import net.runelite.client.ui.FontManager;
 import net.runelite.client.ui.overlay.Overlay;
 import net.runelite.client.ui.overlay.OverlayLayer;
@@ -19,6 +20,7 @@ import net.runelite.client.ui.overlay.OverlayPosition;
  * counter - this sits in the same corner and is read the same way, so looking like a
  * different kind of thing would only make both harder to read.
  */
+@Singleton
 class PerformanceOverlay extends Overlay
 {
 	private static final Color GOOD = new Color(0x3FFF3F);
