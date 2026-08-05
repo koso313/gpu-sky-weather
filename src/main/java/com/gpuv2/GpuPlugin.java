@@ -1763,19 +1763,27 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 		glDrawArrays(GL_TRIANGLES, 0, 3);
 
 		/*
-		 * Put back everything this touched. drawProceduralSky restores depth and blend at
-		 * its own end, but this runs after it and so has to do the same - leaving depth
-		 * testing off and blending disabled meant the scene drew into a framebuffer with no
-		 * depth at all, and the texture left on unit 0 had the scene's own draws failing
-		 * with INVALID_OPERATION.
+		 * Hand the scene program back.
+		 *
+		 * This is the one that matters, and it is easy to miss because nothing here uses it.
+		 * The client calls drawZoneOpaque after the sky, and Zone.renderOpaque sets uniforms
+		 * and draws without ever binding a program - it assumes the scene's is still current
+		 * from drawScene. Leaving the upscale program bound meant every zone was setting a
+		 * scene uniform on a program that has no such uniform: INVALID_OPERATION, and a world
+		 * that did not draw.
+		 *
+		 * drawProceduralSky ends with exactly these two lines for the same reason. Running
+		 * after it means repeating them, along with the depth and blend state it also
+		 * restores.
 		 */
 		glBindTexture(GL_TEXTURE_2D, 0);
 		glActiveTexture(GL_TEXTURE1);
-		glBindVertexArray(0);
 
 		glDepthMask(true);
 		glEnable(GL_DEPTH_TEST);
 		glEnable(GL_BLEND);
+		glBindVertexArray(0);
+		glUseProgram(glProgram);
 	}
 
 	private void drawProceduralSky(int sky, float cameraPitch, float cameraYaw)
