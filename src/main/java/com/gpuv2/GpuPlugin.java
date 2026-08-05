@@ -4129,6 +4129,9 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 		// Renderable kept alongside the id: the model test is now what decides most objects,
 		// and it cannot be re-derived from an id alone.
 		Map<Integer, Renderable> ids = new TreeMap<>();
+		// Where each id sits and what kind of object it is, so a specific torch on screen can
+		// be matched to a specific id - the names give nothing to go on.
+		Map<Integer, String> where = new TreeMap<>();
 		final int radius = 6;
 		int cx = origin.getSceneX();
 		int cy = origin.getSceneY();
@@ -4150,20 +4153,24 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 						if (obj != null)
 						{
 							ids.put(obj.getId(), obj.getRenderable());
+							where.put(obj.getId(), bearing(cx, cy, x, y) + " game");
 						}
 					}
 				}
 				if (tile.getWallObject() != null)
 				{
 					ids.put(tile.getWallObject().getId(), tile.getWallObject().getRenderable1());
+					where.put(tile.getWallObject().getId(), bearing(cx, cy, x, y) + " wall");
 				}
 				if (tile.getGroundObject() != null)
 				{
 					ids.put(tile.getGroundObject().getId(), tile.getGroundObject().getRenderable());
+					where.put(tile.getGroundObject().getId(), bearing(cx, cy, x, y) + " ground");
 				}
 				if (tile.getDecorativeObject() != null)
 				{
 					ids.put(tile.getDecorativeObject().getId(), tile.getDecorativeObject().getRenderable());
+					where.put(tile.getDecorativeObject().getId(), bearing(cx, cy, x, y) + " decor");
 				}
 			}
 		}
@@ -4200,13 +4207,22 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 			boolean byModel = model != null && LightScanner.isBurning(r, model);
 			boolean animated = r instanceof DynamicObject;
 
-			String label = e.getKey() + "=" + (name == null ? "<unresolved>" : name);
+			String label = e.getKey() + "=" + (name == null ? "<unresolved>" : name)
+				+ " @" + where.getOrDefault(e.getKey(), "?");
 			(byName || byModel ? lit : dark).add(label
 				+ (byName ? "(name)" : "") + (byModel ? "(model)" : ""));
 
 			if (model == null)
 			{
-				evidence.add(label + " no model");
+				/*
+				 * Two different failures wearing the same label. No renderable at all means
+				 * this renderer freed the CPU-side model after uploading it to the GPU, and
+				 * nothing can bring it back - that would put static scenery permanently out
+				 * of reach. A renderable whose model is null is a transient build, and is
+				 * only a matter of asking again later.
+				 */
+				evidence.add(label + (r == null ? " no renderable (freed after upload?)"
+					: " renderable " + r.getClass().getSimpleName() + " but model null"));
 			}
 			else
 			{
@@ -4230,6 +4246,22 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 			say("[GPU v2] Nothing nearby has fire-coloured geometry at all - stand right "
 				+ "next to a torch and run this again.");
 		}
+	}
+
+	/** Compass bearing and distance of a scene tile from the player, for ::lightids. */
+	private static String bearing(int cx, int cy, int x, int y)
+	{
+		int dx = x - cx;
+		int dy = y - cy;
+		if (dx == 0 && dy == 0)
+		{
+			return "here";
+		}
+
+		// Scene Y increases north.
+		String ns = dy > 0 ? "N" : dy < 0 ? "S" : "";
+		String ew = dx > 0 ? "E" : dx < 0 ? "W" : "";
+		return (int) Math.round(Math.sqrt(dx * dx + dy * dy)) + ns + ew;
 	}
 
 	private void say(String msg)
