@@ -2075,7 +2075,7 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 		{
 			lightScanner = new LightScanner(client);
 		}
-		lightScanner.scan();
+		lightScanner.scan(config.lightRadius(), config.maxLights());
 	}
 
 	/**

@@ -1072,18 +1072,38 @@ public interface GpuPluginConfig extends Config
 
 	@Range(
 		min = 1,
-		max = 20
+		max = 40
 	)
 	@ConfigItem(
 		keyName = "lightRadius",
 		name = "Light radius",
-		description = "How far a light reaches, in tiles.",
+		description = "How far a single light reaches, in tiles. Raising this also widens "
+			+ "the area searched for lights, so distant ones keep working.",
 		position = 560,
 		section = lightSection
 	)
 	default int lightRadius()
 	{
 		return 6;
+	}
+
+	@Range(
+		min = 4,
+		max = 64
+	)
+	@ConfigItem(
+		keyName = "maxLights",
+		name = "Max lights at once",
+		description = "How many lights can be drawn together. Somewhere dense this is what "
+			+ "limits how far lighting reaches, since only the nearest ones fit - raise it "
+			+ "to light more of the street. Each costs a little performance everywhere on "
+			+ "screen, so raise it only as far as you need.",
+		position = 562,
+		section = lightSection
+	)
+	default int maxLights()
+	{
+		return 32;
 	}
 
 	@Range(

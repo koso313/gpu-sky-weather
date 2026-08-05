@@ -48,18 +48,24 @@ import net.runelite.api.coords.LocalPoint;
 @Slf4j
 class LightScanner
 {
-	/** Must match MAX_LIGHTS in frag.glsl. */
-	static final int MAX_LIGHTS = 32;
+	/**
+	 * Hard ceiling on lights drawn at once. Must match MAX_LIGHTS in frag.glsl.
+	 *
+	 * <p>This is the size of the shader's uniform arrays, so it is fixed at compile time.
+	 * How many of the slots are actually used is a setting, because every one of them costs
+	 * an iteration of a loop that runs for every pixel on screen.
+	 */
+	static final int MAX_LIGHTS = 64;
 
 	/**
-	 * How far around the player to look, in tiles.
+	 * Headroom between how far a light reaches and how far out they are looked for, in
+	 * tiles.
 	 *
-	 * <p>Has to comfortably exceed the light radius setting, because a light stops existing
-	 * the moment it leaves this patch - and a light that is still within its own reach when
-	 * that happens vanishes mid-throw. The setting caps at 20 tiles, so 25 leaves exactly
-	 * the fade band below spare.
+	 * <p>A light stops existing the moment it leaves the scanned patch, so scanning only as
+	 * far as a light reaches would delete lights that are still lighting something. The
+	 * margin also gives the fade somewhere to happen.
 	 */
-	private static final int RADIUS = 25;
+	private static final int SCAN_MARGIN = 6;
 
 	/**
 	 * Width of the band at the edge of the scan, in tiles, over which a light dims to
@@ -105,6 +111,10 @@ class LightScanner
 	private final float[] staticFade = new float[MAX_LIGHTS];
 	private int staticCount;
 
+	/** How many lights may be drawn, and how far out to look, from config at scan time. */
+	private int budget = MAX_LIGHTS;
+	private int scanRadius = 25;
+
 	/** Flattened xyz per light, rebuilt each frame by {@link #collectFrame}. */
 	final float[] positions = new float[MAX_LIGHTS * 3];
 
@@ -125,9 +135,11 @@ class LightScanner
 	 * scenery does not move. Live effects are picked up separately by
 	 * {@link #collectFrame()}.
 	 */
-	void scan()
+	void scan(int lightRadiusTiles, int maxLights)
 	{
 		staticCount = 0;
+		budget = Math.max(1, Math.min(MAX_LIGHTS, maxLights));
+		scanRadius = lightRadiusTiles + SCAN_MARGIN;
 
 		WorldView wv = client.getTopLevelWorldView();
 		Player player = client.getLocalPlayer();
@@ -155,9 +167,9 @@ class LightScanner
 		List<TileObject> found = new ArrayList<>();
 		Set<Long> seen = new HashSet<>();
 
-		for (int x = Math.max(0, cx - RADIUS); x <= Math.min(tiles[plane].length - 1, cx + RADIUS); ++x)
+		for (int x = Math.max(0, cx - scanRadius); x <= Math.min(tiles[plane].length - 1, cx + scanRadius); ++x)
 		{
-			for (int y = Math.max(0, cy - RADIUS); y <= Math.min(tiles[plane][x].length - 1, cy + RADIUS); ++y)
+			for (int y = Math.max(0, cy - scanRadius); y <= Math.min(tiles[plane][x].length - 1, cy + scanRadius); ++y)
 			{
 				Tile tile = tiles[plane][x][y];
 				if (tile != null)
@@ -196,16 +208,16 @@ class LightScanner
 		 * fade is measured against that instead. Whatever falls off the end has already
 		 * dimmed to nothing on its way there.
 		 */
-		float edge = RADIUS;
-		if (found.size() > MAX_LIGHTS)
+		float edge = scanRadius;
+		if (found.size() > budget)
 		{
-			float lastKept = (float) Math.sqrt(distanceSq(found.get(MAX_LIGHTS - 1), origin)) / TILE;
+			float lastKept = (float) Math.sqrt(distanceSq(found.get(budget - 1), origin)) / TILE;
 			edge = Math.min(edge, lastKept);
 		}
 
 		for (TileObject obj : found)
 		{
-			if (staticCount >= MAX_LIGHTS)
+			if (staticCount >= budget)
 			{
 				break;
 			}
@@ -243,7 +255,7 @@ class LightScanner
 			collectEffects();
 		}
 
-		for (int i = 0; i < staticCount && count < MAX_LIGHTS; ++i)
+		for (int i = 0; i < staticCount && count < budget; ++i)
 		{
 			positions[count * 3] = staticPositions[i * 3];
 			positions[count * 3 + 1] = staticPositions[i * 3 + 1];
@@ -267,7 +279,7 @@ class LightScanner
 	{
 		for (Projectile p : client.getProjectiles())
 		{
-			if (count >= MAX_LIGHTS)
+			if (count >= budget)
 			{
 				return;
 			}
@@ -284,7 +296,7 @@ class LightScanner
 
 		for (GraphicsObject g : client.getGraphicsObjects())
 		{
-			if (count >= MAX_LIGHTS)
+			if (count >= budget)
 			{
 				return;
 			}

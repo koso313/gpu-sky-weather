@@ -1,7 +1,15 @@
 package com.gpuv2;
 
+import java.io.BufferedReader;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import org.junit.Test;
 
@@ -114,11 +122,25 @@ public class LightScannerTest
 		assertEquals(0f, LightScanner.fadeAt(0f, 0f), 1e-6);
 	}
 
-	/** The budget has to match the shader's array, or lights past it are silently dropped. */
+	/**
+	 * The ceiling has to match the shader's array exactly. Too high and lights past the end
+	 * are silently dropped; too low and uniform slots go to waste. Read out of the shader
+	 * rather than repeated here, so the two cannot drift apart.
+	 */
 	@Test
-	public void lightBudgetIsWhatTheShaderDeclares()
+	public void lightCeilingMatchesTheShaderArray() throws Exception
 	{
-		assertEquals(32, LightScanner.MAX_LIGHTS);
+		String frag;
+		try (InputStream in = getClass().getResourceAsStream("/com/gpuv2/frag.glsl"))
+		{
+			assertNotNull("frag.glsl not on the test classpath", in);
+			frag = new BufferedReader(new InputStreamReader(in, StandardCharsets.UTF_8))
+				.lines().collect(Collectors.joining("\n"));
+		}
+
+		Matcher m = Pattern.compile("#define\\s+MAX_LIGHTS\\s+(\\d+)").matcher(frag);
+		assertTrue("frag.glsl declares no MAX_LIGHTS", m.find());
+		assertEquals(Integer.parseInt(m.group(1)), LightScanner.MAX_LIGHTS);
 	}
 
 	@Test
