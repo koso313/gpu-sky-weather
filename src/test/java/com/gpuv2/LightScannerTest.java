@@ -67,12 +67,29 @@ public class LightScannerTest
 	@Test
 	public void lightsFadeOutTowardsTheEdgeOfTheScan()
 	{
-		assertEquals("close up", 1f, LightScanner.fadeAt(0f), 1e-6);
-		assertEquals("inside the band", 1f, LightScanner.fadeAt(19f), 1e-6);
-		assertEquals("band starts", 1f, LightScanner.fadeAt(20f), 1e-6);
-		assertEquals("half way through", 0.5f, LightScanner.fadeAt(22.5f), 1e-6);
-		assertEquals("at the edge", 0f, LightScanner.fadeAt(25f), 1e-6);
-		assertEquals("past the edge", 0f, LightScanner.fadeAt(40f), 1e-6);
+		assertEquals("close up", 1f, LightScanner.fadeAt(0f, 25f), 1e-6);
+		assertEquals("inside the band", 1f, LightScanner.fadeAt(19f, 25f), 1e-6);
+		assertEquals("band starts", 1f, LightScanner.fadeAt(20f, 25f), 1e-6);
+		assertEquals("half way through", 0.5f, LightScanner.fadeAt(22.5f, 25f), 1e-6);
+		assertEquals("at the edge", 0f, LightScanner.fadeAt(25f, 25f), 1e-6);
+		assertEquals("past the edge", 0f, LightScanner.fadeAt(40f, 25f), 1e-6);
+	}
+
+	/**
+	 * Somewhere dense enough to spend the light budget within a few tiles, the budget is the
+	 * real edge rather than the scan boundary - and a light dropped for being 33rd nearest
+	 * has to be dark by then, or it snaps off as you take a step.
+	 */
+	@Test
+	public void theFadeFollowsTheBudgetWhenThatIsWhatBinds()
+	{
+		float edge = 6f;
+		assertEquals("well inside", 1f, LightScanner.fadeAt(0.5f, edge), 1e-6);
+		assertEquals("at the budget edge", 0f, LightScanner.fadeAt(6f, edge), 1e-6);
+		assertEquals("beyond it", 0f, LightScanner.fadeAt(9f, edge), 1e-6);
+
+		// The same distance is full brightness when the budget is not the constraint.
+		assertEquals(1f, LightScanner.fadeAt(6f, 25f), 1e-6);
 	}
 
 	/** The budget has to match the shader's array, or lights past it are silently dropped. */

@@ -180,7 +180,28 @@ class LightScanner
 		 * overflows is now always the farthest light, which the fade below has already
 		 * dimmed towards nothing.
 		 */
+		found.removeIf(o -> o.getLocalLocation() == null);
 		found.sort(Comparator.comparingInt(o -> distanceSq(o, origin)));
+
+		/*
+		 * Where lights actually stop, which is not always the scan boundary.
+		 *
+		 * Once detection started finding torches by their models rather than only by name,
+		 * a city block can hold far more than the budget within a few tiles. The budget then
+		 * becomes the real edge: the 33rd nearest light is dropped outright, and walking a
+		 * step is enough to swap which one that is. Fading against the scan radius does
+		 * nothing about that, because at 6 tiles out the fade is still returning 1.
+		 *
+		 * So when the budget is what binds, the last light that fits marks the edge and the
+		 * fade is measured against that instead. Whatever falls off the end has already
+		 * dimmed to nothing on its way there.
+		 */
+		float edge = RADIUS;
+		if (found.size() > MAX_LIGHTS)
+		{
+			float lastKept = (float) Math.sqrt(distanceSq(found.get(MAX_LIGHTS - 1), origin)) / TILE;
+			edge = Math.min(edge, lastKept);
+		}
 
 		for (TileObject obj : found)
 		{
@@ -190,17 +211,13 @@ class LightScanner
 			}
 
 			LocalPoint lp = obj.getLocalLocation();
-			if (lp == null)
-			{
-				continue;
-			}
-
 			staticPositions[staticCount * 3] = lp.getX();
 			// Lifted off the floor so the light sits in the flame rather than under it.
 			staticPositions[staticCount * 3 + 1] = obj.getZ() - TILE * 0.4f;
 			staticPositions[staticCount * 3 + 2] = lp.getY();
 
-			staticFade[staticCount] = fadeAt((float) Math.sqrt(distanceSq(obj, origin)) / TILE);
+			float tilesAway = (float) Math.sqrt(distanceSq(obj, origin)) / TILE;
+			staticFade[staticCount] = fadeAt(tilesAway, edge);
 			++staticCount;
 		}
 	}
@@ -309,9 +326,9 @@ class LightScanner
 	 * the scan boundary. Full until the fade band, then linearly down to nothing at the
 	 * edge. The light's own radius falloff applies on top of this in the shader.
 	 */
-	static float fadeAt(float tilesAway)
+	static float fadeAt(float tilesAway, float edgeTiles)
 	{
-		return Math.max(0f, Math.min(1f, (RADIUS - tilesAway) / FADE_BAND));
+		return Math.max(0f, Math.min(1f, (edgeTiles - tilesAway) / FADE_BAND));
 	}
 
 	/**
