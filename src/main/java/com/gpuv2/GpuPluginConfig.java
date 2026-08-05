@@ -523,16 +523,47 @@ public interface GpuPluginConfig extends Config
 		return true;
 	}
 
+	@ConfigItem(
+		keyName = "moonPhases",
+		name = "Moon phases",
+		description = "Let the moon wax and wane between nights. Off keeps it permanently "
+			+ "full.",
+		position = 345,
+		section = sunMoonSection
+	)
+	default boolean moonPhases()
+	{
+		return false;
+	}
+
+	@Range(
+		min = 1,
+		max = 30
+	)
+	@ConfigItem(
+		keyName = "moonCycleDays",
+		name = "Moon cycle length",
+		description = "Days for a full new-to-full-to-new cycle. 29 matches the real "
+			+ "lunar calendar but changes only slightly per night; lower makes the "
+			+ "phases visibly move.",
+		position = 346,
+		section = sunMoonSection
+	)
+	default int moonCycleDays()
+	{
+		return 8;
+	}
+
 	@Range(
 		min = -1,
 		max = 100
 	)
 	@ConfigItem(
 		keyName = "moonPhasePreview",
-		name = "Moon phase",
-		description = "-1 follows the real lunar calendar. 0-100 forces a phase: 0 new, "
+		name = "Force moon phase",
+		description = "-1 uses the cycle above. 0-100 pins a phase for a look: 0 new, "
 			+ "50 full, 100 new again.",
-		position = 345,
+		position = 347,
 		section = sunMoonSection
 	)
 	default int moonPhasePreview()

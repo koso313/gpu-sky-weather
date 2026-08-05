@@ -2270,8 +2270,21 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 			return preview / 100f;
 		}
 
+		if (!config.moonPhases())
+		{
+			// Phases off: a permanently full moon, which is the whole disc lit.
+			return 0.5f;
+		}
+
+		/*
+		 * Anchored to a real new moon so the default cycle length lines up with the actual
+		 * lunar calendar. A shorter cycle keeps the same anchor and simply runs faster -
+		 * at the real 29.5 days the change from one night to the next is only a few
+		 * percent, which is accurate but too slow to notice while playing.
+		 */
 		double epochDays = System.currentTimeMillis() / 86400000d;
-		double cycles = (epochDays - KNOWN_NEW_MOON_EPOCH_DAYS) / LUNAR_CYCLE_DAYS;
+		double cycleDays = Math.max(1, config.moonCycleDays());
+		double cycles = (epochDays - KNOWN_NEW_MOON_EPOCH_DAYS) / cycleDays;
 		return (float) (cycles - Math.floor(cycles));
 	}
 
