@@ -248,6 +248,21 @@ public interface GpuPluginConfig extends Config
 	String performanceSection = "performanceSection";
 
 	@ConfigItem(
+		keyName = "lowResSky",
+		name = "Low resolution sky",
+		description = "Draw the sky at half size and stretch it back. It is the most "
+			+ "expensive pass here - fullscreen procedural cloud, every frame - and being a "
+			+ "smooth gradient it survives the treatment better than anything else on "
+			+ "screen. Little to no visible cost; the sun's edge is where to look.",
+		position = 24,
+		section = performanceSection
+	)
+	default boolean lowResSky()
+	{
+		return false;
+	}
+
+	@ConfigItem(
 		keyName = "unlockFps",
 		name = "Unlock FPS",
 		description = "Draw more frames than the game's own 50 fps cap.",

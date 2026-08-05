@@ -190,6 +190,11 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 		.add(GL_VERTEX_SHADER, "sky_vert.glsl")
 		.add(GL_FRAGMENT_SHADER, "weather_frag.glsl");
 
+	// Stretches the half-resolution sky back to full size.
+	static final Shader UPSCALE_PROGRAM = new Shader()
+		.add(GL_VERTEX_SHADER, "sky_vert.glsl")
+		.add(GL_FRAGMENT_SHADER, "upscale_frag.glsl");
+
 	static final Shader GODRAY_PROGRAM = new Shader()
 		.add(GL_VERTEX_SHADER, "sky_vert.glsl")
 		.add(GL_FRAGMENT_SHADER, "godray_frag.glsl");
@@ -208,6 +213,14 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 	/** Single-sampled resolve of the multisampled scene FBO, so it can be sampled. */
 	private int fboResolve = -1;
 	private int texResolve;
+
+	/** Half-size target the sky is drawn into when the low-resolution sky is on. */
+	private int fboSky = -1;
+	private int texSky;
+	private int skyW;
+	private int skyH;
+	private int glUpscaleProgram;
+	private int uniUpscaleSrc;
 	/** Half-resolution ping-pong targets for the bright pass and separable blur. */
 	private final int[] fboBloom = {-1, -1};
 	private final int[] texBloom = new int[2];
@@ -1000,6 +1013,8 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 		glBloomProgram = BLOOM_PROGRAM.compile(template);
 		glWeatherProgram = WEATHER_PROGRAM.compile(template);
 		glGodrayProgram = GODRAY_PROGRAM.compile(template);
+		glUpscaleProgram = UPSCALE_PROGRAM.compile(template);
+		uniUpscaleSrc = glGetUniformLocation(glUpscaleProgram, "src");
 		glPostProgram = POST_PROGRAM.compile(template);
 
 		glBindVertexArray(0);
@@ -1146,6 +1161,9 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 
 		glDeleteProgram(glPostProgram);
 		glPostProgram = 0;
+
+		glDeleteProgram(glUpscaleProgram);
+		glUpscaleProgram = 0;
 	}
 
 	private void initVao()
@@ -1332,6 +1350,24 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 		glBindFramebuffer(GL_FRAMEBUFFER, fboResolve);
 		glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, texResolve, 0);
 
+		/*
+		 * Half the scene in each axis, so a quarter of the pixels. Sized here with the
+		 * other targets because this is what runs on a resize, and a stale size would
+		 * stretch the sky across the wrong shape of screen.
+		 */
+		skyW = Math.max(1, width / 2);
+		skyH = Math.max(1, height / 2);
+
+		texSky = glGenTextures();
+		glBindTexture(GL_TEXTURE_2D, texSky);
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, skyW, skyH, 0, GL_RGBA, GL_UNSIGNED_BYTE, 0);
+		// Linear magnification is what makes the upscale invisible on a smooth gradient.
+		setBloomTexParams();
+
+		fboSky = glGenFramebuffers();
+		glBindFramebuffer(GL_FRAMEBUFFER, fboSky);
+		glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, texSky, 0);
+
 		for (int i = 0; i < 2; ++i)
 		{
 			texBloom[i] = glGenTextures();
@@ -1367,6 +1403,17 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 		{
 			glDeleteTextures(texResolve);
 			texResolve = 0;
+		}
+
+		if (fboSky != -1)
+		{
+			glDeleteFramebuffers(fboSky);
+			fboSky = -1;
+		}
+		if (texSky != 0)
+		{
+			glDeleteTextures(texSky);
+			texSky = 0;
 		}
 
 		for (int i = 0; i < 2; ++i)
@@ -1664,6 +1711,54 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 	 * Runs with depth test and blending off - it fills every pixel and everything drawn
 	 * afterwards should cover it.
 	 */
+	/**
+	 * Draws the sky, either straight into the scene or by way of a smaller target.
+	 *
+	 * <p>The sky is a fullscreen pass of four-octave noise with a domain warp on top, run
+	 * for every pixel of every frame - by some distance the most expensive thing here. It is
+	 * also a smooth gradient, so drawing it at half size and stretching it back is very
+	 * close to free visually, which is not true of anything else on screen.
+	 *
+	 * <p>The pass itself is resolution-independent: direction comes from the fullscreen
+	 * triangle's NDC and the viewport shape arrives as uniforms, so a smaller target yields
+	 * the same image with fewer samples rather than a differently framed one.
+	 */
+	private void drawSkyPass(int sky, float cameraPitch, float cameraYaw)
+	{
+		if (!config.lowResSky() || fboSky == -1 || glUpscaleProgram == 0)
+		{
+			drawProceduralSky(sky, cameraPitch, cameraYaw);
+			return;
+		}
+
+		int dst = glGetInteger(GL_FRAMEBUFFER_BINDING);
+
+		glBindFramebuffer(GL_FRAMEBUFFER, fboSky);
+		glViewport(0, 0, skyW, skyH);
+		drawProceduralSky(sky, cameraPitch, cameraYaw);
+
+		glBindFramebuffer(GL_FRAMEBUFFER, dst);
+		glViewport(0, 0, lastStretchedCanvasWidth, lastStretchedCanvasHeight);
+
+		/*
+		 * Drawn rather than blitted: the scene framebuffer is multisampled, and
+		 * glBlitFramebuffer rejects a single-sampled source into a multisampled destination.
+		 */
+		glUseProgram(glUpscaleProgram);
+		glBindVertexArray(vaoSkyHandle);
+		glDisable(GL_DEPTH_TEST);
+		glDepthMask(false);
+		glDisable(GL_BLEND);
+
+		glActiveTexture(GL_TEXTURE0);
+		glBindTexture(GL_TEXTURE_2D, texSky);
+		glUniform1i(uniUpscaleSrc, 0);
+		glDrawArrays(GL_TRIANGLES, 0, 3);
+
+		// The scene draws with texture unit 1, so leave the active unit where it found it.
+		glActiveTexture(GL_TEXTURE1);
+	}
+
 	private void drawProceduralSky(int sky, float cameraPitch, float cameraYaw)
 	{
 		LocalTime time = skyTime();
@@ -2488,7 +2583,7 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 					|| skyWeather.overcast() > 0f
 					|| (skyWeather.hasLightning() && config.lightning())))
 			{
-				drawProceduralSky(sky, cameraPitch, cameraYaw);
+				drawSkyPass(sky, cameraPitch, cameraYaw);
 			}
 			return;
 		}

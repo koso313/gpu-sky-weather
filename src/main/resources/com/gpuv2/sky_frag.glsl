@@ -774,5 +774,21 @@ void main()
 	// clouds with it rather than leaving any of them hanging in the dark.
 	col = mix(col, vec3(0.0), skyDim);
 
+	/*
+	 * Dither, at the very end.
+	 *
+	 * The sky is one enormous smooth gradient, which is the worst case for an 8-bit
+	 * framebuffer: neighbouring output values differ by a single step, so the ramp lands as
+	 * a series of visible bands rather than a gradient. Worst at dusk, when the gradient is
+	 * widest and the banding sweeps right across the screen.
+	 *
+	 * A sub-step of noise before quantisation scatters that boundary, trading a band for
+	 * grain far below the level anyone can see. Interleaved gradient noise rather than a
+	 * random hash: it is a fixed function of pixel position, so it holds still as the camera
+	 * moves instead of crawling, and it costs three instructions.
+	 */
+	float ign = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))));
+	col += (ign - 0.5) / 255.0;
+
 	FragColor = vec4(col, 1.0);
 }
