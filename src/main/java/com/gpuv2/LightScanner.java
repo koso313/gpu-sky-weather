@@ -258,33 +258,69 @@ class LightScanner
 			return cached;
 		}
 
-		boolean light = false;
-		try
+		String name = resolveName(id);
+		if (name == null)
 		{
-			ObjectComposition comp = client.getObjectDefinition(id);
-			if (comp != null)
-			{
-				// Some objects vary by player state - a lit brazier and an unlit one share
-				// an id and differ only by impostor, so resolve to the active one.
-				if (comp.getImpostorIds() != null && comp.getImpostor() != null)
-				{
-					comp = comp.getImpostor();
-				}
-				light = nameSuggestsLight(comp.getName());
-			}
-		}
-		catch (RuntimeException ex)
-		{
-			log.debug("could not resolve object {}", id, ex);
+			/*
+			 * Not cached. A lookup can fail transiently - the definition may not be loaded
+			 * yet just after a scene change - and caching that "no" would leave the object
+			 * permanently dark for the rest of the session, long after the data arrived.
+			 */
+			return false;
 		}
 
+		boolean light = nameSuggestsLight(name);
 		lightCache.put(id, light);
 		return light;
 	}
 
+	/**
+	 * The name detection actually sees for an object id, or null if it could not be
+	 * resolved. Shared with the ::lightids diagnostic so what it prints is what is judged.
+	 */
+	String resolveName(int id)
+	{
+		try
+		{
+			ObjectComposition comp = client.getObjectDefinition(id);
+			if (comp == null)
+			{
+				return null;
+			}
+
+			// Some objects vary by player state - a lit brazier and an unlit one share
+			// an id and differ only by impostor, so resolve to the active one.
+			if (comp.getImpostorIds() != null)
+			{
+				ObjectComposition impostor = comp.getImpostor();
+				/*
+				 * Only when the impostor actually has a name. Some resolve to a nameless
+				 * placeholder, and taking that over the base composition threw away the
+				 * one name that would have matched.
+				 */
+				if (impostor != null && !isBlank(impostor.getName()))
+				{
+					comp = impostor;
+				}
+			}
+
+			return comp.getName();
+		}
+		catch (RuntimeException ex)
+		{
+			log.debug("could not resolve object {}", id, ex);
+			return null;
+		}
+	}
+
+	private static boolean isBlank(String name)
+	{
+		return name == null || name.isEmpty() || "null".equals(name);
+	}
+
 	static boolean nameSuggestsLight(String name)
 	{
-		if (name == null || name.isEmpty() || "null".equals(name))
+		if (isBlank(name))
 		{
 			return false;
 		}

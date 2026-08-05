@@ -37,7 +37,9 @@ import java.awt.image.BufferedImage;
 import java.awt.image.DataBufferInt;
 import java.nio.ByteBuffer;
 import java.nio.FloatBuffer;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.Set;
@@ -4197,8 +4199,36 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 			}
 		}
 
-		say("[GPU v2] Object ids within " + radius + " tiles: " + ids);
-		say("[GPU v2] Stand next to a fire or torch and add its id to 'Light object ids'.");
+		/*
+		 * Ids alone were not enough to explain a torch staying dark - the question is always
+		 * what name detection saw and what it made of it. Resolved through the scanner's own
+		 * lookup, impostors and all, so this reports the judgement rather than a re-creation
+		 * of it that might differ.
+		 */
+		if (lightScanner == null)
+		{
+			lightScanner = new LightScanner(client);
+		}
+
+		List<String> lit = new ArrayList<>();
+		List<String> dark = new ArrayList<>();
+		for (int id : ids)
+		{
+			String name = lightScanner.resolveName(id);
+			String entry = id + "=" + (name == null ? "<unresolved>" : name);
+			if (name != null && LightScanner.nameSuggestsLight(name))
+			{
+				lit.add(entry);
+			}
+			else
+			{
+				dark.add(entry);
+			}
+		}
+
+		say("[GPU v2] Within " + radius + " tiles - lighting: " + (lit.isEmpty() ? "none" : lit));
+		say("[GPU v2] not lighting: " + dark);
+		say("[GPU v2] Anything above that should light, add its id to 'Light object ids'.");
 	}
 
 	private void say(String msg)
