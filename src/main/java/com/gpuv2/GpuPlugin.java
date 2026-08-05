@@ -1731,14 +1731,21 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 			return;
 		}
 
+		/*
+		 * Both the target and the viewport are read back rather than assumed. The scene's
+		 * viewport is not the whole canvas, and restoring it from the canvas size drew the
+		 * world into a small patch in the middle of the screen.
+		 */
 		int dst = glGetInteger(GL_FRAMEBUFFER_BINDING);
+		int[] viewport = new int[4];
+		glGetIntegerv(GL_VIEWPORT, viewport);
 
 		glBindFramebuffer(GL_FRAMEBUFFER, fboSky);
 		glViewport(0, 0, skyW, skyH);
 		drawProceduralSky(sky, cameraPitch, cameraYaw);
 
 		glBindFramebuffer(GL_FRAMEBUFFER, dst);
-		glViewport(0, 0, lastStretchedCanvasWidth, lastStretchedCanvasHeight);
+		glViewport(viewport[0], viewport[1], viewport[2], viewport[3]);
 
 		/*
 		 * Drawn rather than blitted: the scene framebuffer is multisampled, and
@@ -1755,8 +1762,20 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 		glUniform1i(uniUpscaleSrc, 0);
 		glDrawArrays(GL_TRIANGLES, 0, 3);
 
-		// The scene draws with texture unit 1, so leave the active unit where it found it.
+		/*
+		 * Put back everything this touched. drawProceduralSky restores depth and blend at
+		 * its own end, but this runs after it and so has to do the same - leaving depth
+		 * testing off and blending disabled meant the scene drew into a framebuffer with no
+		 * depth at all, and the texture left on unit 0 had the scene's own draws failing
+		 * with INVALID_OPERATION.
+		 */
+		glBindTexture(GL_TEXTURE_2D, 0);
 		glActiveTexture(GL_TEXTURE1);
+		glBindVertexArray(0);
+
+		glDepthMask(true);
+		glEnable(GL_DEPTH_TEST);
+		glEnable(GL_BLEND);
 	}
 
 	private void drawProceduralSky(int sky, float cameraPitch, float cameraYaw)
