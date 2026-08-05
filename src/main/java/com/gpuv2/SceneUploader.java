@@ -50,6 +50,11 @@ class SceneUploader
 	/** Packed vertex normals for the model being uploaded, parallel to the position arrays. */
 	private final int[] modelNormals;
 
+	/** Accumulators for computing those normals: summed face normals, per vertex. */
+	private final float[] normalAccX;
+	private final float[] normalAccY;
+	private final float[] normalAccZ;
+
 	private final int[] modelLocalXI;
 	private final int[] modelLocalYI;
 	private final int[] modelLocalZI;
@@ -63,6 +68,9 @@ class SceneUploader
 	{
 		this.renderCallbackManager = renderCallbackManager;
 		modelNormals = new int[ModelUploader.MAX_VERTEX_COUNT];
+		normalAccX = new float[ModelUploader.MAX_VERTEX_COUNT];
+		normalAccY = new float[ModelUploader.MAX_VERTEX_COUNT];
+		normalAccZ = new float[ModelUploader.MAX_VERTEX_COUNT];
 		modelLocalXI = new int[ModelUploader.MAX_VERTEX_COUNT];
 		modelLocalYI = new int[ModelUploader.MAX_VERTEX_COUNT];
 		modelLocalZI = new int[ModelUploader.MAX_VERTEX_COUNT];
@@ -576,6 +584,88 @@ class SceneUploader
 	}
 
 	// scene upload
+	/**
+	 * Fills the accumulators with a normal per vertex, averaged over the faces meeting there.
+	 *
+	 * <p>Each face contributes its own normal, unnormalised, to each of its three vertices.
+	 * Leaving the length in is deliberate: a cross product's magnitude is twice the
+	 * triangle's area, so larger faces pull the average further, which is what stops a fan
+	 * of slivers outvoting the surface they sit on.
+	 */
+	private void computeVertexNormals(float[] vertexX, float[] vertexY, float[] vertexZ,
+		int[] indices1, int[] indices2, int[] indices3, int vertexCount, int triangleCount)
+	{
+		for (int v = 0; v < vertexCount; ++v)
+		{
+			normalAccX[v] = 0;
+			normalAccY[v] = 0;
+			normalAccZ[v] = 0;
+		}
+
+		for (int f = 0; f < triangleCount; ++f)
+		{
+			int a = indices1[f];
+			int b = indices2[f];
+			int c = indices3[f];
+
+			float abx = vertexX[b] - vertexX[a];
+			float aby = vertexY[b] - vertexY[a];
+			float abz = vertexZ[b] - vertexZ[a];
+
+			float acx = vertexX[c] - vertexX[a];
+			float acy = vertexY[c] - vertexY[a];
+			float acz = vertexZ[c] - vertexZ[a];
+
+			float nx = aby * acz - abz * acy;
+			float ny = abz * acx - abx * acz;
+			float nz = abx * acy - aby * acx;
+
+			normalAccX[a] += nx;
+			normalAccY[a] += ny;
+			normalAccZ[a] += nz;
+
+			normalAccX[b] += nx;
+			normalAccY[b] += ny;
+			normalAccZ[b] += nz;
+
+			normalAccX[c] += nx;
+			normalAccY[c] += ny;
+			normalAccZ[c] += nz;
+		}
+
+		/*
+		 * Instrumentation, measuring the thing that actually matters: how many faces ended
+		 * up with three different vertex normals. A face whose three normals match is one
+		 * smooth shading cannot improve on, so this number is the difference between the
+		 * feature working and it being inert - which is exactly what could not be judged
+		 * from screenshots.
+		 */
+		for (int f = 0; f < triangleCount; ++f)
+		{
+			int a = indices1[f];
+			int b = indices2[f];
+			int c = indices3[f];
+
+			if (normalAccX[a] != normalAccX[b] || normalAccY[a] != normalAccY[b]
+				|| normalAccX[a] != normalAccX[c] || normalAccY[a] != normalAccY[c])
+			{
+				NormalPacking.DISTINCT_NORMALS.incrementAndGet();
+			}
+		}
+
+		for (int v = 0; v < vertexCount; ++v)
+		{
+			if (normalAccX[v] == 0 && normalAccY[v] == 0 && normalAccZ[v] == 0)
+			{
+				NormalPacking.MODELS_WITHOUT_NORMALS.incrementAndGet();
+			}
+			else
+			{
+				NormalPacking.MODELS_WITH_NORMALS.incrementAndGet();
+			}
+		}
+	}
+
 	private int uploadStaticModel(Model model, int orient, int x, int y, int z, GpuIntBuffer vb, GpuIntBuffer ab)
 	{
 		final int vertexCount = model.getVerticesCount();
@@ -607,14 +697,18 @@ class SceneUploader
 		}
 
 		/*
-		 * The client computes vertex normals itself, so these are read rather than derived.
-		 * Null for models it never needed them for, in which case the normal is left as NONE
-		 * and the shader falls back to the flat one it has always used.
+		 * Normals are computed here rather than read from the model.
+		 *
+		 * Model.getVertexNormalsX() looked like the obvious source, but it returns null for
+		 * every model in a loaded scene - measured at 0 of 14061 - because the client
+		 * discards them once it has finished lighting. So they are derived the standard way
+		 * instead: sum the normal of every face touching a vertex, and normalise. Vertices
+		 * are shared between faces here (the face arrays are indices into one vertex list),
+		 * which is what makes the sum an average over the faces meeting there, and that
+		 * average is what smooths the shading.
 		 */
-		final int[] normalX = model.getVertexNormalsX();
-		final int[] normalY = model.getVertexNormalsY();
-		final int[] normalZ = model.getVertexNormalsZ();
-		final boolean haveNormals = normalX != null && normalY != null && normalZ != null;
+		computeVertexNormals(vertexX, vertexY, vertexZ, indices1, indices2, indices3,
+			vertexCount, triangleCount);
 
 		for (int v = 0; v < vertexCount; ++v)
 		{
@@ -622,9 +716,9 @@ class SceneUploader
 			int vy = (int) vertexY[v];
 			int vz = (int) vertexZ[v];
 
-			int nx = haveNormals ? normalX[v] : 0;
-			int ny = haveNormals ? normalY[v] : 0;
-			int nz = haveNormals ? normalZ[v] : 0;
+			float nx = normalAccX[v];
+			float ny = normalAccY[v];
+			float nz = normalAccZ[v];
 
 			if (orient != 0)
 			{
@@ -638,9 +732,9 @@ class SceneUploader
 				 * modelled - so the same rotation is applied, without the translation, since
 				 * a direction has no position.
 				 */
-				int n0 = nx;
-				nx = nz * orientSin + n0 * orientCos >> 16;
-				nz = nz * orientCos - n0 * orientSin >> 16;
+				float n0 = nx;
+				nx = (nz * orientSin + n0 * orientCos) / 65536f;
+				nz = (nz * orientCos - n0 * orientSin) / 65536f;
 			}
 
 			vx += x;
@@ -650,7 +744,7 @@ class SceneUploader
 			modelLocalXI[v] = vx;
 			modelLocalYI[v] = vy;
 			modelLocalZI[v] = vz;
-			modelNormals[v] = haveNormals ? NormalPacking.pack(nx, ny, nz) : NormalPacking.NONE;
+			modelNormals[v] = NormalPacking.pack(nx, ny, nz);
 		}
 
 		int len = 0;

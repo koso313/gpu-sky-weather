@@ -41,6 +41,61 @@ class ModelUploader
 	/** Packed vertex normals for the model being written, parallel to the position arrays. */
 	private final int[] modelNormals;
 
+	/** Accumulators for computing those normals: summed face normals, per vertex. */
+	private final float[] normalAccX = new float[MAX_VERTEX_COUNT];
+	private final float[] normalAccY = new float[MAX_VERTEX_COUNT];
+	private final float[] normalAccZ = new float[MAX_VERTEX_COUNT];
+
+	/**
+	 * Sums the normal of every face touching each vertex.
+	 *
+	 * <p>Computed rather than read: Model.getVertexNormalsX() is null for every model the
+	 * scene hands over, the client having discarded them once it finished its own lighting.
+	 * Face contributions are left unnormalised so their magnitude - twice the triangle's
+	 * area - weights the average toward larger faces.
+	 */
+	private void computeVertexNormals(float[] vx, float[] vy, float[] vz,
+		int[] indices1, int[] indices2, int[] indices3, int vertexCount, int faceCount)
+	{
+		for (int v = 0; v < vertexCount; ++v)
+		{
+			normalAccX[v] = 0;
+			normalAccY[v] = 0;
+			normalAccZ[v] = 0;
+		}
+
+		for (int f = 0; f < faceCount; ++f)
+		{
+			int a = indices1[f];
+			int b = indices2[f];
+			int c = indices3[f];
+
+			float abx = vx[b] - vx[a];
+			float aby = vy[b] - vy[a];
+			float abz = vz[b] - vz[a];
+
+			float acx = vx[c] - vx[a];
+			float acy = vy[c] - vy[a];
+			float acz = vz[c] - vz[a];
+
+			float nx = aby * acz - abz * acy;
+			float ny = abz * acx - abx * acz;
+			float nz = abx * acy - aby * acx;
+
+			normalAccX[a] += nx;
+			normalAccY[a] += ny;
+			normalAccZ[a] += nz;
+
+			normalAccX[b] += nx;
+			normalAccY[b] += ny;
+			normalAccZ[b] += nz;
+
+			normalAccX[c] += nx;
+			normalAccY[c] += ny;
+			normalAccZ[c] += nz;
+		}
+	}
+
 	private final float[] modelLocalX;
 	private final float[] modelLocalY;
 	private final float[] modelLocalZ;
@@ -121,10 +176,8 @@ class ModelUploader
 		float[] p = proj.project(x, y, z, rt.tmp);
 		int zero = (int) p[2];
 
-		final int[] normalX = model.getVertexNormalsX();
-		final int[] normalY = model.getVertexNormalsY();
-		final int[] normalZ = model.getVertexNormalsZ();
-		final boolean haveNormals = normalX != null && normalY != null && normalZ != null;
+		computeVertexNormals(verticesX, verticesY, verticesZ,
+			indices1, indices2, indices3, vertexCount, faceCount);
 
 		for (int v = 0; v < vertexCount; ++v)
 		{
@@ -132,9 +185,9 @@ class ModelUploader
 			float vertexY = verticesY[v];
 			float vertexZ = verticesZ[v];
 
-			float nx = haveNormals ? normalX[v] : 0;
-			float ny = haveNormals ? normalY[v] : 0;
-			float nz = haveNormals ? normalZ[v] : 0;
+			float nx = normalAccX[v];
+			float ny = normalAccY[v];
+			float nz = normalAccZ[v];
 
 			if (orientation != 0)
 			{
@@ -153,7 +206,7 @@ class ModelUploader
 			vertexY += y;
 			vertexZ += z;
 
-			modelNormals[v] = haveNormals ? NormalPacking.pack(nx, ny, nz) : NormalPacking.NONE;
+			modelNormals[v] = NormalPacking.pack(nx, ny, nz);
 			modelLocalX[v] = vertexX;
 			modelLocalY[v] = vertexY;
 			modelLocalZ[v] = vertexZ;
@@ -534,14 +587,11 @@ class ModelUploader
 
 		/*
 		 * Animated models are the ones smooth lighting is most wanted on - players, NPCs,
-		 * anything that moves - so these are read here as well as in the scene uploader.
-		 * Null for models the client had no reason to compute them for; those pack the
-		 * reserved zero and fall back to flat shading.
+		 * anything that moves - so this path needs normals as much as the scene does.
+		 * Computed here, since the client keeps none by the time the model reaches us.
 		 */
-		final int[] normalX = model.getVertexNormalsX();
-		final int[] normalY = model.getVertexNormalsY();
-		final int[] normalZ = model.getVertexNormalsZ();
-		final boolean haveNormals = normalX != null && normalY != null && normalZ != null;
+		computeVertexNormals(verticesX, verticesY, verticesZ,
+			indices1, indices2, indices3, vertexCount, triangleCount);
 
 		for (int v = 0; v < vertexCount; ++v)
 		{
@@ -549,9 +599,9 @@ class ModelUploader
 			float vertexY = verticesY[v];
 			float vertexZ = verticesZ[v];
 
-			float nx = haveNormals ? normalX[v] : 0;
-			float ny = haveNormals ? normalY[v] : 0;
-			float nz = haveNormals ? normalZ[v] : 0;
+			float nx = normalAccX[v];
+			float ny = normalAccY[v];
+			float nz = normalAccZ[v];
 
 			if (orientation != 0)
 			{
@@ -573,7 +623,7 @@ class ModelUploader
 			modelLocalX[v] = vertexX;
 			modelLocalY[v] = vertexY;
 			modelLocalZ[v] = vertexZ;
-			modelNormals[v] = haveNormals ? NormalPacking.pack(nx, ny, nz) : NormalPacking.NONE;
+			modelNormals[v] = NormalPacking.pack(nx, ny, nz);
 		}
 
 		int len = 0;

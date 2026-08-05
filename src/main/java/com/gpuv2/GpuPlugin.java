@@ -4127,6 +4127,11 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 			}
 		}
 		log.debug("Scene upload time {}", sw);
+		log.info("Normals: {} vertices packed, {} degenerate, {} faces with distinct normals",
+			NormalPacking.MODELS_WITH_NORMALS.get(),
+			NormalPacking.MODELS_WITHOUT_NORMALS.get(),
+			NormalPacking.DISTINCT_NORMALS.get());
+		NormalPacking.reset();
 
 		nextZones = newZones;
 		nextRoofChanges = roofChanges;
