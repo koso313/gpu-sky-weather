@@ -8,12 +8,12 @@ package com.gpuv2.config;
  */
 public enum WeatherMode
 {
-	OFF("Off", false, false, 0f, 0x000000, 0f, 0f),
+	OFF("Off", false, false, 0f, 0x000000, 0f, 0f, 0f),
 	/**
 	 * Resolved to one of the real conditions by the weather cycle. Never reaches the
 	 * renderer itself, so its values here are unused placeholders.
 	 */
-	AUTO("Automatic", false, false, 0f, 0x000000, 0f, 0f),
+	AUTO("Automatic", false, false, 0f, 0x000000, 0f, 0f, 0f),
 	/**
 	 * Cloud and nothing else: a sealed deck, no precipitation.
 	 *
@@ -21,15 +21,19 @@ public enum WeatherMode
 	 * of that so the sun, moon and stars stay visible through the weather - here losing them
 	 * behind the cloud is the entire point, by day and by night alike.
 	 */
-	OVERCAST("Overcast", false, false, 0f, 0x8E969E, 0.95f, 1f),
-	// Rain leaves the sun as a dull smear behind the cloud rather than removing it; a storm
-	// takes it away entirely, which is most of what makes a storm feel like one.
-	RAIN("Rain", true, true, 0f, 0x7C848C, 0.60f, 0.70f),
-	STORM("Storm", true, true, 1f, 0x4A5057, 0.88f, 1f),
+	OVERCAST("Overcast", false, false, 0f, 0x8E969E, 0.95f, 1f, 0f),
+	/*
+	 * Rain hides the sun almost completely rather than merely dimming it. 0.7 was tried and
+	 * was not nearly enough: the disc is drawn incandescent, so 30% of very bright is still
+	 * a bright white spot in the sky, and the result read as a sunny day with rain falling
+	 * through it. A storm takes it away outright.
+	 */
+	RAIN("Rain", true, true, 0f, 0x7C848C, 0.60f, 0.92f, 0.20f),
+	STORM("Storm", true, true, 1f, 0x4A5057, 0.88f, 1f, 0.34f),
 	// Snow skies are bright and heavy rather than grey - the light bounces off the cloud
 	// base and the falling snow, so they read almost white.
-	SNOW("Snow", false, true, 0f, 0xD6DCE2, 0.75f, 0f),
-	BLIZZARD("Blizzard", false, true, 1f, 0xE6EBEF, 0.95f, 0f);
+	SNOW("Snow", false, true, 0f, 0xD6DCE2, 0.75f, 0f, 0f),
+	BLIZZARD("Blizzard", false, true, 1f, 0xE6EBEF, 0.95f, 0f, 0f);
 
 	private final String name;
 	private final boolean rainLike;
@@ -38,9 +42,10 @@ public enum WeatherMode
 	private final int overcastColor;
 	private final float overcast;
 	private final float sunHiding;
+	private final float gloom;
 
 	WeatherMode(String name, boolean rainLike, boolean precipitates, float heavy,
-		int overcastColor, float overcast, float sunHiding)
+		int overcastColor, float overcast, float sunHiding, float gloom)
 	{
 		this.name = name;
 		this.rainLike = rainLike;
@@ -49,6 +54,22 @@ public enum WeatherMode
 		this.overcastColor = overcastColor;
 		this.overcast = overcast;
 		this.sunHiding = sunHiding;
+		this.gloom = gloom;
+	}
+
+	/**
+	 * How much the weather darkens the world beneath it, 0 none to 1 pitch dark.
+	 *
+	 * <p>Hiding the sun in the sky is only half of it. With the ground still lit as though
+	 * the sun were out, rain reads as a sunny day with water falling through it - the light
+	 * has to go when the sun does.
+	 *
+	 * <p>Snow and blizzard stay at zero for the same reason they keep their sun: those skies
+	 * are bright, and snow throws light back up rather than swallowing it.
+	 */
+	public float gloom()
+	{
+		return gloom;
 	}
 
 	/**

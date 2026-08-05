@@ -2026,10 +2026,20 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 			: 0f;
 		float day = 1f - night;
 
+		/*
+		 * Bad weather darkens the world under it, not just the sky over it.
+		 *
+		 * Hiding the sun on its own left the ground still lit as though the sun were out,
+		 * which reads as a sunny day with rain falling through it. The sunlight term takes
+		 * the larger share of the gloom, since that is the light the cloud is actually
+		 * blocking, while ambient keeps most of its strength so the scene stays readable.
+		 */
+		float gloom = activeWeather().gloom() * weatherIntensity();
+
 		// Ambient keeps a floor at night so the world stays playable rather than black.
 		float ambMul = config.lightAmbientStrength() / 100f * (NIGHT_AMBIENT_FLOOR
-			+ (1f - NIGHT_AMBIENT_FLOOR) * day);
-		float sunMul = config.lightSunStrength() / 100f * day;
+			+ (1f - NIGHT_AMBIENT_FLOOR) * day) * (1f - gloom * 0.5f);
+		float sunMul = config.lightSunStrength() / 100f * day * (1f - gloom);
 
 		Color ambient = config.lightAmbientColor();
 		glUniform3f(uniLightAmbient,

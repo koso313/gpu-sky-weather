@@ -186,9 +186,33 @@ public class WeatherCycleTest
 		assertEquals(1f, WeatherMode.STORM.sunHiding(), 1e-6);
 		assertEquals(1f, WeatherMode.OVERCAST.sunHiding(), 1e-6);
 
+		/*
+		 * Rain has to hide nearly all of it. The disc is drawn incandescent, so a merely
+		 * halved one is still a bright white spot in the sky - 0.7 was tried and the result
+		 * read as a sunny day with rain falling through it.
+		 */
 		float rain = WeatherMode.RAIN.sunHiding();
-		assertTrue("rain should dim the sun", rain > 0f);
-		assertTrue("rain should not remove it", rain < 1f);
+		assertTrue("rain should nearly hide the sun, was " + rain, rain > 0.85f);
+		assertTrue("rain should not remove it outright", rain < 1f);
+	}
+
+	/**
+	 * Hiding the sun is only half of it. Ground still lit as though the sun were out is what
+	 * made rain read as a sunny day with water falling through it.
+	 */
+	@Test
+	public void wetWeatherDarkensTheWorldUnderIt()
+	{
+		assertEquals(0f, WeatherMode.OFF.gloom(), 1e-6);
+		assertTrue("rain should darken", WeatherMode.RAIN.gloom() > 0f);
+		assertTrue("a storm should be darker than rain",
+			WeatherMode.STORM.gloom() > WeatherMode.RAIN.gloom());
+
+		// Readable, not unplayable.
+		for (WeatherMode m : WeatherMode.values())
+		{
+			assertTrue(m + " darkens too far", m.gloom() < 0.5f);
+		}
 	}
 
 	@Test
