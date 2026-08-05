@@ -29,6 +29,8 @@ uniform float cloudOpacity;
 // noise, so gaps remain wherever it happens to fall below the coverage threshold - and the
 // sun shines straight through them.
 uniform float cloudSeal;
+// 0 open air, 1 fully enclosed. Blacks the whole sky out underground.
+uniform float skyDim;
 
 /*
  * Shooting stars. Whether one is flying, and where, is decided on the CPU rather than
@@ -760,6 +762,11 @@ void main()
 	{
 		col += lightningBolt(dir, up);
 	}
+
+	// Under a roof there is no sky to see. Faded rather than skipped so walking into a cave
+	// dims out instead of cutting, and applied last so it takes the sun, moon, stars and
+	// clouds with it rather than leaving any of them hanging in the dark.
+	col = mix(col, vec3(0.0), skyDim);
 
 	FragColor = vec4(col, 1.0);
 }

@@ -297,6 +297,9 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 	/** Eased underground factor, so entering a cave fades rather than snaps. */
 	private float undergroundBlend;
 
+	/** Eased 0..1 blackout of the sky underground, advanced once per frame. */
+	private float skyBlackout;
+
 	/** Synodic month in days - one new moon to the next. */
 	private static final double LUNAR_CYCLE_DAYS = 29.530588;
 	/** A known new moon, as epoch days, to count cycles from. */
@@ -304,6 +307,7 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 	private int uniSkyCloudAmount;
 	private int uniSkyCloudOpacity;
 	private int uniSkyCloudSeal;
+	private int uniSkyDim;
 	private int uniSkyMeteorSamples;
 	private int uniSkyCloudOctaves;
 	private int uniSkyMeteorActive;
@@ -1105,6 +1109,7 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 		uniSkyCloudAmount = glGetUniformLocation(glSkyProgram, "cloudAmount");
 		uniSkyCloudOpacity = glGetUniformLocation(glSkyProgram, "cloudOpacity");
 		uniSkyCloudSeal = glGetUniformLocation(glSkyProgram, "cloudSeal");
+		uniSkyDim = glGetUniformLocation(glSkyProgram, "skyDim");
 		uniSkyMeteorSamples = glGetUniformLocation(glSkyProgram, "meteorSamples");
 		uniSkyCloudOctaves = glGetUniformLocation(glSkyProgram, "cloudOctaves");
 		uniSkyMeteorActive = glGetUniformLocation(glSkyProgram, "meteorActive");
@@ -1559,6 +1564,11 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 		final int drawDistance = getDrawDistance();
 		final boolean fx = enhancements();
 		final int fogDepth = fx && config.fogEnabled() ? config.fogDepth() : 0;
+		// Advanced once here, then read from the field everywhere else this frame - easing
+		// that stepped on every read would settle at a rate depending on how many callers
+		// happened to ask.
+		undergroundSkyFade();
+
 		// Feeds both the fog uniform below and drawSkybox() further down, so overriding it
 		// here keeps the sky and the fog it fades into the same colour.
 		final int sky = resolveSkyColor();
@@ -1739,6 +1749,7 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 		 */
 		glUniform1f(uniSkyCloudSeal,
 			weather.sealsSky() ? 0.88f * weatherIntensity() : 0f);
+		glUniform1f(uniSkyDim, skyBlackout);
 
 		// Shooting stars need a clear night sky, for the same reason the stars do.
 		float clearSky = Math.max(0f, 1f - clouds * 1.2f);
@@ -2069,7 +2080,12 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 			sky = blendRgb(sky, overcast, weather.overcast() * weatherIntensity());
 		}
 
-		return sky;
+		/*
+		 * Under a roof there is no sky, so it goes black - and because this colour is also
+		 * the fog colour, the far end of a cave fades into darkness rather than into a
+		 * daylight blue that has no business being down there.
+		 */
+		return blendRgb(sky, 0x000000, skyBlackout);
 	}
 
 	private static int blendRgb(int a, int b, float t)
@@ -2197,19 +2213,45 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 	{
 		float target = 0f;
 
-		if (config.undergroundDarkening() > 0)
+		if (config.undergroundDarkening() > 0 && isUnderground())
 		{
-			Player player = client.getLocalPlayer();
-			WorldPoint wp = player == null ? null : player.getWorldLocation();
-			if (wp != null && wp.getY() >= UNDERGROUND_Y)
-			{
-				target = config.undergroundDarkening() / 100f;
-			}
+			target = config.undergroundDarkening() / 100f;
 		}
 
 		// Roughly a second to settle at 50fps.
 		undergroundBlend += (target - undergroundBlend) * 0.02f;
 		return undergroundBlend;
+	}
+
+	/**
+	 * Whether the player is in a cave, dungeon, raid or any other enclosed area.
+	 *
+	 * <p>OSRS puts them all in a band of the world map starting at y 6400, which is a stable
+	 * property of the map rather than something needing a per-region list to maintain.
+	 */
+	private boolean isUnderground()
+	{
+		Player player = client.getLocalPlayer();
+		WorldPoint wp = player == null ? null : player.getWorldLocation();
+		return wp != null && wp.getY() >= UNDERGROUND_Y;
+	}
+
+	/**
+	 * How far the sky should be blacked out, 0 open air to 1 fully enclosed.
+	 *
+	 * <p>Separate from {@link #undergroundFactor()}, which is gated behind the darkening
+	 * slider - a roof over your head is a fact about where you are standing, not an effect
+	 * to be turned down, so a sun setting through the ceiling of a dungeon should not depend
+	 * on an unrelated setting being switched on.
+	 *
+	 * <p>Advanced once per frame by the caller rather than on read, since easing that runs
+	 * per call would settle at a different rate depending on how many things asked.
+	 */
+	private float undergroundSkyFade()
+	{
+		float target = !config.undergroundSky() && isUnderground() ? 1f : 0f;
+		skyBlackout += (target - skyBlackout) * 0.02f;
+		return skyBlackout;
 	}
 
 	/**
@@ -2840,7 +2882,10 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 		WeatherMode mode = activeWeather();
 		glUniform1i(uniWeatherType, mode.isRainLike() ? 1 : 2);
 		glUniform1f(uniWeatherTime, weatherSeconds());
-		glUniform1f(uniWeatherAmount, config.weatherAmount() / 100f * weatherIntensity());
+		// Nothing falls on you under a roof, so precipitation thins out with the sky it
+		// comes from rather than raining on the floor of a dungeon.
+		glUniform1f(uniWeatherAmount,
+			config.weatherAmount() / 100f * weatherIntensity() * (1f - skyBlackout));
 		glUniform1f(uniWeatherHeavy, mode.heavy());
 		glUniform1f(uniWeatherWind, config.weatherWind() / 100f);
 

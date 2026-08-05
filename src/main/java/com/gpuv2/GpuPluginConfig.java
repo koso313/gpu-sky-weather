@@ -1045,6 +1045,20 @@ public interface GpuPluginConfig extends Config
 	}
 
 	@ConfigItem(
+		keyName = "undergroundSky",
+		name = "Sky in caves and dungeons",
+		description = "Keep drawing the sky underground. Off blacks it out in caves, "
+			+ "dungeons and raids, and stops weather falling indoors - there is no sky "
+			+ "above you down there, so a sunset through the ceiling gives the game away.",
+		position = 305,
+		section = skySection
+	)
+	default boolean undergroundSky()
+	{
+		return false;
+	}
+
+	@ConfigItem(
 		keyName = "daytimeLights",
 		name = "Lights during the day",
 		description = "Keep dynamic lights on around the clock - torches, fires and glowing "
