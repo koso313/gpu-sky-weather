@@ -1696,7 +1696,7 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 		{
 			zenith = SkyGradient.zenithColorAt(time);
 			WeatherMode weatherNow = activeWeather();
-			if (weatherNow != WeatherMode.OFF)
+			if (!weatherNow.isClear())
 			{
 				// Overcast flattens the sky - cloud closes the gradient down.
 				zenith = blendRgb(zenith, sky, weatherNow.overcast() * weatherIntensity());
@@ -1724,7 +1724,7 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 		// Weather thickens the cloud deck as well as greying the sky.
 		float clouds = config.cloudAmount() / 100f;
 		WeatherMode weather = activeWeather();
-		if (weather != WeatherMode.OFF)
+		if (!weather.isClear())
 		{
 			/*
 			 * Weather thickens the deck but must not seal it. Cover runs as high as 0.95
@@ -1902,7 +1902,7 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 		WeatherMode selected = config.weather();
 		if (selected != WeatherMode.AUTO)
 		{
-			return selected == WeatherMode.OFF ? 0f : 1f;
+			return selected.isClear() ? 0f : 1f;
 		}
 		return WeatherCycle.intensityAt(clockMinutes(), config.autoWeatherPeriod());
 	}
@@ -1941,7 +1941,7 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 		if (config.cloudShadows() > 0 && effectiveSkyMode() == SkyMode.TIME_OF_DAY)
 		{
 			float cover = config.cloudAmount() / 100f;
-			if (weather != WeatherMode.OFF)
+			if (!weather.isClear())
 			{
 				cover = Math.max(cover, weather.overcast() * weatherIntensity());
 			}
@@ -2077,7 +2077,7 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 		// Weather overcasts the sky, so rain doesn't fall out of clear blue. This also
 		// reaches the fog, which shares this colour.
 		WeatherMode weather = activeWeather();
-		if (weather != WeatherMode.OFF)
+		if (!weather.isClear())
 		{
 			int overcast = weather.overcastColor();
 

@@ -168,17 +168,43 @@ public class WeatherCycleTest
 	}
 
 	/**
-	 * Snow and blizzard were first shipped with the sun untouched, on the reasoning that
-	 * their skies are bright rather than dark. In game that came out blown white with the
-	 * sun blazing through it. Pale is not the same as bright: they are heavily overcast days
-	 * that happen to be light in colour.
+	 * If there is enough cloud to rain or snow out of, there is enough to hide the sun
+	 * behind. Partial values were tried across several rounds and none held up - the disc is
+	 * drawn incandescent, so even a fraction of it reads as a sunny day with something
+	 * falling through it.
 	 */
 	@Test
-	public void snowSkiesArePaleNotSunlit()
+	public void everyWeatherHidesTheSunEntirely()
 	{
-		assertTrue("snow should hide the sun", WeatherMode.SNOW.sunHiding() > 0.8f);
-		assertTrue("a blizzard should hide it further",
-			WeatherMode.BLIZZARD.sunHiding() > WeatherMode.SNOW.sunHiding());
+		for (WeatherMode m : WeatherMode.values())
+		{
+			if (m.isClear() || m == WeatherMode.AUTO)
+			{
+				assertEquals(m + " should leave the sun alone", 0f, m.sunHiding(), 1e-6);
+			}
+			else
+			{
+				assertEquals(m + " should hide the sun", 1f, m.sunHiding(), 1e-6);
+			}
+		}
+	}
+
+	/**
+	 * Sunny has to behave exactly as switching weather off does, or picking it would apply
+	 * some fraction of a condition that is supposed to be no condition at all.
+	 */
+	@Test
+	public void sunnyIsIndistinguishableFromOff()
+	{
+		WeatherMode s = WeatherMode.SUNNY;
+		assertTrue(s.isClear());
+		assertFalse(s.hasPrecipitation());
+		assertFalse(s.hasLightning());
+		assertFalse(s.sealsSky());
+		assertEquals(WeatherMode.OFF.overcast(), s.overcast(), 1e-6);
+		assertEquals(WeatherMode.OFF.sunHiding(), s.sunHiding(), 1e-6);
+		assertEquals(WeatherMode.OFF.gloom(), s.gloom(), 1e-6);
+		assertEquals(WeatherMode.OFF.cloudSealing(), s.cloudSealing(), 1e-6);
 	}
 
 	/** Every real condition must declare precipitation one way or the other, not by accident. */
@@ -191,27 +217,6 @@ public class WeatherCycleTest
 		assertTrue(WeatherMode.STORM.hasPrecipitation());
 		assertTrue(WeatherMode.SNOW.hasPrecipitation());
 		assertTrue(WeatherMode.BLIZZARD.hasPrecipitation());
-	}
-
-	/**
-	 * A storm with a visible sun does not read as a storm. Rain leaves it as a smear behind
-	 * the cloud rather than removing it, which is the difference between the two.
-	 */
-	@Test
-	public void weatherHidesTheSunBySeverity()
-	{
-		assertEquals(0f, WeatherMode.OFF.sunHiding(), 1e-6);
-		assertEquals(1f, WeatherMode.STORM.sunHiding(), 1e-6);
-		assertEquals(1f, WeatherMode.OVERCAST.sunHiding(), 1e-6);
-
-		/*
-		 * Rain has to hide nearly all of it. The disc is drawn incandescent, so a merely
-		 * halved one is still a bright white spot in the sky - 0.7 was tried and the result
-		 * read as a sunny day with rain falling through it.
-		 */
-		float rain = WeatherMode.RAIN.sunHiding();
-		assertTrue("rain should nearly hide the sun, was " + rain, rain > 0.85f);
-		assertTrue("rain should not remove it outright", rain < 1f);
 	}
 
 	/**

@@ -15,6 +15,15 @@ public enum WeatherMode
 	 */
 	AUTO("Automatic", false, false, 0f, 0x000000, 0f, 0f, 0f, 0f),
 	/**
+	 * A plain clear day, identical in every value to {@link #OFF}.
+	 *
+	 * <p>It exists to be sayable. "Off" reads as switching the feature off rather than as
+	 * choosing the weather, which makes it an awkward way to ask for a sunny day - and once
+	 * every other condition takes the sun away, having one that plainly leaves it there is
+	 * worth naming.
+	 */
+	SUNNY("Sunny", false, false, 0f, 0x000000, 0f, 0f, 0f, 0f),
+	/**
 	 * Cloud and nothing else: a sealed deck, no precipitation.
 	 *
 	 * <p>The only mode that closes the sky over completely. Every other one is capped short
@@ -23,12 +32,14 @@ public enum WeatherMode
 	 */
 	OVERCAST("Overcast", false, false, 0f, 0x8E969E, 0.95f, 1f, 0f, 0.88f),
 	/*
-	 * Rain hides the sun almost completely rather than merely dimming it. 0.7 was tried and
-	 * was not nearly enough: the disc is drawn incandescent, so 30% of very bright is still
-	 * a bright white spot in the sky, and the result read as a sunny day with rain falling
-	 * through it. A storm takes it away outright.
+	 * Every condition below takes the sun away outright.
+	 *
+	 * Partial values were tried and none of them held up. The disc is drawn incandescent, so
+	 * even a tenth of it is a bright spot in an overcast sky, and any weather that leaves it
+	 * showing reads as a sunny day with something falling through it. If there is enough
+	 * cloud to rain or snow out of, there is enough to hide the sun behind.
 	 */
-	RAIN("Rain", true, true, 0f, 0x7C848C, 0.60f, 0.92f, 0.20f, 0.18f),
+	RAIN("Rain", true, true, 0f, 0x7C848C, 0.60f, 1f, 0.20f, 0.18f),
 	STORM("Storm", true, true, 1f, 0x363C44, 0.90f, 1f, 0.34f, 0.42f),
 	/*
 	 * Snow skies are pale rather than grey - light bounces off the cloud base and the
@@ -37,8 +48,8 @@ public enum WeatherMode
 	 * are heavily overcast days that happen to be light in colour: the sun goes, the deck
 	 * closes up, and the sky settles a good way below white.
 	 */
-	SNOW("Snow", false, true, 0f, 0xBFC7D2, 0.86f, 0.88f, 0.12f, 0.48f),
-	BLIZZARD("Blizzard", false, true, 1f, 0xC9D2DC, 0.95f, 0.96f, 0.20f, 0.72f);
+	SNOW("Snow", false, true, 0f, 0xBFC7D2, 0.86f, 1f, 0.12f, 0.48f),
+	BLIZZARD("Blizzard", false, true, 1f, 0xC9D2DC, 0.95f, 1f, 0.20f, 0.72f);
 
 	private final String name;
 	private final boolean rainLike;
@@ -162,6 +173,19 @@ public enum WeatherMode
 	public boolean hasPrecipitation()
 	{
 		return precipitates;
+	}
+
+	/**
+	 * Whether this is no weather at all - nothing falling, nothing over the sun.
+	 *
+	 * <p>Both an explicitly sunny day and having weather switched off leave the sky exactly
+	 * as configured, and every caller that used to test for OFF means this. Asked as a
+	 * question rather than compared against a list, so adding another clear condition later
+	 * cannot leave one of those callers behind.
+	 */
+	public boolean isClear()
+	{
+		return this == OFF || this == SUNNY;
 	}
 
 	/**

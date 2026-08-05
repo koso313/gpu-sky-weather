@@ -80,7 +80,7 @@ final class WeatherCycle
 	 */
 	static float intensityAt(double minutes, int periodMinutes)
 	{
-		if (modeAt(minutes, periodMinutes) == WeatherMode.OFF)
+		if (modeAt(minutes, periodMinutes).isClear())
 		{
 			return 0f;
 		}
