@@ -61,7 +61,7 @@ uniform float aerial;
 uniform float underground;
 
 // Point lights from fires, torches and lanterns. Count 0 disables.
-#define MAX_LIGHTS 12
+#define MAX_LIGHTS 32
 uniform int lightCount;
 uniform vec3 lightPos[MAX_LIGHTS];
 uniform vec3 lightColor[MAX_LIGHTS];

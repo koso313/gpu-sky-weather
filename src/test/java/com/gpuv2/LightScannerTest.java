@@ -1,5 +1,6 @@
 package com.gpuv2;
 
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import org.junit.Test;
@@ -56,6 +57,29 @@ public class LightScannerTest
 	{
 		assertTrue(LightScanner.nameSuggestsLight("TORCH"));
 		assertTrue(LightScanner.nameSuggestsLight("bRaZiEr"));
+	}
+
+	/**
+	 * The fade is what stops a torch snapping off the moment it leaves the scan patch, so
+	 * pin its shape: full brightness well inside, nothing at the boundary, and no values
+	 * outside 0..1 for anything beyond it.
+	 */
+	@Test
+	public void lightsFadeOutTowardsTheEdgeOfTheScan()
+	{
+		assertEquals("close up", 1f, LightScanner.fadeAt(0f), 1e-6);
+		assertEquals("inside the band", 1f, LightScanner.fadeAt(19f), 1e-6);
+		assertEquals("band starts", 1f, LightScanner.fadeAt(20f), 1e-6);
+		assertEquals("half way through", 0.5f, LightScanner.fadeAt(22.5f), 1e-6);
+		assertEquals("at the edge", 0f, LightScanner.fadeAt(25f), 1e-6);
+		assertEquals("past the edge", 0f, LightScanner.fadeAt(40f), 1e-6);
+	}
+
+	/** The budget has to match the shader's array, or lights past it are silently dropped. */
+	@Test
+	public void lightBudgetIsWhatTheShaderDeclares()
+	{
+		assertEquals(32, LightScanner.MAX_LIGHTS);
 	}
 
 	@Test

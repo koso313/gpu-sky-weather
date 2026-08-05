@@ -2140,9 +2140,12 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 
 		for (int i = 0; i < count; ++i)
 		{
-			lightColours[i * 3] = tint.getRed() / 255f * strength;
-			lightColours[i * 3 + 1] = tint.getGreen() / 255f * strength;
-			lightColours[i * 3 + 2] = tint.getBlue() / 255f * strength;
+			// Dimmed towards the edge of the scan patch, so a light that is about to fall
+			// out of range is already dark when it goes rather than snapping off.
+			float s = strength * lightScanner.fade[i];
+			lightColours[i * 3] = tint.getRed() / 255f * s;
+			lightColours[i * 3 + 1] = tint.getGreen() / 255f * s;
+			lightColours[i * 3 + 2] = tint.getBlue() / 255f * s;
 			lightRadii[i] = radius;
 		}
 

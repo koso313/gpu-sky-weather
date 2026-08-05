@@ -1,7 +1,9 @@
 package com.gpuv2;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -32,10 +34,26 @@ import net.runelite.api.coords.LocalPoint;
 class LightScanner
 {
 	/** Must match MAX_LIGHTS in frag.glsl. */
-	static final int MAX_LIGHTS = 12;
+	static final int MAX_LIGHTS = 32;
 
-	/** How far around the player to look, in tiles. */
-	private static final int RADIUS = 12;
+	/**
+	 * How far around the player to look, in tiles.
+	 *
+	 * <p>Has to comfortably exceed the light radius setting, because a light stops existing
+	 * the moment it leaves this patch - and a light that is still within its own reach when
+	 * that happens vanishes mid-throw. The setting caps at 20 tiles, so 25 leaves exactly
+	 * the fade band below spare.
+	 */
+	private static final int RADIUS = 25;
+
+	/**
+	 * Width of the band at the edge of the scan, in tiles, over which a light dims to
+	 * nothing.
+	 *
+	 * <p>Without it, walking away snaps a torch off the instant it crosses the boundary, and
+	 * walking back snaps it on. The band means what leaves the set is already dark.
+	 */
+	private static final float FADE_BAND = 5f;
 
 	private static final int TILE = 128;
 
@@ -66,6 +84,10 @@ class LightScanner
 
 	/** Flattened xyz per light, filled by {@link #scan}. */
 	final float[] positions = new float[MAX_LIGHTS * 3];
+
+	/** Per-light 0..1 multiplier that dims lights approaching the edge of the scan. */
+	final float[] fade = new float[MAX_LIGHTS];
+
 	int count;
 
 	LightScanner(Client client)
@@ -106,6 +128,7 @@ class LightScanner
 		int cy = origin.getSceneY();
 
 		List<TileObject> found = new ArrayList<>();
+		Set<Long> seen = new HashSet<>();
 
 		for (int x = Math.max(0, cx - RADIUS); x <= Math.min(tiles[plane].length - 1, cx + RADIUS); ++x)
 		{
@@ -114,15 +137,25 @@ class LightScanner
 				Tile tile = tiles[plane][x][y];
 				if (tile != null)
 				{
-					collect(found, extraIds, tile);
-				}
-
-				if (found.size() >= MAX_LIGHTS)
-				{
-					break;
+					collect(found, seen, extraIds, tile);
 				}
 			}
 		}
+
+		/*
+		 * Nearest first, then take the budget off the front.
+		 *
+		 * The scan walks the patch corner to corner, so taking the first MAX_LIGHTS it
+		 * happened to trip over meant the budget filled from whichever corner the loop
+		 * started in, regardless of where the player was looking. In a place as dense with
+		 * torches as Falador that is spent well before the loop reaches you, so the lights
+		 * beside you stayed dark while ones behind a building half a street away burned.
+		 *
+		 * Sorting also makes the eviction survivable: what gets dropped when the budget
+		 * overflows is now always the farthest light, which the fade below has already
+		 * dimmed towards nothing.
+		 */
+		found.sort(Comparator.comparingInt(o -> distanceSq(o, origin)));
 
 		for (TileObject obj : found)
 		{
@@ -141,11 +174,40 @@ class LightScanner
 			// Lifted off the floor so the light sits in the flame rather than under it.
 			positions[count * 3 + 1] = obj.getZ() - TILE * 0.4f;
 			positions[count * 3 + 2] = lp.getY();
+
+			fade[count] = fadeAt((float) Math.sqrt(distanceSq(obj, origin)) / TILE);
 			++count;
 		}
 	}
 
-	private void collect(List<TileObject> out, Set<Integer> extraIds, Tile tile)
+	/**
+	 * How brightly a light this many tiles away should burn, 0..1, purely as a function of
+	 * the scan boundary. Full until the fade band, then linearly down to nothing at the
+	 * edge. The light's own radius falloff applies on top of this in the shader.
+	 */
+	static float fadeAt(float tilesAway)
+	{
+		return Math.max(0f, Math.min(1f, (RADIUS - tilesAway) / FADE_BAND));
+	}
+
+	/**
+	 * Squared distance in local units, squared to keep the sort off square roots.
+	 * Objects with no location sort last rather than throwing.
+	 */
+	private static int distanceSq(TileObject obj, LocalPoint origin)
+	{
+		LocalPoint lp = obj.getLocalLocation();
+		if (lp == null)
+		{
+			return Integer.MAX_VALUE;
+		}
+
+		int dx = lp.getX() - origin.getX();
+		int dy = lp.getY() - origin.getY();
+		return dx * dx + dy * dy;
+	}
+
+	private void collect(List<TileObject> out, Set<Long> seen, Set<Integer> extraIds, Tile tile)
 	{
 		GameObject[] gameObjects = tile.getGameObjects();
 		if (gameObjects != null)
@@ -154,7 +216,17 @@ class LightScanner
 			{
 				if (obj != null && isLight(obj.getId(), extraIds))
 				{
-					out.add(obj);
+					/*
+					 * A multi-tile object is referenced from every tile it covers, so a
+					 * single large brazier arrives here several times over. Each copy used
+					 * to take its own slot out of the budget and then stack its light on
+					 * the same spot, which both wasted the budget and made that one object
+					 * brighter than its neighbours for no reason.
+					 */
+					if (seen.add(obj.getHash()))
+					{
+						out.add(obj);
+					}
 				}
 			}
 		}
