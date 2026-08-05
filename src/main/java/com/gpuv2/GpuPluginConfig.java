@@ -1107,6 +1107,24 @@ public interface GpuPluginConfig extends Config
 	}
 
 	@Range(
+		max = 60
+	)
+	@ConfigItem(
+		keyName = "lightSearchDistance",
+		name = "Light search distance",
+		description = "How far out lights are looked for, in tiles. 0 follows your draw "
+			+ "distance, so anything on screen can light. Raise it only alongside 'Max "
+			+ "lights at once' - finding more lights does nothing if there is no room to "
+			+ "draw them.",
+		position = 563,
+		section = lightSection
+	)
+	default int lightSearchDistance()
+	{
+		return 0;
+	}
+
+	@Range(
 		max = 200
 	)
 	@ConfigItem(

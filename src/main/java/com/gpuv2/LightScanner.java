@@ -68,6 +68,14 @@ class LightScanner
 	private static final int SCAN_MARGIN = 6;
 
 	/**
+	 * Hard cap on the search radius, in tiles.
+	 *
+	 * <p>The walk is the expensive half of a scan and it grows with the square of this, so
+	 * it is bounded independently of how far the player has pushed their draw distance.
+	 */
+	private static final int SCAN_CAP = 60;
+
+	/**
 	 * Width of the band at the edge of the scan, in tiles, over which a light dims to
 	 * nothing.
 	 *
@@ -120,6 +128,11 @@ class LightScanner
 	float lastEdgeTiles;
 	int lastCandidates;
 
+	int scanRadiusTiles()
+	{
+		return scanRadius;
+	}
+
 	/** Flattened xyz per light, rebuilt each frame by {@link #collectFrame}. */
 	final float[] positions = new float[MAX_LIGHTS * 3];
 
@@ -140,12 +153,22 @@ class LightScanner
 	 * scenery does not move. Live effects are picked up separately by
 	 * {@link #collectFrame()}.
 	 */
-	void scan(int lightRadiusTiles, int maxLights)
+	void scan(int lightRadiusTiles, int maxLights, int searchTiles)
 	{
 		staticCount = 0;
 		budget = Math.max(1, Math.min(MAX_LIGHTS, maxLights));
 		lightRadius = Math.max(1, lightRadiusTiles);
-		scanRadius = lightRadius + SCAN_MARGIN;
+
+		/*
+		 * Search as far as the world is drawn, not as far as a light reaches.
+		 *
+		 * Tying the two together meant a torch stopped existing a few tiles past its own
+		 * glow, so its pool of light blinked into being as the player walked up to it even
+		 * though the torch had been on screen the whole time. A light's contribution is
+		 * already limited by its own falloff, so reaching further costs nothing but a slot
+		 * in the budget - and buys lit scenery wherever it is visible.
+		 */
+		scanRadius = Math.min(SCAN_CAP, Math.max(lightRadius + SCAN_MARGIN, searchTiles));
 		lastCandidates = 0;
 		lastEdgeTiles = scanRadius;
 

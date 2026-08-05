@@ -2075,7 +2075,12 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 		{
 			lightScanner = new LightScanner(client);
 		}
-		lightScanner.scan(config.lightRadius(), config.maxLights());
+		// 0 means follow the draw distance, so lit scenery reaches as far as the world does
+		// without the user having to keep two numbers in step by hand.
+		int search = config.lightSearchDistance() > 0
+			? config.lightSearchDistance()
+			: getDrawDistance();
+		lightScanner.scan(config.lightRadius(), config.maxLights(), search);
 	}
 
 	/**
@@ -4251,7 +4256,7 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 				? " - BUDGET BINDING, raise 'Max lights at once'"
 				: " - budget not binding";
 			say("[GPU v2] Lights: " + lightScanner.count + " drawn, "
-				+ lightScanner.lastCandidates + " found within " + (config.lightRadius() + 6)
+				+ lightScanner.lastCandidates + " found within " + lightScanner.scanRadiusTiles()
 				+ " tiles, cap " + config.maxLights()
 				+ ", fade edge " + String.format("%.1f", lightScanner.lastEdgeTiles)
 				+ " tiles" + budgetNote);
