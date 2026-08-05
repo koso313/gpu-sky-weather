@@ -4235,6 +4235,28 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 			}
 		}
 
+		/*
+		 * The live set, not just what qualifies. Whether the budget is binding, and how
+		 * close in it binds, is the difference between "detection is broken" and "there are
+		 * more lights here than can be drawn" - which look identical in game and need
+		 * opposite fixes.
+		 */
+		if (config.dynamicLights() <= 0)
+		{
+			say("[GPU v2] Dynamic lights is 0 - nothing will light regardless of what follows.");
+		}
+		else
+		{
+			String budgetNote = lightScanner.lastCandidates > config.maxLights()
+				? " - BUDGET BINDING, raise 'Max lights at once'"
+				: " - budget not binding";
+			say("[GPU v2] Lights: " + lightScanner.count + " drawn, "
+				+ lightScanner.lastCandidates + " found within " + (config.lightRadius() + 6)
+				+ " tiles, cap " + config.maxLights()
+				+ ", fade edge " + String.format("%.1f", lightScanner.lastEdgeTiles)
+				+ " tiles" + budgetNote);
+		}
+
 		say("[GPU v2] Within " + radius + " tiles - lighting: " + (lit.isEmpty() ? "none" : lit));
 		say("[GPU v2] not lighting: " + dark);
 		for (String line : evidence)

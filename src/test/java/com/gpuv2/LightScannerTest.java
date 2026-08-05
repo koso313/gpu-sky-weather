@@ -116,6 +116,28 @@ public class LightScannerTest
 		}
 	}
 
+	/**
+	 * The regression that cost the torches twice over: the budget edge alone made the
+	 * radius setting work backwards. Turning the radius up pulls in more candidates, the
+	 * budget binds sooner, the edge collapses inward, and the fade dims the torches that
+	 * were working - asking for more light gave less. Flooring the edge at the light radius
+	 * means a light inside its own reach is never faded.
+	 */
+	@Test
+	public void aLightInsideItsOwnReachIsNeverFaded()
+	{
+		int lightRadius = 12;
+
+		// Budget bit hard at 3 tiles, but the floor keeps the edge out at the light radius.
+		float edge = Math.min(40f, Math.max(3f, lightRadius));
+		assertEquals(12f, edge, 1e-6);
+
+		for (float d : new float[]{0.5f, 1f, 2f, 3f})
+		{
+			assertEquals("at " + d + " tiles", 1f, LightScanner.fadeAt(d, edge), 1e-6);
+		}
+	}
+
 	@Test
 	public void aZeroEdgeIsNotADivideByZero()
 	{

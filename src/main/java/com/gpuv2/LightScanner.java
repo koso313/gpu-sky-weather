@@ -114,6 +114,11 @@ class LightScanner
 	/** How many lights may be drawn, and how far out to look, from config at scan time. */
 	private int budget = MAX_LIGHTS;
 	private int scanRadius = 25;
+	private int lightRadius = 6;
+
+	/** Set by the last scan so ::lightids can report whether the budget is what binds. */
+	float lastEdgeTiles;
+	int lastCandidates;
 
 	/** Flattened xyz per light, rebuilt each frame by {@link #collectFrame}. */
 	final float[] positions = new float[MAX_LIGHTS * 3];
@@ -139,7 +144,10 @@ class LightScanner
 	{
 		staticCount = 0;
 		budget = Math.max(1, Math.min(MAX_LIGHTS, maxLights));
-		scanRadius = lightRadiusTiles + SCAN_MARGIN;
+		lightRadius = Math.max(1, lightRadiusTiles);
+		scanRadius = lightRadius + SCAN_MARGIN;
+		lastCandidates = 0;
+		lastEdgeTiles = scanRadius;
 
 		WorldView wv = client.getTopLevelWorldView();
 		Player player = client.getLocalPlayer();
@@ -212,8 +220,25 @@ class LightScanner
 		if (found.size() > budget)
 		{
 			float lastKept = (float) Math.sqrt(distanceSq(found.get(budget - 1), origin)) / TILE;
-			edge = Math.min(edge, lastKept);
+
+			/*
+			 * Never fade a light that is still inside its own reach.
+			 *
+			 * Taking the budget edge on its own made the radius setting work backwards:
+			 * turning it up pulls in more candidates, so the budget binds sooner, so the
+			 * edge collapses closer to the player - and the fade then dims the very torches
+			 * that were working. Asking for more light produced less.
+			 *
+			 * Where the budget bites inside the light radius there is no fade that helps.
+			 * Every light being dropped is one that was visibly lighting something, and
+			 * dimming the whole set to hide that costs more than the pop does. So the floor
+			 * is the light radius: past that point, accept the pop and keep the brightness.
+			 */
+			edge = Math.min(edge, Math.max(lastKept, lightRadius));
 		}
+
+		lastCandidates = found.size();
+		lastEdgeTiles = edge;
 
 		for (TileObject obj : found)
 		{
