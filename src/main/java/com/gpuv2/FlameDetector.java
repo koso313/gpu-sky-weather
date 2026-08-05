@@ -97,6 +97,47 @@ final class FlameDetector
 		return hot;
 	}
 
+	/**
+	 * What the test saw, for ::lightids: how many faces passed, out of how many, and the
+	 * warm-hued colours it found as hue/sat/lum.
+	 *
+	 * <p>Reports the warm faces separately from the passing ones because those are two
+	 * different failures with two different fixes. No warm faces at all means the flame is
+	 * not in this model. Warm faces that did not pass means the thresholds are wrong.
+	 */
+	static String describe(short[] unlitFaceColors)
+	{
+		if (unlitFaceColors == null || unlitFaceColors.length == 0)
+		{
+			return "no faces";
+		}
+
+		StringBuilder warm = new StringBuilder();
+		int shown = 0;
+		int seenWarm = 0;
+		for (short c : unlitFaceColors)
+		{
+			int hsl = c & 0xFFFF;
+			if (((hsl >> HUE_SHIFT) & HUE_MASK) > MAX_HUE)
+			{
+				continue;
+			}
+
+			++seenWarm;
+			if (shown < 4)
+			{
+				++shown;
+				warm.append(' ')
+					.append((hsl >> HUE_SHIFT) & HUE_MASK).append('/')
+					.append((hsl >> SAT_SHIFT) & SAT_MASK).append('/')
+					.append(hsl & LUM_MASK);
+			}
+		}
+
+		return "fire=" + burningFaces(unlitFaceColors) + "/" + unlitFaceColors.length
+			+ " warm=" + seenWarm + (seenWarm > 0 ? " [" + warm.toString().trim() + "]" : "");
+	}
+
 	static boolean isFlameColor(short packed)
 	{
 		int hsl = packed & 0xFFFF;

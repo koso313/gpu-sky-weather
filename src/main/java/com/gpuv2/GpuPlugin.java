@@ -53,6 +53,7 @@ import net.runelite.api.Constants;
 import net.runelite.api.FloatProjection;
 import net.runelite.api.GameObject;
 import net.runelite.api.GameState;
+import net.runelite.api.DynamicObject;
 import net.runelite.api.Model;
 import net.runelite.api.Perspective;
 import net.runelite.api.Projection;
@@ -4128,7 +4129,7 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 		// Renderable kept alongside the id: the model test is now what decides most objects,
 		// and it cannot be re-derived from an id alone.
 		Map<Integer, Renderable> ids = new TreeMap<>();
-		final int radius = 4;
+		final int radius = 6;
 		int cx = origin.getSceneX();
 		int cy = origin.getSceneY();
 
@@ -4180,21 +4181,55 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 
 		List<String> lit = new ArrayList<>();
 		List<String> dark = new ArrayList<>();
+
+		/*
+		 * Anything with warm-hued geometry gets its numbers printed whether it passed or
+		 * not. "It didn't work" cannot be acted on; "the flame faces are there but at
+		 * luminance 55" or "this object isn't animated" both can, and they need opposite
+		 * fixes.
+		 */
+		List<String> evidence = new ArrayList<>();
+
 		for (Map.Entry<Integer, Renderable> e : ids.entrySet())
 		{
 			String name = lightScanner.resolveName(e.getKey());
-			boolean byName = name != null && LightScanner.nameSuggestsLight(name);
-			boolean byModel = LightScanner.isBurning(e.getValue());
+			Renderable r = e.getValue();
+			Model model = LightScanner.modelOf(r);
 
-			String entry = e.getKey() + "=" + (name == null ? "<unresolved>" : name)
-				+ (byName ? "(name)" : "") + (byModel ? "(model)" : "");
-			(byName || byModel ? lit : dark).add(entry);
+			boolean byName = name != null && LightScanner.nameSuggestsLight(name);
+			boolean byModel = model != null && LightScanner.isBurning(r, model);
+			boolean animated = r instanceof DynamicObject;
+
+			String label = e.getKey() + "=" + (name == null ? "<unresolved>" : name);
+			(byName || byModel ? lit : dark).add(label
+				+ (byName ? "(name)" : "") + (byModel ? "(model)" : ""));
+
+			if (model == null)
+			{
+				evidence.add(label + " no model");
+			}
+			else
+			{
+				String desc = FlameDetector.describe(model.getUnlitFaceColors());
+				// Only worth printing where there is warmth to explain.
+				if (!desc.contains("warm=0"))
+				{
+					evidence.add(label + " anim=" + (animated ? "Y" : "N") + " " + desc);
+				}
+			}
 		}
 
 		say("[GPU v2] Within " + radius + " tiles - lighting: " + (lit.isEmpty() ? "none" : lit));
 		say("[GPU v2] not lighting: " + dark);
-		say("[GPU v2] 'null' means the object genuinely has no name, so only its model can "
-			+ "identify it - that needs it to be animated and painted like fire.");
+		for (String line : evidence)
+		{
+			say("[GPU v2]   " + line);
+		}
+		if (evidence.isEmpty())
+		{
+			say("[GPU v2] Nothing nearby has fire-coloured geometry at all - stand right "
+				+ "next to a torch and run this again.");
+		}
 	}
 
 	private void say(String msg)

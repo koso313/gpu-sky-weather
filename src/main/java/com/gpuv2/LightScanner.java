@@ -396,7 +396,26 @@ class LightScanner
 		}
 
 		// Name first, since it is far cheaper than building a model.
-		boolean light = nameSuggestsLight(name) || isBurning(renderable);
+		if (nameSuggestsLight(name))
+		{
+			lightCache.put(id, true);
+			return true;
+		}
+
+		/*
+		 * A model that is not there yet is not the same as a model that is not on fire. The
+		 * renderable can be null, or getModel() can return null, while a zone is still being
+		 * built - and caching that as "no" would leave the object dark for the rest of the
+		 * session even once its geometry arrived. Only a model we actually read gets a
+		 * verdict; anything else is left uncached to be retried next tick.
+		 */
+		Model model = modelOf(renderable);
+		if (model == null)
+		{
+			return false;
+		}
+
+		boolean light = isBurning(renderable, model);
 		lightCache.put(id, light);
 		return light;
 	}
@@ -408,9 +427,29 @@ class LightScanner
 	 * animation alone catches windmills and spinning wheels. Something that flickers *and*
 	 * is bright saturated orange is a fire.
 	 */
-	static boolean isBurning(Renderable renderable)
+	static boolean isBurning(Renderable renderable, Model model)
 	{
-		return renderable instanceof DynamicObject && isFlameModel(renderable);
+		return renderable instanceof DynamicObject
+			&& FlameDetector.looksLikeFlame(model.getUnlitFaceColors());
+	}
+
+	/** The model behind a renderable, or null if it is not built yet. */
+	static Model modelOf(Renderable renderable)
+	{
+		if (renderable == null)
+		{
+			return null;
+		}
+
+		try
+		{
+			return renderable.getModel();
+		}
+		catch (RuntimeException ex)
+		{
+			log.debug("could not read model", ex);
+			return null;
+		}
 	}
 
 	/**
