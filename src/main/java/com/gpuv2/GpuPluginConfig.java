@@ -285,35 +285,6 @@ public interface GpuPluginConfig extends Config
 	)
 	String performanceSection = "performanceSection";
 
-	@Range(
-		max = 240
-	)
-	@ConfigItem(
-		keyName = "adaptiveQuality",
-		name = "Adaptive quality",
-		description = "The frame rate you want to keep. Set 0 to turn this off."
-			+ "<br><br>"
-			+ "If your frame rate drops below this number, effects switch off one at a "
-			+ "time until it recovers, and switch back on once you have room to spare."
-			+ "<br><br>"
-			+ "They go in this order:"
-			+ "<br>1. Post-processing (bloom, god rays, sharpening)"
-			+ "<br>2. Sky drops to half resolution"
-			+ "<br>3. Fewer lights"
-			+ "<br><br>"
-			+ "Set it to the frame rate you actually want to hold - your monitor's refresh "
-			+ "rate is a good choice. Do not set it near your highest, or it will be "
-			+ "switching things off constantly for no benefit."
-			+ "<br><br>"
-			+ "Your settings are never changed. They are only overridden while needed, and "
-			+ "everything comes straight back when you set this to 0.",
-		position = 28,
-		section = performanceSection
-	)
-	default int adaptiveQuality()
-	{
-		return 0;
-	}
 
 	@ConfigItem(
 		keyName = "perfOverlay",
