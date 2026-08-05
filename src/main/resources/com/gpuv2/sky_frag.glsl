@@ -359,13 +359,25 @@ vec3 moonSurface(vec3 dir, float discCos)
 	 * The unlit side is dimmed rather than removed, since earthshine keeps a real moon's
 	 * dark limb faintly visible.
 	 */
-	float phaseAngle = 6.28318 * moonPhase;
-	float termX = cos(phaseAngle);
-	float ellipse = termX * sqrt(max(0.0, 1.0 - v * v));
+	float d = cos(6.28318 * moonPhase);
+	float limb = sqrt(max(0.0, 1.0 - v * v));
 
-	// Which side is lit flips at full moon.
-	float side = moonPhase < 0.5 ? 1.0 : -1.0;
-	float litness = smoothstep(-0.06, 0.06, (u - ellipse) * side);
+	/*
+	 * Waxing lights from one side, waning from the other - and the terminator mirrors
+	 * with it. Flipping only which side is tested, while reusing the same terminator,
+	 * inverts the whole disc: it makes new and full swap places, so a full moon renders
+	 * dark. The waning half needs -d, not d.
+	 *
+	 *   waxing p=0   -> d=1,  lit where u >  limb  -> nothing (new)
+	 *   waxing p=0.5 -> d=-1, lit where u > -limb  -> everything (full)
+	 *   waning p=0.5 -> -d=1, lit where u <  limb  -> everything (full, continuous)
+	 *   waning p=1   -> -d=-1, lit where u < -limb -> nothing (new)
+	 */
+	bool waxing = moonPhase < 0.5;
+	float edgeX = (waxing ? d : -d) * limb;
+	float side = waxing ? 1.0 : -1.0;
+
+	float litness = smoothstep(-0.06, 0.06, (u - edgeX) * side);
 	float lit = mix(0.10, 1.0, litness);
 
 	return vec3(0.96, 0.95, 0.88) * clamp(surface, 0.0, 1.4) * edge * lit;
