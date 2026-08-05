@@ -19,9 +19,11 @@ package com.gpuv2;
  * true of {@code SceneTilePaint}, whose corner colours are bare light levels with no hue in
  * them at all - which is why saturation carries more of the decision here than brightness.
  *
- * <p>Colour alone is not enough - a yellow banner is bright and orange-ish too - so
- * {@link LightScanner} only asks this of objects that are also animated. Fire flickers;
- * banners do not.
+ * <p>The floors do all the discriminating, so they matter more than the hue arc does. Wood
+ * and brick sit in the same arc as flame and are only separated by being duller and darker;
+ * a yellow banner is separated by brightness alone. An earlier version also required the
+ * object to be animated, on the grounds that fire flickers - true, but it excluded every
+ * static wall torch, which is the thing this was written to find.
  */
 final class FlameDetector
 {
@@ -53,7 +55,7 @@ final class FlameDetector
 	 * colours: scene lighting moves luminance in both directions, and a torch in a dark
 	 * corner at night is still a torch.
 	 */
-	static final int MIN_LUMINANCE = 55;
+	static final int MIN_LUMINANCE = 70;
 
 	/**
 	 * How much of the model has to be alight. A torch is mostly bracket, so this is

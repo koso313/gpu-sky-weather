@@ -427,15 +427,35 @@ class LightScanner
 	 * animation alone catches windmills and spinning wheels. Something that flickers *and*
 	 * is bright saturated orange is a fire.
 	 */
+	/**
+	 * Whether an object is painted like fire.
+	 *
+	 * <p>No longer requires the object to be animated. That gate was there because colour
+	 * alone would claim a yellow banner, and a flicker is good evidence of a flame - but it
+	 * also excluded every static wall torch, which is precisely what this exists to find.
+	 * The saturation and brightness floors carry the discrimination instead.
+	 */
 	static boolean isBurning(Renderable renderable, Model model)
 	{
-		return renderable instanceof DynamicObject
-			&& FlameDetector.looksLikeFlame(model.getFaceColors1());
+		return FlameDetector.looksLikeFlame(model.getFaceColors1());
 	}
 
-	/** The model behind a renderable, or null if it is not built yet. */
+	/**
+	 * The model behind a renderable, or null if there is not one to read.
+	 *
+	 * <p>Static scenery <i>is</i> its own model, and {@code getModel()} on one of those
+	 * returns null - it exists to unwrap things that hold a model, like an animated object
+	 * holding the current frame. Calling it unconditionally asked every wall torch in the
+	 * game to hand over its model and took the null for "no geometry here", which is why
+	 * ::lightids reported "renderable fx but model null" for essentially all of them.
+	 */
 	static Model modelOf(Renderable renderable)
 	{
+		if (renderable instanceof Model)
+		{
+			return (Model) renderable;
+		}
+
 		if (renderable == null)
 		{
 			return null;
