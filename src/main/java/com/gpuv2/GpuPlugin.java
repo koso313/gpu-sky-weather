@@ -1728,7 +1728,9 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 		glUniform1f(uniGradeTemperature, temperature);
 		glUniform1f(uniToneMap, fx ? config.toneMapping() / 100f : 0f);
 		glUniform1f(uniSmoothLighting, config.smoothLighting() ? 1f : 0f);
-		glUniform1f(uniDebugNormals, debugNormals ? 1f : 0f);
+		// Read from config rather than the ::normals command - that command never reached
+		// the plugin while ::lightids beside it did, and a checkbox is proven to work.
+		glUniform1f(uniDebugNormals, (debugNormals || config.debugNormals()) ? 1f : 0f);
 
 		glUniform1f(uniAerial, fx ? config.aerialPerspective() / 100f : 0f);
 		glUniform1f(uniUnderground, fx ? undergroundFactor() : 0f);

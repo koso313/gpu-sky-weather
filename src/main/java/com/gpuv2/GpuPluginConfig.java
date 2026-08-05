@@ -258,6 +258,24 @@ public interface GpuPluginConfig extends Config
 	}
 
 	@ConfigItem(
+		keyName = "debugNormals",
+		name = "Debug: show normals",
+		description = "Paints the surface direction as colour instead of drawing the world, "
+			+ "to check whether smooth lighting is actually reaching the shader."
+			+ "<br><br>"
+			+ "Each triangle one solid colour means flat shading. Colour blending across a "
+			+ "triangle means smooth shading is working."
+			+ "<br><br>"
+			+ "Diagnostic only - turn it back off afterwards.",
+		position = 138,
+		section = displaySection
+	)
+	default boolean debugNormals()
+	{
+		return false;
+	}
+
+	@ConfigItem(
 		keyName = "smoothBanding",
 		name = "Remove colour banding",
 		description = "Smooths out the colour banding present in the CPU renderer.",
