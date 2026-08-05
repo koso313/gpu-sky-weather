@@ -110,7 +110,7 @@ public final class SkyGradient
 	 */
 	public static int colorAt(LocalTime time)
 	{
-		int minute = minuteOfDay(time);
+		float minute = minuteOfDay(time);
 		int i = segmentStart(minute);
 		float t = segmentProgress(minute, i);
 		return lerpColor(COLORS[i], COLORS[i + 1], t);
@@ -121,7 +121,7 @@ public final class SkyGradient
 	 */
 	public static int zenithColorAt(LocalTime time)
 	{
-		int minute = minuteOfDay(time);
+		float minute = minuteOfDay(time);
 		int i = segmentStart(minute);
 		float t = segmentProgress(minute, i);
 		return lerpColor(ZENITH[i], ZENITH[i + 1], t);
@@ -136,7 +136,7 @@ public final class SkyGradient
 	 */
 	public static float temperatureAt(LocalTime time)
 	{
-		int minute = minuteOfDay(time);
+		float minute = minuteOfDay(time);
 		int i = segmentStart(minute);
 		float t = segmentProgress(minute, i);
 		return TEMPERATURE[i] + (TEMPERATURE[i + 1] - TEMPERATURE[i]) * t;
@@ -147,15 +147,23 @@ public final class SkyGradient
 	 */
 	public static float nightFactorAt(LocalTime time)
 	{
-		int minute = minuteOfDay(time);
+		float minute = minuteOfDay(time);
 		int i = segmentStart(minute);
 		float t = segmentProgress(minute, i);
 		return NIGHT[i] + (NIGHT[i + 1] - NIGHT[i]) * t;
 	}
 
-	private static int minuteOfDay(LocalTime time)
+	/**
+	 * Minutes past midnight, fractional.
+	 *
+	 * <p>Seconds are included deliberately. Whole minutes meant the sky was re-evaluated
+	 * 1440 times a day and held still in between - so it did fade between keyframes, but in
+	 * steps, and across a fast transition like sunrise a step is a visible tick rather than
+	 * a fade. The fraction costs nothing and makes it continuous.
+	 */
+	private static float minuteOfDay(LocalTime time)
 	{
-		return time.getHour() * 60 + time.getMinute();
+		return time.getHour() * 60 + time.getMinute() + time.getSecond() / 60f;
 	}
 
 	/**
@@ -163,7 +171,7 @@ public final class SkyGradient
 	 * midnight back onto the first keyframe, which is why COLORS/NIGHT repeat their
 	 * first entry at the end.
 	 */
-	private static int segmentStart(int minute)
+	private static int segmentStart(float minute)
 	{
 		for (int i = TIMES.length - 1; i >= 0; --i)
 		{
@@ -177,7 +185,7 @@ public final class SkyGradient
 		return TIMES.length - 1;
 	}
 
-	private static float segmentProgress(int minute, int i)
+	private static float segmentProgress(float minute, int i)
 	{
 		int start = TIMES[i];
 		int end = i + 1 < TIMES.length ? TIMES[i + 1] : TIMES[0] + MINUTES_PER_DAY;

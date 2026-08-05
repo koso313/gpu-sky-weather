@@ -388,6 +388,9 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 	/** Reused per-frame scratch for {@link #computeSunDirection}. */
 	private final float[] sunDir = new float[3];
 
+	/** Reused per-frame scratch for {@link #computeMoonDirection}. */
+	private final float[] moonDir = new float[3];
+
 	/**
 	 * Reference point for {@link #skySeconds}. Cloud drift is measured as elapsed time
 	 * from here rather than read off the clock each frame, so it advances smoothly and
@@ -1996,8 +1999,9 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 		glUniform1f(uniSkyCloudOpacity, config.cloudOpacity() / 100f);
 
 		computeSunDirection(time);
+		computeMoonDirection(time);
 		glUniform3f(uniSkySunDir, sunDir[0], sunDir[1], sunDir[2]);
-		glUniform3f(uniSkyMoonDir, -sunDir[0], -sunDir[1], -sunDir[2]);
+		glUniform3f(uniSkyMoonDir, moonDir[0], moonDir[1], moonDir[2]);
 
 		// Lightning bolt: same strike that drives the frame-wide flash, so they fire together.
 		float seconds = weatherSeconds();
@@ -2059,14 +2063,53 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 	 */
 	private void computeSunDirection(LocalTime time)
 	{
-		double dayFraction = (time.getHour() * 60 + time.getMinute()) / 1440d;
+		computeBodyDirection(dayFractionOf(time), sunDir);
+	}
+
+	/**
+	 * Direction toward the moon, which depends on its phase.
+	 *
+	 * <p>A moon's phase <i>is</i> its angle from the sun: full means directly opposite,
+	 * new means alongside. So placing the moon at a fixed opposite vector - as this used to
+	 * - silently claims every moon is full, and a crescent sitting opposite the sun is not a
+	 * configuration the sky can actually produce.
+	 *
+	 * <p>Offsetting the time of day by the phase gives that angle for free, and the rest
+	 * falls out correctly: a full moon rises at sunset, a new moon rises with the sun and is
+	 * lost in daylight, and the quarters sit half a sky apart.
+	 */
+	private void computeMoonDirection(LocalTime time)
+	{
+		computeBodyDirection(dayFractionOf(time) + moonPhase(), moonDir);
+	}
+
+	/**
+	 * Position through the day, 0 at midnight.
+	 *
+	 * <p>Seconds included for the same reason the sky gradient includes them: without the
+	 * fraction the sun advances a quarter of a degree once a minute and holds, which is a
+	 * step rather than a movement.
+	 */
+	private static double dayFractionOf(LocalTime time)
+	{
+		return (time.getHour() * 60 + time.getMinute() + time.getSecond() / 60d) / 1440d;
+	}
+
+	/**
+	 * Position of a body on its daily arc, written into {@code out} as a unit direction.
+	 *
+	 * @param dayFraction 0 at midnight, 0.25 at dawn - values outside 0..1 wrap, which is
+	 *                    what lets the moon be given an offset rather than its own maths
+	 */
+	private void computeBodyDirection(double dayFraction, float[] out)
+	{
 		double phase = 2 * Math.PI * (dayFraction - 0.25);
 		double elevation = Math.sin(phase) * MAX_SUN_ELEVATION;
 		double azimuth = Math.PI / 2 + phase;
 
-		sunDir[0] = (float) (Math.sin(azimuth) * Math.cos(elevation));
-		sunDir[1] = (float) -Math.sin(elevation);
-		sunDir[2] = (float) (Math.cos(azimuth) * Math.cos(elevation));
+		out[0] = (float) (Math.sin(azimuth) * Math.cos(elevation));
+		out[1] = (float) -Math.sin(elevation);
+		out[2] = (float) (Math.cos(azimuth) * Math.cos(elevation));
 	}
 
 	/**

@@ -1,12 +1,51 @@
 package com.gpuv2;
 
 import java.time.LocalTime;
+import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import org.junit.Test;
 
 public class SkyGradientTest
 {
+	/**
+	 * The sky has to change continuously, not once a minute. Whole-minute resolution meant
+	 * it held still and then stepped, which across a fast transition like sunrise reads as a
+	 * tick rather than a fade.
+	 */
+	@Test
+	public void colourAdvancesWithinAMinute()
+	{
+		// Mid-sunrise, where the gradient moves fastest.
+		int a = SkyGradient.colorAt(LocalTime.of(6, 30, 0));
+		int b = SkyGradient.colorAt(LocalTime.of(6, 30, 30));
+		int c = SkyGradient.colorAt(LocalTime.of(6, 31, 0));
+
+		assertNotEquals("half a minute should have moved the colour", a, b);
+		assertNotEquals(b, c);
+	}
+
+	/** Seconds must not push the time into the wrong keyframe segment. */
+	@Test
+	public void secondsDoNotSkipSegments()
+	{
+		int before = SkyGradient.colorAt(LocalTime.of(6, 14, 59));
+		int at = SkyGradient.colorAt(LocalTime.of(6, 15, 0));
+		int after = SkyGradient.colorAt(LocalTime.of(6, 15, 1));
+
+		// Either side of a keyframe the colour should be near-identical, not jump.
+		assertTrue("keyframe boundary jumped", channelGap(before, at) < 8);
+		assertTrue("keyframe boundary jumped", channelGap(at, after) < 8);
+	}
+
+	private static int channelGap(int a, int b)
+	{
+		int dr = Math.abs((a >> 16 & 0xFF) - (b >> 16 & 0xFF));
+		int dg = Math.abs((a >> 8 & 0xFF) - (b >> 8 & 0xFF));
+		int db = Math.abs((a & 0xFF) - (b & 0xFF));
+		return Math.max(dr, Math.max(dg, db));
+	}
+
 	/**
 	 * Every minute of the day must resolve without falling off the end of the keyframe
 	 * arrays - the wrapping segment past the last keyframe is the easy one to get wrong.
