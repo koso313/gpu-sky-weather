@@ -58,13 +58,20 @@ final class FlameDetector
 	static final int MIN_LUMINANCE = 70;
 
 	/**
-	 * How much of the model has to be alight. A torch is mostly bracket, so this is
-	 * deliberately low - but not zero, or any object with a single warm highlight qualifies.
+	 * How many faces have to be alight. Just two, and there is no proportional test at all.
+	 *
+	 * <p>Measured rather than guessed: a Falador wall torch reports 2 burning faces out of
+	 * 150. The flame is a tiny cap on a model that is nearly all mounting bracket, and the
+	 * bracket is textured, so its faces carry light values with no hue in them. An earlier
+	 * version wanted 12% of the model alight, which asked that torch for 18 faces and missed
+	 * it by a factor of nine.
+	 *
+	 * <p>Dropping the proportion is safe because it was never what did the discriminating.
+	 * The luminance floor is: measured against the same scene, banners come in at 5/7/9,
+	 * signposts at 5/7/16 and javelins at 6/7/8 - all perfect fire hue and saturation,
+	 * every one of them failing on brightness alone.
 	 */
-	static final float MIN_FRACTION = 0.12f;
-
-	/** Below this, a "fraction" of a handful of faces is noise rather than evidence. */
-	static final int MIN_FACES = 3;
+	static final int MIN_FACES = 2;
 
 	private FlameDetector()
 	{
@@ -82,8 +89,7 @@ final class FlameDetector
 			return false;
 		}
 
-		int hot = burningFaces(faceColors);
-		return hot >= MIN_FACES && hot >= faceColors.length * MIN_FRACTION;
+		return burningFaces(faceColors) >= MIN_FACES;
 	}
 
 	/** How many faces are painted like fire. Reported by ::lightids so the call is visible. */

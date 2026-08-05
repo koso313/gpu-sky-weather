@@ -53,18 +53,44 @@ public class FlameDetectorTest
 		assertFalse("violet", FlameDetector.isFlameColor(hsl(55, 7, 110)));
 	}
 
-	/** A torch is mostly bracket, so a minority of burning faces still counts. */
+	/**
+	 * The real measurement this is calibrated against: a Falador wall torch, 2 burning faces
+	 * out of 150. Nearly all of it is textured bracket, whose faces carry light values with
+	 * no hue. Any proportional test large enough to sound reasonable fails this.
+	 */
 	@Test
-	public void aMostlyWoodenTorchStillBurns()
+	public void aRealWallTorchBurns()
 	{
-		assertTrue(FlameDetector.looksLikeFlame(model(4, 20)));
+		assertTrue(FlameDetector.looksLikeFlame(model(2, 148)));
 	}
 
 	@Test
-	public void anObjectWithOneWarmHighlightDoesNot()
+	public void aSingleWarmHighlightDoesNot()
 	{
-		assertFalse("too few faces", FlameDetector.looksLikeFlame(model(2, 4)));
-		assertFalse("too small a share", FlameDetector.looksLikeFlame(model(3, 200)));
+		assertFalse(FlameDetector.looksLikeFlame(model(1, 40)));
+	}
+
+	/**
+	 * Everything else measured in that same scene: correct fire hue, full saturation, and
+	 * dim. Brightness is the whole discriminator, so these have to stay dark or the fix that
+	 * lit the torch lights half of Falador with it.
+	 */
+	@Test
+	public void brightlyHuedButDimSceneryStaysDark()
+	{
+		int[] measured = {
+			hsl(5, 7, 9),   // hanging banner
+			hsl(5, 7, 16),  // signpost
+			hsl(6, 7, 8),   // javelin
+			hsl(12, 7, 21), // ground decoration
+			hsl(6, 6, 2),   // door
+		};
+
+		for (int c : measured)
+		{
+			assertFalse("sat " + ((c >> 7) & 0x7) + " lum " + (c & 0x7F),
+				FlameDetector.isFlameColor(c));
+		}
 	}
 
 	@Test
