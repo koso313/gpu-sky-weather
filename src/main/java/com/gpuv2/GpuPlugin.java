@@ -2700,7 +2700,9 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 				meteorPath[2] = (rng.nextFloat() - 0.5f) * 1.5f;
 				meteorPath[3] = 0.18f + rng.nextFloat() * 0.22f;
 
-				if (config.shootingStarSound())
+				// 0 is the "no sound" id rather than a real effect, so the sound can be
+				// switched on without something arbitrary playing until an id is picked.
+				if (config.shootingStarSound() && config.shootingStarSoundId() > 0)
 				{
 					client.playSoundEffect(config.shootingStarSoundId());
 				}
