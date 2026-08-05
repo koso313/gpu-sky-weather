@@ -96,6 +96,7 @@ import net.runelite.client.plugins.PluginManager;
 import com.gpuv2.config.AntiAliasingMode;
 import com.gpuv2.config.UIScalingMode;
 import com.gpuv2.template.Template;
+import net.runelite.client.ui.overlay.OverlayManager;
 import net.runelite.client.ui.ClientUI;
 import net.runelite.client.ui.DrawManager;
 import net.runelite.rlawt.AWTContext;
@@ -161,6 +162,18 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 
 	@Inject
 	private RenderCallbackManager renderCallbackManager;
+
+	@Inject
+	private OverlayManager overlayManager;
+
+	@Inject
+	private PerformanceOverlay performanceOverlay;
+
+	@Inject
+	private FrameStats frameStats;
+
+	@Inject
+	private GpuMonitor gpuMonitor;
 
 	private Canvas canvas;
 	private AWTContext awtContext;
@@ -572,6 +585,12 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 		skyClockStartSeconds = now.getHour() * 3600f + now.getMinute() * 60f
 			+ now.getSecond() + now.getNano() / 1e9f;
 
+		overlayManager.add(performanceOverlay);
+		if (config.perfOverlay() && config.perfShowGpu())
+		{
+			gpuMonitor.start();
+		}
+
 		root = new SceneContext(NUM_ZONES, NUM_ZONES);
 		subs = new SceneContext[MAX_WORLDVIEWS];
 		int numThreads = config.numThreads();
@@ -838,6 +857,10 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 	@Override
 	protected void shutDown()
 	{
+		overlayManager.remove(performanceOverlay);
+		gpuMonitor.stop();
+		frameStats.reset();
+
 		clientThread.invoke(() ->
 		{
 			// Only tear down client renderer state if we actually own it. If we bailed out
@@ -917,6 +940,20 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 			}
 			// No "preset" case: it is read every frame rather than applied, which is what
 			// makes it a flip switch instead of an edit to the user's settings.
+			else if (configChanged.getKey().equals("perfShowGpu")
+				|| configChanged.getKey().equals("perfOverlay"))
+			{
+				// Started and stopped with the setting rather than left running, so nothing
+				// spawns processes for a readout that is switched off.
+				if (config.perfOverlay() && config.perfShowGpu())
+				{
+					gpuMonitor.start();
+				}
+				else
+				{
+					gpuMonitor.stop();
+				}
+			}
 			else if (configChanged.getKey().equals("removeVertexSnapping"))
 			{
 				log.debug("Toggle {}", configChanged.getKey());
@@ -3605,6 +3642,10 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 	@Override
 	public void draw(int overlayColor)
 	{
+		// Timed here, at the end of a frame's work, so what is measured is the interval the
+		// player actually sees rather than any one stage of producing it.
+		frameStats.frame(System.nanoTime());
+
 		final GameState gameState = client.getGameState();
 		if (gameState == GameState.STARTING)
 		{

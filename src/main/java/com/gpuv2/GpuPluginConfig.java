@@ -267,6 +267,74 @@ public interface GpuPluginConfig extends Config
 	String performanceSection = "performanceSection";
 
 	@ConfigItem(
+		keyName = "perfOverlay",
+		name = "Performance overlay",
+		description = "Show the current frame rate in the corner of the viewport. The "
+			+ "options below add to it and do nothing on their own.",
+		position = 30,
+		section = performanceSection
+	)
+	default boolean perfOverlay()
+	{
+		return false;
+	}
+
+	@ConfigItem(
+		keyName = "perfShowFrameTime",
+		name = "  Frame time",
+		description = "Average milliseconds per frame. Often more use than the frame rate: "
+			+ "the difference between 250 and 200 fps is under a millisecond, while the "
+			+ "difference between 60 and 30 is sixteen.",
+		position = 31,
+		section = performanceSection
+	)
+	default boolean perfShowFrameTime()
+	{
+		return false;
+	}
+
+	@ConfigItem(
+		keyName = "perfShowAverage",
+		name = "  Average FPS",
+		description = "Mean frame rate over the last thousand frames.",
+		position = 32,
+		section = performanceSection
+	)
+	default boolean perfShowAverage()
+	{
+		return false;
+	}
+
+	@ConfigItem(
+		keyName = "perfShowLows",
+		name = "  1% lows",
+		description = "Frame rate of the slowest one percent of the last thousand frames - "
+			+ "what a stutter actually feels like, and the number an average hides.",
+		position = 33,
+		section = performanceSection
+	)
+	default boolean perfShowLows()
+	{
+		return false;
+	}
+
+	@ConfigItem(
+		keyName = "perfShowGpu",
+		name = "  GPU temperature",
+		description = "GPU temperature and utilisation. NVIDIA cards only: there is no way "
+			+ "to read either from Java, so this runs the nvidia-smi tool as a separate "
+			+ "process every two seconds while it is on. Hides itself on any machine where "
+			+ "that tool is not present. CPU temperature is not offered because Windows "
+			+ "does not report it on most desktops without extra drivers.",
+		position = 34,
+		section = performanceSection
+	)
+	default boolean perfShowGpu()
+	{
+		return false;
+	}
+
+	@ConfigItem(
 		keyName = "lowResSky",
 		name = "Low resolution sky",
 		description = "Draw the sky at half size and stretch it back. It is the most "

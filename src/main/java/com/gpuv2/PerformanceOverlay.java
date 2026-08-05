@@ -1,0 +1,133 @@
+package com.gpuv2;
+
+import java.awt.Color;
+import java.awt.Dimension;
+import java.awt.FontMetrics;
+import java.awt.Graphics2D;
+import java.util.ArrayList;
+import java.util.List;
+import javax.inject.Inject;
+import net.runelite.client.ui.FontManager;
+import net.runelite.client.ui.overlay.Overlay;
+import net.runelite.client.ui.overlay.OverlayLayer;
+import net.runelite.client.ui.overlay.OverlayPosition;
+
+/**
+ * Frame rate and GPU readout, drawn in the corner of the viewport.
+ *
+ * <p>Deliberately plain text rather than a bordered panel, to match the client's own FPS
+ * counter - this sits in the same corner and is read the same way, so looking like a
+ * different kind of thing would only make both harder to read.
+ */
+class PerformanceOverlay extends Overlay
+{
+	private static final Color GOOD = new Color(0x3FFF3F);
+	private static final Color WARN = new Color(0xFFD24A);
+	private static final Color BAD = new Color(0xFF5B5B);
+	private static final Color SHADOW = new Color(0, 0, 0, 190);
+
+	/** Frame rates below this read as a problem worth colouring. */
+	private static final int WARN_FPS = 60;
+	private static final int BAD_FPS = 30;
+
+	private final GpuPluginConfig config;
+	private final FrameStats stats;
+	private final GpuMonitor gpu;
+
+	private final List<String> lines = new ArrayList<>();
+	private final List<Color> colours = new ArrayList<>();
+
+	@Inject
+	PerformanceOverlay(GpuPluginConfig config, FrameStats stats, GpuMonitor gpu)
+	{
+		this.config = config;
+		this.stats = stats;
+		this.gpu = gpu;
+
+		setPosition(OverlayPosition.TOP_RIGHT);
+		setLayer(OverlayLayer.ABOVE_WIDGETS);
+	}
+
+	@Override
+	public Dimension render(Graphics2D g)
+	{
+		if (!config.perfOverlay() || !stats.hasData())
+		{
+			return null;
+		}
+
+		lines.clear();
+		colours.clear();
+
+		double current = stats.currentFps();
+		add(Math.round(current) + " FPS", fpsColour(current));
+
+		if (config.perfShowFrameTime())
+		{
+			add(String.format("%.1f ms", stats.averageFrameMs()), GOOD);
+		}
+
+		if (config.perfShowAverage())
+		{
+			double avg = stats.averageFps();
+			add("avg " + Math.round(avg), fpsColour(avg));
+		}
+
+		if (config.perfShowLows())
+		{
+			double low = stats.onePercentLow();
+			add("1% " + Math.round(low), fpsColour(low));
+		}
+
+		// Hidden rather than shown empty when there is no NVIDIA card to ask.
+		if (config.perfShowGpu() && gpu.isAvailable())
+		{
+			add("GPU " + gpu.temperature() + "°C  " + gpu.utilisation() + "%", GOOD);
+		}
+
+		g.setFont(FontManager.getRunescapeBoldFont());
+		FontMetrics metrics = g.getFontMetrics();
+
+		int width = 0;
+		for (String line : lines)
+		{
+			width = Math.max(width, metrics.stringWidth(line));
+		}
+
+		int lineHeight = metrics.getHeight();
+		int y = metrics.getAscent();
+
+		for (int i = 0; i < lines.size(); ++i)
+		{
+			String line = lines.get(i);
+
+			// Right-aligned, so the numbers stay put as their width changes rather than
+			// jittering the whole block every time the frame rate crosses a digit.
+			int x = width - metrics.stringWidth(line);
+
+			g.setColor(SHADOW);
+			g.drawString(line, x + 1, y + 1);
+			g.setColor(colours.get(i));
+			g.drawString(line, x, y);
+
+			y += lineHeight;
+		}
+
+		return new Dimension(width, lineHeight * lines.size());
+	}
+
+	private void add(String text, Color colour)
+	{
+		lines.add(text);
+		colours.add(colour);
+	}
+
+	private static Color fpsColour(double fps)
+	{
+		if (fps < BAD_FPS)
+		{
+			return BAD;
+		}
+		return fps < WARN_FPS ? WARN : GOOD;
+	}
+}
