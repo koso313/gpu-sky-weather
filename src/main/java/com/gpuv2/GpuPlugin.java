@@ -214,6 +214,17 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 	private int fboResolve = -1;
 	private int texResolve;
 
+	/**
+	 * Pixel size of the scene framebuffer, which is the window size times the render scale.
+	 *
+	 * <p>Recorded rather than recomputed, because everything reading the scene has to agree
+	 * with what was actually allocated - the post chain reads it, the final composite scales
+	 * out of it, and a mismatch between any two of those is a stretched or cropped frame.
+	 */
+	private int sceneFboWidth;
+	private int sceneFboHeight;
+	private int lastRenderScale = -1;
+
 	/** Half-size target the sky is drawn into when the low-resolution sky is on. */
 	private int fboSky = -1;
 	private int texSky;
@@ -1293,6 +1304,15 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 		width = getScaledValue(transform.getScaleX(), width);
 		height = getScaledValue(transform.getScaleY(), height);
 
+		/*
+		 * Render scale, applied once here so every target sized from this call - the scene,
+		 * the resolve, the bloom chain - lands at the same resolution automatically.
+		 */
+		width = Math.max(1, width * renderScalePercent() / 100);
+		height = Math.max(1, height * renderScalePercent() / 100);
+		sceneFboWidth = width;
+		sceneFboHeight = height;
+
 		if (aaSamples > 0)
 		{
 			glEnable(GL_MULTISAMPLE);
@@ -1532,9 +1552,14 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 			final int stretchedCanvasHeight = client.isStretchedEnabled() ? stretchedDimensions.height : canvasHeight;
 
 			// Re-create fbo
+			// Render scale joins the rebuild trigger: it changes the size of every target
+			// allocated below, so changing it has to reallocate them.
+			final int renderScale = renderScalePercent();
+
 			if (lastStretchedCanvasWidth != stretchedCanvasWidth
 				|| lastStretchedCanvasHeight != stretchedCanvasHeight
-				|| lastAntiAliasingMode != antiAliasingMode)
+				|| lastAntiAliasingMode != antiAliasingMode
+				|| lastRenderScale != renderScale)
 			{
 				shutdownFbo();
 
@@ -1552,6 +1577,7 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 				lastStretchedCanvasWidth = stretchedCanvasWidth;
 				lastStretchedCanvasHeight = stretchedCanvasHeight;
 				lastAntiAliasingMode = antiAliasingMode;
+				lastRenderScale = renderScale;
 			}
 
 			glBindFramebuffer(GL_DRAW_FRAMEBUFFER, fboScene);
@@ -1605,7 +1631,10 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 			renderWidthOff = (int) Math.floor(scaleFactorX * (renderWidthOff)) - padding;
 		}
 
-		glDpiAwareViewport(renderWidthOff, renderCanvasHeight - renderViewportHeight - renderHeightOff, renderViewportWidth, renderViewportHeight);
+		// The world's viewport follows the render scale; the interface's does not, which is
+		// why this is applied here rather than inside glDpiAwareViewport.
+		glSceneViewport(renderWidthOff, renderCanvasHeight - renderViewportHeight - renderHeightOff,
+			renderViewportWidth, renderViewportHeight);
 
 		glUseProgram(glProgram);
 
@@ -2783,7 +2812,41 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 	 * Draws the resolved scene through anti-aliasing, sharpening and vignette, in place of
 	 * the plain blit.
 	 */
-	private void renderImagePass(int defaultFbo, int width, int height)
+	/**
+	 * Draws a texture over a whole framebuffer, scaling it to fit.
+	 *
+	 * <p>Used to get the scene out of a render-scaled framebuffer and onto the window, which
+	 * a blit cannot do from a multisampled source at a different size.
+	 */
+	private void drawUpscale(int dstFbo, int width, int height, int tex)
+	{
+		glBindFramebuffer(GL_FRAMEBUFFER, dstFbo);
+		glViewport(0, 0, width, height);
+
+		glUseProgram(glUpscaleProgram);
+		glBindVertexArray(vaoSkyHandle);
+		glDisable(GL_DEPTH_TEST);
+		glDepthMask(false);
+		glDisable(GL_BLEND);
+
+		glActiveTexture(GL_TEXTURE0);
+		glBindTexture(GL_TEXTURE_2D, tex);
+		glUniform1i(uniUpscaleSrc, 0);
+		glDrawArrays(GL_TRIANGLES, 0, 3);
+
+		glBindTexture(GL_TEXTURE_2D, 0);
+		glBindVertexArray(0);
+		glUseProgram(0);
+		glDepthMask(true);
+	}
+
+	/**
+	 * @param width  window size, what gets drawn to
+	 * @param srcW   scene size, what gets read from - the two differ under a render scale,
+	 *               and the edge filters need the source's texel size rather than the
+	 *               destination's or they sample the wrong distance
+	 */
+	private void renderImagePass(int defaultFbo, int width, int height, int srcW, int srcH)
 	{
 		glBindFramebuffer(GL_FRAMEBUFFER, defaultFbo);
 		glViewport(0, 0, width, height);
@@ -2797,7 +2860,7 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 		glActiveTexture(GL_TEXTURE0);
 		glBindTexture(GL_TEXTURE_2D, texResolve);
 		glUniform1i(uniPostSrc, 0);
-		glUniform2f(uniPostTexel, 1f / Math.max(1, width), 1f / Math.max(1, height));
+		glUniform2f(uniPostTexel, 1f / Math.max(1, srcW), 1f / Math.max(1, srcH));
 		glUniform1f(uniPostFxaa, config.fxaa() ? 1f : 0f);
 		glUniform1f(uniPostSharpen, config.sharpen() / 100f * 0.5f);
 		glUniform1f(uniPostVignette, config.vignette() / 100f * 0.8f);
@@ -3071,14 +3134,20 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 
 	private void blitSceneFbo()
 	{
-		int width = lastStretchedCanvasWidth;
-		int height = lastStretchedCanvasHeight;
-
 		final GraphicsConfiguration graphicsConfiguration = clientUI.getGraphicsConfiguration();
 		final AffineTransform transform = graphicsConfiguration.getDefaultTransform();
 
-		width = getScaledValue(transform.getScaleX(), width);
-		height = getScaledValue(transform.getScaleY(), height);
+		/*
+		 * Two sizes from here on, and mixing them up is how a frame ends up stretched or
+		 * cropped. The window is what gets written to; the scene framebuffer is what gets
+		 * read from, and with a render scale set they are different.
+		 */
+		final int outW = getScaledValue(transform.getScaleX(), lastStretchedCanvasWidth);
+		final int outH = getScaledValue(transform.getScaleY(), lastStretchedCanvasHeight);
+
+		int width = sceneFboWidth > 0 ? sceneFboWidth : outW;
+		int height = sceneFboHeight > 0 ? sceneFboHeight : outH;
+		final boolean rescaling = width != outW || height != outH;
 
 		int defaultFbo = awtContext.getFramebuffer(false);
 
@@ -3090,7 +3159,13 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 		boolean imagePass = canPost && glPostProgram != 0
 			&& (config.fxaa() || config.sharpen() > 0 || config.vignette() > 0);
 
-		if (bloom || rays || imagePass)
+		/*
+		 * Rescaling forces the resolve too, even with every effect off. A multisampled blit
+		 * cannot resize - source and destination rectangles must match exactly - so the only
+		 * way out of a multisampled scene at a different size is to resolve it to a plain
+		 * texture first and then draw that texture at the size wanted.
+		 */
+		if (bloom || rays || imagePass || (rescaling && fboResolve != -1))
 		{
 			// Must run before the scene leaves fboScene.
 			resolveScene(width, height);
@@ -3109,34 +3184,43 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 		if (imagePass)
 		{
 			// Draws the scene through FXAA/sharpen/vignette instead of blitting it, so
-			// bloom and god rays still composite on top afterwards.
-			renderImagePass(defaultFbo, width, height);
+			// bloom and god rays still composite on top afterwards. Reads the resolve, so
+			// it scales to the window on its own.
+			renderImagePass(defaultFbo, outW, outH, width, height);
+		}
+		else if (rescaling && fboResolve != -1)
+		{
+			drawUpscale(defaultFbo, outW, outH, texResolve);
 		}
 		else
 		{
 			glBindFramebuffer(GL_READ_FRAMEBUFFER, fboScene);
 			glBindFramebuffer(GL_DRAW_FRAMEBUFFER, defaultFbo);
-			glBlitFramebuffer(0, 0, width, height, 0, 0, width, height,
+			glBlitFramebuffer(0, 0, width, height, 0, 0, outW, outH,
 				GL_COLOR_BUFFER_BIT, GL_NEAREST);
 		}
 
+		// Composites write to the window, so they take the window's size. They draw
+		// fullscreen from half-res buffers already, so scaling costs them nothing.
 		if (rays)
 		{
-			compositeAdditive(defaultFbo, width, height, texBloom[0],
+			compositeAdditive(defaultFbo, outW, outH, texBloom[0],
 				config.godRays() / 100f, glGodrayProgram);
 		}
 
 		if (bloom)
 		{
 			renderBloom(width, height);
-			compositeBloom(defaultFbo, width, height);
+			compositeBloom(defaultFbo, outW, outH);
 		}
 
 		// After the scene is on the default framebuffer but before the UI is composited,
 		// so precipitation falls in front of the world and behind the interface.
 		if (activeWeather().hasPrecipitation() && glWeatherProgram != 0)
 		{
-			drawWeather(defaultFbo, width, height);
+			// Window size: precipitation is drawn onto the window over the finished scene,
+			// so it stays at full resolution regardless of what the world rendered at.
+			drawWeather(defaultFbo, outW, outH);
 		}
 
 		// Reset
@@ -4190,6 +4274,33 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 	private int getScaledValue(final double scale, final int value)
 	{
 		return (int) (value * scale);
+	}
+
+	/** Render scale as a percentage, clamped to the range the setting offers. */
+	private int renderScalePercent()
+	{
+		return Ints.constrainToRange(config.renderScale(), 50, 200);
+	}
+
+	/**
+	 * Viewport for the world, in scene-framebuffer pixels.
+	 *
+	 * <p>Same as {@link #glDpiAwareViewport} with the render scale folded in. The world is
+	 * rasterised into a framebuffer of a different size to the window, so its viewport has
+	 * to match that framebuffer rather than the window - while the interface, drawn straight
+	 * to the window, must not be scaled at all.
+	 */
+	private void glSceneViewport(final int x, final int y, final int width, final int height)
+	{
+		final GraphicsConfiguration graphicsConfiguration = clientUI.getGraphicsConfiguration();
+		final AffineTransform t = graphicsConfiguration.getDefaultTransform();
+		final int scale = renderScalePercent();
+
+		glViewport(
+			getScaledValue(t.getScaleX(), x) * scale / 100,
+			getScaledValue(t.getScaleY(), y) * scale / 100,
+			Math.max(1, getScaledValue(t.getScaleX(), width) * scale / 100),
+			Math.max(1, getScaledValue(t.getScaleY(), height) * scale / 100));
 	}
 
 	private void glDpiAwareViewport(final int x, final int y, final int width, final int height)

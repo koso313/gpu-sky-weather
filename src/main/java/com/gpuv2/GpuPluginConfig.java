@@ -117,6 +117,25 @@ public interface GpuPluginConfig extends Config
 		return true;
 	}
 
+	@Range(
+		min = 50,
+		max = 200
+	)
+	@ConfigItem(
+		keyName = "renderScale",
+		name = "Render scale",
+		description = "What percentage of the window the world is drawn at before being "
+			+ "scaled to fit. Below 100 costs sharpness and buys frame rate; above 100 "
+			+ "renders larger and shrinks it down, which is the best-looking anti-aliasing "
+			+ "there is and the most expensive. The interface is unaffected either way.",
+		position = 135,
+		section = displaySection
+	)
+	default int renderScale()
+	{
+		return 100;
+	}
+
 	@ConfigItem(
 		keyName = "antiAliasingMode",
 		name = "Anti aliasing",
