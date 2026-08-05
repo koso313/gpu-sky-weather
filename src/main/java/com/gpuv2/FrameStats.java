@@ -96,16 +96,41 @@ class FrameStats
 		return total == 0 ? 0 : 1e9 / ((double) total / count);
 	}
 
-	/** Frames per second of the most recent frame. */
-	double currentFps()
+	/**
+	 * Frames per second over the last {@code windowNanos} of frames.
+	 *
+	 * <p>Not the single most recent frame. At a few hundred fps that value changes entirely
+	 * every three milliseconds, which makes a number nobody can read - it has to be averaged
+	 * over something before it will sit still long enough to be looked at.
+	 *
+	 * <p>Walks backwards from the newest frame until it has covered the window, so it spans
+	 * a fixed amount of time rather than a fixed number of frames. A frame count would cover
+	 * a fifth of a second at 300fps and three whole seconds at 20, which is the wrong way
+	 * round: the slower it gets, the more responsive this needs to be.
+	 */
+	double recentFps(long windowNanos)
 	{
 		if (count == 0)
 		{
 			return 0;
 		}
 
-		long last = frameNanos[(next - 1 + WINDOW) % WINDOW];
-		return last <= 0 ? 0 : 1e9 / last;
+		long total = 0;
+		int frames = 0;
+
+		for (int i = 0; i < count; ++i)
+		{
+			long delta = frameNanos[(next - 1 - i + 2 * WINDOW) % WINDOW];
+			total += delta;
+			++frames;
+
+			if (total >= windowNanos)
+			{
+				break;
+			}
+		}
+
+		return total <= 0 ? 0 : 1e9 / ((double) total / frames);
 	}
 
 	/**

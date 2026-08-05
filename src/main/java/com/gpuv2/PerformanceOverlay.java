@@ -23,10 +23,23 @@ import net.runelite.client.ui.overlay.OverlayPosition;
 @Singleton
 class PerformanceOverlay extends Overlay
 {
-	private static final Color GOOD = new Color(0x3FFF3F);
-	private static final Color WARN = new Color(0xFFD24A);
-	private static final Color BAD = new Color(0xFF5B5B);
-	private static final Color SHADOW = new Color(0, 0, 0, 190);
+	// Matches the client's own counter rather than inventing a palette next to it.
+	private static final Color GOOD = Color.GREEN;
+	private static final Color WARN = Color.YELLOW;
+	private static final Color BAD = Color.RED;
+	private static final Color SHADOW = Color.BLACK;
+
+	/**
+	 * How often the readout is allowed to change.
+	 *
+	 * <p>At three hundred frames a second the numbers turn over faster than they can be
+	 * read. Four times a second is quick enough to catch a dip you just felt and slow enough
+	 * that the digits hold still long enough to look at.
+	 */
+	private static final long REFRESH_NANOS = 250_000_000L;
+
+	/** Window the displayed rate is averaged over, matching the refresh interval. */
+	private static final long SAMPLE_NANOS = 250_000_000L;
 
 	/** Frame rates below this read as a problem worth colouring. */
 	private static final int WARN_FPS = 60;
@@ -38,6 +51,8 @@ class PerformanceOverlay extends Overlay
 
 	private final List<String> lines = new ArrayList<>();
 	private final List<Color> colours = new ArrayList<>();
+
+	private long lastRefreshNanos;
 
 	@Inject
 	PerformanceOverlay(GpuPluginConfig config, FrameStats stats, GpuMonitor gpu)
@@ -58,36 +73,18 @@ class PerformanceOverlay extends Overlay
 			return null;
 		}
 
-		lines.clear();
-		colours.clear();
-
-		double current = stats.currentFps();
-		add(Math.round(current) + " FPS", fpsColour(current));
-
-		if (config.perfShowFrameTime())
+		/*
+		 * Rebuilt on a timer, not per frame. Everything here is held between refreshes so
+		 * the whole readout changes together and holds still in between.
+		 */
+		long now = System.nanoTime();
+		if (lines.isEmpty() || now - lastRefreshNanos >= REFRESH_NANOS)
 		{
-			add(String.format("%.1f ms", stats.averageFrameMs()), GOOD);
+			lastRefreshNanos = now;
+			rebuild();
 		}
 
-		if (config.perfShowAverage())
-		{
-			double avg = stats.averageFps();
-			add("avg " + Math.round(avg), fpsColour(avg));
-		}
-
-		if (config.perfShowLows())
-		{
-			double low = stats.onePercentLow();
-			add("1% " + Math.round(low), fpsColour(low));
-		}
-
-		// Hidden rather than shown empty when there is no NVIDIA card to ask.
-		if (config.perfShowGpu() && gpu.isAvailable())
-		{
-			add("GPU " + gpu.temperature() + "°C  " + gpu.utilisation() + "%", GOOD);
-		}
-
-		g.setFont(FontManager.getRunescapeBoldFont());
+		g.setFont(FontManager.getRunescapeSmallFont());
 		FontMetrics metrics = g.getFontMetrics();
 
 		int width = 0;
@@ -116,6 +113,38 @@ class PerformanceOverlay extends Overlay
 		}
 
 		return new Dimension(width, lineHeight * lines.size());
+	}
+
+	private void rebuild()
+	{
+		lines.clear();
+		colours.clear();
+
+		double current = stats.recentFps(SAMPLE_NANOS);
+		add(Math.round(current) + " FPS", fpsColour(current));
+
+		if (config.perfShowFrameTime())
+		{
+			add(String.format("%.1f ms", stats.averageFrameMs()), GOOD);
+		}
+
+		if (config.perfShowAverage())
+		{
+			double avg = stats.averageFps();
+			add("avg " + Math.round(avg), fpsColour(avg));
+		}
+
+		if (config.perfShowLows())
+		{
+			double low = stats.onePercentLow();
+			add("1% " + Math.round(low), fpsColour(low));
+		}
+
+		// Hidden rather than shown empty when there is no NVIDIA card to ask.
+		if (config.perfShowGpu() && gpu.isAvailable())
+		{
+			add("GPU " + gpu.temperature() + "°C " + gpu.utilisation() + "%", GOOD);
+		}
 	}
 
 	private void add(String text, Color colour)

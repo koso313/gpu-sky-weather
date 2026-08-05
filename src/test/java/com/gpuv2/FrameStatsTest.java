@@ -28,7 +28,7 @@ public class FrameStatsTest
 	{
 		FrameStats s = atSteady(10, 100);
 		assertEquals(100.0, s.averageFps(), 0.01);
-		assertEquals(100.0, s.currentFps(), 0.01);
+		assertEquals(100.0, s.recentFps(250 * MS), 0.01);
 		assertEquals(10.0, s.averageFrameMs(), 0.01);
 	}
 
@@ -96,6 +96,40 @@ public class FrameStatsTest
 
 		assertEquals("the gap should not have entered the window",
 			before, s.onePercentLow(), 1.0);
+	}
+
+	/**
+	 * The displayed rate spans a fixed slice of time rather than a fixed number of frames.
+	 * A frame count would cover a fifth of a second at 300fps and three seconds at 20 - the
+	 * wrong way round, since the slower it runs the more responsive it needs to be.
+	 */
+	@Test
+	public void recentRateSpansTimeNotFrameCount()
+	{
+		// 5ms frames: a 250ms window is 50 of them, and the rate is 200 either way.
+		assertEquals(200.0, atSteady(5, 500).recentFps(250 * MS), 1.0);
+
+		// 100ms frames: only two or three fit the window, and it still reports 10.
+		assertEquals(10.0, atSteady(100, 50).recentFps(250 * MS), 1.0);
+	}
+
+	/** A recent change has to show up rather than being buried under the older window. */
+	@Test
+	public void recentRateFollowsAChangeTheAverageHasNotCaughtUpWith()
+	{
+		FrameStats s = atSteady(4, 900);
+
+		// The frame rate collapses for the last stretch.
+		long now = 900 * 4L * MS;
+		for (int i = 0; i < 10; ++i)
+		{
+			now += 40 * MS;
+			s.frame(now);
+		}
+
+		assertEquals("recent should show the collapse", 25.0, s.recentFps(250 * MS), 2.0);
+		assertTrue("the long average should still be dominated by the fast frames",
+			s.averageFps() > 100);
 	}
 
 	@Test
