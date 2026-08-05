@@ -1061,20 +1061,6 @@ public interface GpuPluginConfig extends Config
 	}
 
 	@ConfigItem(
-		keyName = "effectLights",
-		name = "Attacks and spells light up",
-		description = "Let fire spells, boss attacks and other burning effects cast light "
-			+ "while they are on screen. They take priority over scenery when more lights "
-			+ "are in range than can be drawn at once.",
-		position = 558,
-		section = lightSection
-	)
-	default boolean effectLights()
-	{
-		return true;
-	}
-
-	@ConfigItem(
 		keyName = "lightColour",
 		name = "Light colour",
 		description = "Colour cast by dynamic lights.",

@@ -2126,9 +2126,7 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 			&& pointLightTimeFactor() >= 0.02f;
 		if (on)
 		{
-			// Per frame, not per tick: projectiles cross the screen inside a single tick,
-			// so a fireball's light would otherwise stride along behind the fireball.
-			lightScanner.collectFrame(config.effectLights());
+			lightScanner.collectFrame();
 		}
 
 		int count = on ? lightScanner.count : 0;

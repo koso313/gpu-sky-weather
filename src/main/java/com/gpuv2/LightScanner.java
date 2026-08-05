@@ -13,12 +13,10 @@ import net.runelite.api.Client;
 import net.runelite.api.DecorativeObject;
 import net.runelite.api.DynamicObject;
 import net.runelite.api.GameObject;
-import net.runelite.api.GraphicsObject;
 import net.runelite.api.GroundObject;
 import net.runelite.api.Model;
 import net.runelite.api.ObjectComposition;
 import net.runelite.api.Player;
-import net.runelite.api.Projectile;
 import net.runelite.api.Renderable;
 import net.runelite.api.Tile;
 import net.runelite.api.TileObject;
@@ -134,7 +132,7 @@ class LightScanner
 	}
 
 	/**
-	 * Forgets the scenery lights without touching effects.
+	 * Forgets the lights found by the last scan.
 	 *
 	 * <p>Needed because the frame collection keeps running when the scan does not. Clearing
 	 * only the combined count would leave the last scan's torches in place, so they would be
@@ -163,8 +161,7 @@ class LightScanner
 	 * Rebuilds the scenery light list. Must run on the client thread.
 	 *
 	 * <p>On the game tick rather than per frame - the tile walk is the expensive half, and
-	 * scenery does not move. Live effects are picked up separately by
-	 * {@link #collectFrame()}.
+	 * scenery does not move between ticks anyway.
 	 */
 	void scan(int lightRadiusTiles, int maxLights, int searchTiles)
 	{
@@ -296,25 +293,14 @@ class LightScanner
 	}
 
 	/**
-	 * Builds the light list for this frame: live effects first, then scenery.
+	 * Builds the light list for this frame from the last scan.
 	 *
-	 * <p>Split from {@link #scan()} because the two move at different rates. A projectile
-	 * crosses the screen inside a single tick, so a fireball's light sampled on the tick
-	 * would jump along in strides behind the fireball itself.
-	 *
-	 * <p>Effects take the budget first. A boss winding up an attack is the thing worth
-	 * lighting; a torch three buildings away that loses its slot to it will not be missed.
-	 *
-	 * @param includeEffects whether spell and attack effects light the scene
+	 * <p>Kept separate from {@link #scan} so the expensive tile walk stays on the game tick
+	 * while the uniform upload happens per frame.
 	 */
-	void collectFrame(boolean includeEffects)
+	void collectFrame()
 	{
 		count = 0;
-
-		if (includeEffects)
-		{
-			collectEffects();
-		}
 
 		for (int i = 0; i < staticCount && count < budget; ++i)
 		{
@@ -323,74 +309,6 @@ class LightScanner
 			positions[count * 3 + 2] = staticPositions[i * 3 + 2];
 			fade[count] = staticFade[i];
 			++count;
-		}
-	}
-
-	/**
-	 * Fire from spells, attacks and boss specials.
-	 *
-	 * <p>Projectiles are the attack in flight, graphics objects the impact and the spot
-	 * animations that go with it. Neither is scenery, so the tile walk never saw them - a
-	 * fireball crossing a dark room lit nothing at all.
-	 *
-	 * <p>No animation test here, unlike scenery: these only exist while something is
-	 * happening, so being transient is a given and the colour is the whole question.
-	 */
-	private void collectEffects()
-	{
-		for (Projectile p : client.getProjectiles())
-		{
-			if (count >= budget)
-			{
-				return;
-			}
-
-			if (isFlameModel(p))
-			{
-				positions[count * 3] = (float) p.getX();
-				positions[count * 3 + 1] = (float) p.getZ();
-				positions[count * 3 + 2] = (float) p.getY();
-				fade[count] = 1f;
-				++count;
-			}
-		}
-
-		for (GraphicsObject g : client.getGraphicsObjects())
-		{
-			if (count >= budget)
-			{
-				return;
-			}
-
-			LocalPoint lp = g.getLocation();
-			if (g.finished() || lp == null || !isFlameModel(g))
-			{
-				continue;
-			}
-
-			positions[count * 3] = lp.getX();
-			positions[count * 3 + 1] = g.getZ();
-			positions[count * 3 + 2] = lp.getY();
-			fade[count] = 1f;
-			++count;
-		}
-	}
-
-	/**
-	 * Whether a renderable's model is painted like fire. Not cached - effect models change
-	 * shape frame to frame, and there is no stable id to key a cache on.
-	 */
-	private static boolean isFlameModel(Renderable renderable)
-	{
-		try
-		{
-			Model model = renderable.getModel();
-			return model != null && FlameDetector.looksLikeFlame(model.getFaceColors1());
-		}
-		catch (RuntimeException ex)
-		{
-			log.debug("could not read effect model", ex);
-			return false;
 		}
 	}
 
