@@ -62,11 +62,13 @@ class SceneUploader
 	private final float[] u, v;
 
 	private final RenderCallbackManager renderCallbackManager;
+	private final SceneryFilter sceneryFilter;
 	private int basex, basez, rid, level;
 
-	SceneUploader(RenderCallbackManager renderCallbackManager)
+	SceneUploader(RenderCallbackManager renderCallbackManager, SceneryFilter sceneryFilter)
 	{
 		this.renderCallbackManager = renderCallbackManager;
+		this.sceneryFilter = sceneryFilter;
 		modelNormals = new int[ModelUploader.MAX_VERTEX_COUNT];
 		normalAccX = new float[ModelUploader.MAX_VERTEX_COUNT];
 		normalAccY = new float[ModelUploader.MAX_VERTEX_COUNT];
@@ -311,7 +313,8 @@ class SceneUploader
 		}
 
 		WallObject wallObject = t.getWallObject();
-		if (wallObject != null && renderCallbackManager.drawObject(scene, wallObject))
+		if (wallObject != null && renderCallbackManager.drawObject(scene, wallObject)
+			&& !sceneryFilter.hidden(wallObject.getId()))
 		{
 			Renderable renderable1 = wallObject.getRenderable1();
 			uploadZoneRenderable(renderable1, zone, 0, wallObject.getX(), wallObject.getZ(), wallObject.getY(), -1, -1, -1, -1, wallObject.getId(), vertexBuffer, ab);
@@ -321,7 +324,8 @@ class SceneUploader
 		}
 
 		DecorativeObject decorativeObject = t.getDecorativeObject();
-		if (decorativeObject != null && renderCallbackManager.drawObject(scene, decorativeObject))
+		if (decorativeObject != null && renderCallbackManager.drawObject(scene, decorativeObject)
+			&& !sceneryFilter.hidden(decorativeObject.getId()))
 		{
 			Renderable renderable = decorativeObject.getRenderable();
 			uploadZoneRenderable(renderable, zone, 0, decorativeObject.getX() + decorativeObject.getXOffset(), decorativeObject.getZ(), decorativeObject.getY() + decorativeObject.getYOffset(), -1, -1, -1, -1, decorativeObject.getId(), vertexBuffer, ab);
@@ -331,7 +335,8 @@ class SceneUploader
 		}
 
 		GroundObject groundObject = t.getGroundObject();
-		if (groundObject != null && renderCallbackManager.drawObject(scene, groundObject))
+		if (groundObject != null && renderCallbackManager.drawObject(scene, groundObject)
+			&& !sceneryFilter.hidden(groundObject.getId()))
 		{
 			Renderable renderable = groundObject.getRenderable();
 			uploadZoneRenderable(renderable, zone, 0, groundObject.getX(), groundObject.getZ(), groundObject.getY(),
@@ -356,6 +361,13 @@ class SceneUploader
 			}
 
 			if (!renderCallbackManager.drawObject(scene, gameObject))
+			{
+				continue;
+			}
+
+			// Trees and ground clutter live here rather than among the decorations, so this
+			// is the check that actually removes them.
+			if (sceneryFilter.hidden(gameObject.getId()))
 			{
 				continue;
 			}

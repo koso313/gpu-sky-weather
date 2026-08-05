@@ -175,6 +175,9 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 	@Inject
 	private GpuMonitor gpuMonitor;
 
+	@Inject
+	private SceneryFilter sceneryFilter;
+
 	private Canvas canvas;
 	private AWTContext awtContext;
 	private Callback debugCallback;
@@ -592,6 +595,7 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 		skyClockStartSeconds = now.getHour() * 3600f + now.getMinute() * 60f
 			+ now.getSecond() + now.getNano() / 1e9f;
 
+		sceneryFilter.configure(config.hideTrees(), config.hideClutter());
 		overlayManager.add(performanceOverlay);
 		if (config.perfOverlay() && config.perfShowGpu())
 		{
@@ -607,8 +611,8 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 			var rt = rts[i] = new RenderThread();
 			rt.modelUploader = new ModelUploader();
 		}
-		clientUploader = new SceneUploader(renderCallbackManager);
-		mapUploader = new SceneUploader(renderCallbackManager);
+		clientUploader = new SceneUploader(renderCallbackManager, sceneryFilter);
+		mapUploader = new SceneUploader(renderCallbackManager, sceneryFilter);
 		clientThread.invoke(() ->
 		{
 			DrawCallbacks active = client.getDrawCallbacks();
@@ -947,6 +951,24 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 			}
 			// No "preset" case: it is read every frame rather than applied, which is what
 			// makes it a flip switch instead of an edit to the user's settings.
+			else if (configChanged.getKey().equals("hideTrees")
+				|| configChanged.getKey().equals("hideClutter"))
+			{
+				/*
+				 * Geometry is built once at scene load and kept, so a filter change has no
+				 * effect until the scene is rebuilt. Forcing that here is what makes the
+				 * setting look like it works - otherwise it would appear to do nothing until
+				 * the next teleport, which is a confusion this plugin has already had once.
+				 */
+				clientThread.invokeLater(() ->
+				{
+					sceneryFilter.configure(config.hideTrees(), config.hideClutter());
+					if (client.getGameState() == GameState.LOGGED_IN)
+					{
+						client.setGameState(GameState.LOADING);
+					}
+				});
+			}
 			else if (configChanged.getKey().equals("perfShowGpu")
 				|| configChanged.getKey().equals("perfOverlay"))
 			{

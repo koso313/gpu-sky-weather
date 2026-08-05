@@ -258,6 +258,38 @@ public interface GpuPluginConfig extends Config
 	}
 
 	@ConfigItem(
+		keyName = "hideTrees",
+		name = "Hide trees",
+		description = "Leave trees out of the scene entirely - they are not drawn, not just "
+			+ "hidden, so it is a saving as well as a view."
+			+ "<br><br>"
+			+ "Stumps, logs and saplings are kept, since those are usually what you are "
+			+ "actually looking for.",
+		position = 139,
+		section = displaySection
+	)
+	default boolean hideTrees()
+	{
+		return false;
+	}
+
+	@ConfigItem(
+		keyName = "hideClutter",
+		name = "Hide ground clutter",
+		description = "Leave out the small scenery scattered over the ground - flowers, "
+			+ "ferns, mushrooms, loose pebbles and the like."
+			+ "<br><br>"
+			+ "Kept narrow on purpose: anything you might want to click is not treated as "
+			+ "clutter, since the cost of being wrong is a missing interaction.",
+		position = 140,
+		section = displaySection
+	)
+	default boolean hideClutter()
+	{
+		return false;
+	}
+
+	@ConfigItem(
 		keyName = "smoothBanding",
 		name = "Remove colour banding",
 		description = "Smooths out the colour banding present in the CPU renderer.",
