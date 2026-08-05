@@ -15,10 +15,24 @@ import com.gpuv2.config.WeatherMode;
 final class WeatherCycle
 {
 	/**
-	 * Draw table. Clear weather appears most often; storms and blizzards are rare enough
-	 * to stay notable rather than becoming the normal state of the world.
+	 * Draw table, one entry per share of the odds.
+	 *
+	 * <p>Clear runs at roughly two thirds. Weather is the exception rather than the
+	 * background: the point of a cycle is that a storm arriving is worth noticing, which
+	 * stops being true if the sky is doing something most of the time. The earlier split put
+	 * clear at only 42%, so a majority of slots had weather in them and the sky rarely
+	 * settled.
+	 *
+	 * <p>Storms and blizzards stay the rarest by some way, for the same reason.
 	 */
 	private static final WeatherMode[] TABLE = {
+		WeatherMode.OFF,
+		WeatherMode.OFF,
+		WeatherMode.OFF,
+		WeatherMode.OFF,
+		WeatherMode.OFF,
+		WeatherMode.OFF,
+		WeatherMode.OFF,
 		WeatherMode.OFF,
 		WeatherMode.OFF,
 		WeatherMode.OFF,

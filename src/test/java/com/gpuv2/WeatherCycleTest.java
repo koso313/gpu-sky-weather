@@ -82,7 +82,14 @@ public class WeatherCycleTest
 		}
 
 		int clear = counts.getOrDefault(WeatherMode.OFF, 0);
-		assertTrue("clear should be most common, got " + counts, clear > 1000 / 3);
+
+		/*
+		 * A clear majority, not merely the largest share. Weather has to be the exception
+		 * for a storm arriving to be worth noticing, and an earlier table that left clear at
+		 * 42% meant most slots had something going on - which reads as a permanently unsettled
+		 * sky rather than as weather.
+		 */
+		assertTrue("clear should be a majority of slots, got " + counts, clear > 550);
 
 		for (Map.Entry<WeatherMode, Integer> e : counts.entrySet())
 		{
@@ -91,6 +98,26 @@ public class WeatherCycleTest
 				assertTrue(e.getKey() + " outnumbers clear", e.getValue() < clear);
 			}
 		}
+	}
+
+	/**
+	 * Storms and blizzards have to stay rare, or the thing they are for - being an event -
+	 * stops working. Pinned so a later reshuffle of the table cannot quietly promote them.
+	 */
+	@Test
+	public void severeWeatherStaysRare()
+	{
+		int severe = 0;
+		for (int i = 0; i < 1000; ++i)
+		{
+			WeatherMode mode = WeatherCycle.modeAt(i * (double) PERIOD, PERIOD);
+			if (mode == WeatherMode.STORM || mode == WeatherMode.BLIZZARD)
+			{
+				++severe;
+			}
+		}
+
+		assertTrue("severe weather in " + severe + "/1000 slots", severe < 150);
 	}
 
 	/**
