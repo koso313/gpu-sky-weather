@@ -55,8 +55,10 @@ public interface GpuPluginConfig extends Config
 	@ConfigItem(
 		keyName = "preset",
 		name = "Preset",
-		description = "Quality presets. Only Custom is implemented - the others are "
-			+ "placeholders and currently change nothing.",
+		description = "Default renders the game with the GPU and nothing else - no sky, "
+			+ "weather, lighting, fog or post-processing. Custom uses everything you have "
+			+ "set below. Switching between them changes nothing you have configured, so "
+			+ "it is safe to flip back and forth to compare.",
 		position = 0
 	)
 	default GraphicsPreset preset()
@@ -1126,98 +1128,6 @@ public interface GpuPluginConfig extends Config
 	default boolean lightFollowsTime()
 	{
 		return true;
-	}
-
-	// ------------------------------------------------------------------- Water
-
-	@ConfigSection(
-		name = "Water",
-		description = "Animated water surfaces.",
-		position = 60,
-		closedByDefault = true
-	)
-	String waterSection = "waterSection";
-
-	@ConfigItem(
-		keyName = "waterEnabled",
-		name = "Enable water",
-		description = "Animated water surfaces, found automatically.",
-		position = 61,
-		section = waterSection
-	)
-	default boolean waterEnabled()
-	{
-		return false;
-	}
-
-	@ConfigItem(
-		keyName = "waterAutoDetect",
-		name = "Find water automatically",
-		description = "Detect water from the shape and colour of the ground, with no ids to "
-			+ "enter. Catches seas, lakes, rivers and pools. Misses murky green water such "
-			+ "as swamp, which is too close to grass to tell apart - add those below.",
-		position = 62,
-		section = waterSection
-	)
-	default boolean waterAutoDetect()
-	{
-		return true;
-	}
-
-	@Range(
-		max = 100
-	)
-	@ConfigItem(
-		keyName = "waterStrength",
-		name = "Strength",
-		description = "How much the water effect replaces the original surface.",
-		position = 62,
-		section = waterSection
-	)
-	default int waterStrength()
-	{
-		return 70;
-	}
-
-	@Range(
-		max = 200
-	)
-	@ConfigItem(
-		keyName = "waterChoppiness",
-		name = "Choppiness",
-		description = "Size of the ripples. Low is glassy, high is rough.",
-		position = 63,
-		section = waterSection
-	)
-	default int waterChoppiness()
-	{
-		return 60;
-	}
-
-	@ConfigItem(
-		keyName = "waterTint",
-		name = "Water tint",
-		description = "Colour of the water body, under the sky reflection.",
-		position = 64,
-		section = waterSection
-	)
-	default Color waterTint()
-	{
-		return new Color(0x2E, 0x6B, 0x8A);
-	}
-
-	@ConfigItem(
-		keyName = "waterTextureIds",
-		name = "Extra water texture ids",
-		description = "Added to whatever is found automatically, for water the detector "
-			+ "misses. Comma-separated. Stand near the water and type ::watertex in chat to "
-			+ "find the ids there.",
-		position = 68,
-		section = waterSection
-	)
-	default String waterTextureIds()
-	{
-		return "";
 	}
 
 	// --------------------------------------------------------- Post-processing

@@ -513,19 +513,7 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 	private int uniHeightFog;
 	private int uniHeightFogTop;
 	private int uniHeightFogDepth;
-	private int uniWaterFlags;
-	private int uniWaterAuto;
-	private int uniWaterStrength;
-	private int uniWaterChoppiness;
-	private int uniWaterTime;
-	private int uniWaterTint;
 	private int uniCameraPos;
-
-	/**
-	 * Per-texture-id water lookup, rebuilt from config rather than parsed every frame.
-	 * Null means it needs rebuilding.
-	 */
-	private float[] waterFlags;
 	static int uniBase;
 
 	static final float[] IDENTITY = Mat4.identity();
@@ -894,15 +882,8 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 					}
 				});
 			}
-			else if (configChanged.getKey().equals("preset"))
-			{
-				applyPreset(config.preset());
-			}
-			else if (configChanged.getKey().equals("waterTextureIds"))
-			{
-				// Rebuilt lazily on the next frame rather than parsed per frame.
-				waterFlags = null;
-			}
+			// No "preset" case: it is read every frame rather than applied, which is what
+			// makes it a flip switch instead of an edit to the user's settings.
 			else if (configChanged.getKey().equals("lightObjectIds"))
 			{
 				lightIds = null;
@@ -1062,12 +1043,6 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 		uniHeightFog = glGetUniformLocation(glProgram, "heightFog");
 		uniHeightFogTop = glGetUniformLocation(glProgram, "heightFogTop");
 		uniHeightFogDepth = glGetUniformLocation(glProgram, "heightFogDepth");
-		uniWaterFlags = glGetUniformLocation(glProgram, "waterFlags");
-		uniWaterAuto = glGetUniformLocation(glProgram, "waterAuto");
-		uniWaterStrength = glGetUniformLocation(glProgram, "waterStrength");
-		uniWaterChoppiness = glGetUniformLocation(glProgram, "waterChoppiness");
-		uniWaterTime = glGetUniformLocation(glProgram, "waterTime");
-		uniWaterTint = glGetUniformLocation(glProgram, "waterTint");
 		uniCameraPos = glGetUniformLocation(glProgram, "cameraPos");
 
 		uniTex = glGetUniformLocation(glUiProgram, "tex");
@@ -1581,7 +1556,8 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 
 		// Setup uniforms
 		final int drawDistance = getDrawDistance();
-		final int fogDepth = config.fogEnabled() ? config.fogDepth() : 0;
+		final boolean fx = enhancements();
+		final int fogDepth = fx && config.fogEnabled() ? config.fogDepth() : 0;
 		// Feeds both the fog uniform below and drawSkybox() further down, so overriding it
 		// here keeps the sky and the fog it fades into the same colour.
 		final int sky = resolveSkyColor();
@@ -1592,28 +1568,33 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 		glUniform1i(uniFogDepth, fogDepth);
 		glUniform1i(uniDrawDistance, drawDistance * Perspective.LOCAL_TILE_SIZE);
 		glUniform1i(uniExpandedMapLoadingChunks, client.getExpandedMapLoading());
+		// Colourblindness correction is an accessibility aid, not an atmospheric effect, so
+		// it stays on in Default - turning it off would make the game harder to read, which
+		// is the opposite of what a "plain" mode should do.
 		glUniform1f(uniColorblindIntensity, config.colorBlindIntensity());
-		glUniform1f(uniGradeGamma, config.gradeGamma() / 100f);
-		glUniform1f(uniGradeContrast, config.gradeContrast() / 100f);
-		glUniform1f(uniGradeSaturation, config.gradeSaturation() / 100f);
+
+		// 1.0 is the identity for all three, so Default grades nothing.
+		glUniform1f(uniGradeGamma, fx ? config.gradeGamma() / 100f : 1f);
+		glUniform1f(uniGradeContrast, fx ? config.gradeContrast() / 100f : 1f);
+		glUniform1f(uniGradeSaturation, fx ? config.gradeSaturation() / 100f : 1f);
 		/*
 		 * Colour temperature either comes from the slider or follows the sky clock, in
 		 * which case the slider becomes an offset so it can still be nudged either way.
 		 * Only meaningful with the time-of-day sky - there is no clock to follow otherwise.
 		 */
-		float temperature = config.gradeTemperature() / 100f;
-		if (config.autoTemperature() && config.skyMode() == SkyMode.TIME_OF_DAY)
+		float temperature = fx ? config.gradeTemperature() / 100f : 0f;
+		if (fx && config.autoTemperature() && effectiveSkyMode() == SkyMode.TIME_OF_DAY)
 		{
 			temperature = Math.max(-1f, Math.min(1f,
 				temperature + SkyGradient.temperatureAt(skyTime())));
 		}
 		glUniform1f(uniGradeTemperature, temperature);
 
-		glUniform1f(uniAerial, config.aerialPerspective() / 100f);
-		glUniform1f(uniUnderground, undergroundFactor());
+		glUniform1f(uniAerial, fx ? config.aerialPerspective() / 100f : 0f);
+		glUniform1f(uniUnderground, fx ? undergroundFactor() : 0f);
 		setupPointLights();
 		setupLightingUniforms();
-		setupWaterUniforms(cameraX, cameraY, cameraZ);
+		setupCameraUniform(cameraX, cameraY, cameraZ);
 		setupGroundWeatherUniforms();
 
 		// Brightness happens to also be stored in the texture provider, so we use that
@@ -1698,7 +1679,7 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 		 * and the gradient collapses to nothing rather than inventing a hue.
 		 */
 		int zenith = sky;
-		if (config.skyMode() == SkyMode.TIME_OF_DAY)
+		if (effectiveSkyMode() == SkyMode.TIME_OF_DAY)
 		{
 			zenith = SkyGradient.zenithColorAt(time);
 			WeatherMode weatherNow = activeWeather();
@@ -1844,8 +1825,35 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 	 * Weather in effect right now - either the manual selection or, with automatic
 	 * weather on, whatever the cycle has picked for this moment.
 	 */
+	/**
+	 * Whether the plugin's own effects run at all.
+	 *
+	 * <p>The Default preset gates them here, at read time, instead of writing anything to
+	 * config - so flipping back to Custom restores the user's settings intact rather than
+	 * handing them a pile of overwritten sliders to rebuild.
+	 */
+	private boolean enhancements()
+	{
+		return config.preset() == GraphicsPreset.CUSTOM;
+	}
+
+	/**
+	 * The sky mode actually in force. Default reports GAME, which is vanilla behaviour: the
+	 * area's own skybox model draws, and every effect keyed to TIME_OF_DAY switches itself
+	 * off without needing a separate check.
+	 */
+	private SkyMode effectiveSkyMode()
+	{
+		return enhancements() ? config.skyMode() : SkyMode.GAME;
+	}
+
 	private WeatherMode activeWeather()
 	{
+		if (!enhancements())
+		{
+			return WeatherMode.OFF;
+		}
+
 		WeatherMode selected = config.weather();
 		if (selected != WeatherMode.AUTO)
 		{
@@ -1878,23 +1886,6 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 	}
 
 	/**
-	 * Presets are placeholders for now and write nothing.
-	 *
-	 * <p>The previous version wrote a shared baseline before each preset, which meant
-	 * selecting any of them silently reset settings the preset had no real opinion about -
-	 * the sky mode among them, which is how a preset could turn a time-of-day sky grey.
-	 * When these are filled in, each should write only the settings it actually means to
-	 * control.
-	 */
-	private void applyPreset(GraphicsPreset preset)
-	{
-		if (preset != GraphicsPreset.CUSTOM)
-		{
-			log.debug("Preset {} selected; no settings defined for it yet", preset);
-		}
-	}
-
-	/**
 	 * Snow settling and wet ground, driven by whichever weather is running. Both are 0
 	 * unless the matching precipitation is active, so clear weather leaves surfaces alone.
 	 */
@@ -1916,7 +1907,7 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 		 * procedural sky running - in game-sky mode there is no deck to cast them.
 		 */
 		float shadow = 0f;
-		if (config.cloudShadows() > 0 && config.skyMode() == SkyMode.TIME_OF_DAY)
+		if (config.cloudShadows() > 0 && effectiveSkyMode() == SkyMode.TIME_OF_DAY)
 		{
 			float cover = config.cloudAmount() / 100f;
 			if (weather != WeatherMode.OFF)
@@ -1942,81 +1933,18 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 		 * The offset puts the top a little above eye level, so standing in it you are
 		 * inside the mist rather than looking down on a flat sheet.
 		 */
-		float mist = config.fogEnabled() ? config.heightFog() / 100f : 0f;
+		float mist = enhancements() && config.fogEnabled() ? config.heightFog() / 100f : 0f;
 		glUniform1f(uniHeightFog, mist);
 		glUniform1f(uniHeightFogTop, lastCameraY - HEIGHT_FOG_EYE_OFFSET);
 		glUniform1f(uniHeightFogDepth, config.heightFogDepth() * Perspective.LOCAL_TILE_SIZE);
 	}
 
 	/**
-	 * Uploads the water surface uniforms for this frame.
+	 * Camera position, used by wet-ground puddles, height fog and aerial perspective.
 	 */
-	private void setupWaterUniforms(float cameraX, float cameraY, float cameraZ)
+	private void setupCameraUniform(float cameraX, float cameraY, float cameraZ)
 	{
-		// Uploaded unconditionally - puddles need it too, and they run without water on.
 		glUniform3f(uniCameraPos, cameraX, cameraY, cameraZ);
-
-		float strength = config.waterEnabled() ? config.waterStrength() / 100f : 0f;
-		glUniform1f(uniWaterStrength, strength);
-		if (strength < 0.001f)
-		{
-			// Shader early-outs; skip the rest, including the flag array upload.
-			return;
-		}
-
-		if (waterFlags == null)
-		{
-			waterFlags = buildWaterFlags(config.waterTextureIds());
-		}
-		glUniform1fv(uniWaterFlags, waterFlags);
-		glUniform1f(uniWaterAuto, config.waterAutoDetect() ? 1f : 0f);
-
-		glUniform1f(uniWaterChoppiness, config.waterChoppiness() / 100f);
-		glUniform1f(uniWaterTime, (System.nanoTime() % 1_000_000_000_000L) / 1e9f);
-
-		Color tint = config.waterTint();
-		glUniform3f(uniWaterTint,
-			tint.getRed() / 255f, tint.getGreen() / 255f, tint.getBlue() / 255f);
-	}
-
-	/**
-	 * Turns a comma-separated texture id list into a per-id lookup the shader can index
-	 * directly, so water detection is a single array read rather than a loop.
-	 */
-	private static float[] buildWaterFlags(String csv)
-	{
-		float[] flags = new float[TextureManager.TEXTURE_COUNT];
-		if (csv == null)
-		{
-			return flags;
-		}
-
-		for (String part : csv.split(","))
-		{
-			String trimmed = part.trim();
-			if (trimmed.isEmpty())
-			{
-				continue;
-			}
-
-			try
-			{
-				int id = Integer.parseInt(trimmed);
-				if (id >= 0 && id < TextureManager.TEXTURE_COUNT)
-				{
-					flags[id] = 1f;
-				}
-				else
-				{
-					log.warn("water texture id out of range: {}", id);
-				}
-			}
-			catch (NumberFormatException ex)
-			{
-				log.warn("ignoring unparseable water texture id: '{}'", trimmed);
-			}
-		}
-		return flags;
 	}
 
 	/**
@@ -2026,10 +1954,10 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 	{
 		LocalTime time = skyTime();
 		computeSunDirection(time);
-		// Uploaded regardless of whether scene lighting is enabled - the water glint uses it.
+		// Uploaded regardless of whether scene lighting is enabled - god rays need it too.
 		glUniform3f(uniLightSunDir, sunDir[0], sunDir[1], sunDir[2]);
 
-		float strength = config.lightStrength() / 100f;
+		float strength = enhancements() ? config.lightStrength() / 100f : 0f;
 		glUniform1f(uniLightStrength, strength);
 		if (strength < 0.001f)
 		{
@@ -2039,7 +1967,7 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 
 		// Only follow the clock when the sky is actually running on it - otherwise the
 		// world would dim with no matching change in the sky.
-		float night = config.lightFollowsTime() && config.skyMode() == SkyMode.TIME_OF_DAY
+		float night = config.lightFollowsTime() && effectiveSkyMode() == SkyMode.TIME_OF_DAY
 			? SkyGradient.nightFactorAt(time)
 			: 0f;
 		float day = 1f - night;
@@ -2069,7 +1997,7 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 	private int resolveSkyColor()
 	{
 		int sky;
-		switch (config.skyMode())
+		switch (effectiveSkyMode())
 		{
 			case CUSTOM:
 				sky = config.skyColor().getRGB() & 0xFFFFFF;
@@ -2092,7 +2020,7 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 
 			// Overcast colours describe a daytime sky. Blending toward them at night would
 			// light the sky back up, so they're darkened by how dark it currently is.
-			if (config.skyMode() == SkyMode.TIME_OF_DAY)
+			if (effectiveSkyMode() == SkyMode.TIME_OF_DAY)
 			{
 				float night = SkyGradient.nightFactorAt(skyTime());
 				overcast = blendRgb(overcast, NIGHT_OVERCAST, night);
@@ -2197,7 +2125,8 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 	 */
 	private void setupPointLights()
 	{
-		int count = config.dynamicLights() > 0 && lightScanner != null ? lightScanner.count : 0;
+		int count = enhancements() && config.dynamicLights() > 0 && lightScanner != null
+			? lightScanner.count : 0;
 		glUniform1i(uniLightCount, count);
 		if (count <= 0)
 		{
@@ -2446,7 +2375,7 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 	{
 		// An overridden colour also suppresses the area's skybox model - otherwise the model
 		// would still paint the horizon and the fog would fade into a colour that isn't on screen.
-		Model skybox = config.skyMode() == SkyMode.GAME ? scene.getSkybox() : null;
+		Model skybox = effectiveSkyMode() == SkyMode.GAME ? scene.getSkybox() : null;
 		if (skybox == null)
 		{
 			glClearColor((sky >> 16 & 0xFF) / 255f, (sky >> 8 & 0xFF) / 255f, (sky & 0xFF) / 255f, 1f);
@@ -2456,7 +2385,7 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 			// Runs day and night now - it draws the sun, clouds and lightning bolts too,
 			// not just stars. A storm keeps the pass alive even with everything else off,
 			// since the bolt is drawn here.
-			if (config.skyMode() == SkyMode.TIME_OF_DAY
+			if (effectiveSkyMode() == SkyMode.TIME_OF_DAY
 				&& (config.nightSky() || config.showSun() || config.cloudAmount() > 0
 					|| (activeWeather().hasLightning() && config.lightning())))
 			{
@@ -2574,7 +2503,7 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 	 */
 	private boolean updateSunScreenPos()
 	{
-		if (config.skyMode() != SkyMode.TIME_OF_DAY)
+		if (effectiveSkyMode() != SkyMode.TIME_OF_DAY)
 		{
 			// Without the procedural sky there is no sun on screen to radiate from.
 			return false;
@@ -2895,7 +2824,7 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 		 * physics suggests made rain effectively invisible at night, which is a worse
 		 * failure than being a little too bright.
 		 */
-		float night = config.skyMode() == SkyMode.TIME_OF_DAY
+		float night = effectiveSkyMode() == SkyMode.TIME_OF_DAY
 			? SkyGradient.nightFactorAt(skyTime())
 			: 0f;
 		glUniform1f(uniWeatherLight, 1f - night * 0.55f);
@@ -2930,7 +2859,7 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 		int defaultFbo = awtContext.getFramebuffer(false);
 
 		// One switch to bypass every post pass, for comparing what they actually cost.
-		boolean canPost = fboResolve != -1 && config.postProcessing();
+		boolean canPost = fboResolve != -1 && enhancements() && config.postProcessing();
 		boolean bloom = canPost && config.bloomEnabled() && glBloomProgram != 0;
 		boolean rays = canPost && config.godRays() > 0 && glGodrayProgram != 0
 			&& updateSunScreenPos();
@@ -4197,10 +4126,6 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 			}
 			log.info("Total: {}kb", totalSzKb);
 		}
-		else if (event.getCommand().equals("watertex"))
-		{
-			reportTileTexture();
-		}
 		else if (event.getCommand().equals("lightids"))
 		{
 			reportNearbyObjectIds();
@@ -4271,124 +4196,6 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 
 		say("[GPU v2] Object ids within " + radius + " tiles: " + ids);
 		say("[GPU v2] Stand next to a fire or torch and add its id to 'Light object ids'.");
-	}
-
-	/**
-	 * Reports what the surrounding tiles are actually made of, so water can be identified
-	 * from real data rather than guessed. Covers both flat-painted and shaped tiles, and
-	 * reports overlay/underlay ids as well as texture ids - if water turns out to be
-	 * untextured, texture-id matching cannot work and detection has to move to overlays.
-	 */
-	private void reportTileTexture()
-	{
-		WorldView wv = client.getTopLevelWorldView();
-		Player player = client.getLocalPlayer();
-		if (wv == null || player == null)
-		{
-			say("[GPU v2] Not logged in.");
-			return;
-		}
-
-		Scene scene = wv.getScene();
-		LocalPoint lp = player.getLocalLocation();
-		int plane = wv.getPlane();
-		int cx = lp.getSceneX();
-		int cy = lp.getSceneY();
-
-		Tile[][][] tiles = scene.getTiles();
-		short[][][] overlays = scene.getOverlayIds();
-		short[][][] underlays = scene.getUnderlayIds();
-
-		Set<Integer> textureIds = new TreeSet<>();
-		Set<Integer> overlayIds = new TreeSet<>();
-		Set<Integer> underlayIds = new TreeSet<>();
-		Set<Integer> sampleColors = new TreeSet<>();
-		int painted = 0;
-		int shaped = 0;
-		int autoWater = 0;
-
-		// Sample a patch around the player rather than a single tile - the tile you stand
-		// on is often the bank, not the water.
-		final int radius = 5;
-		for (int x = Math.max(0, cx - radius); x <= Math.min(tiles[plane].length - 1, cx + radius); ++x)
-		{
-			for (int y = Math.max(0, cy - radius); y <= Math.min(tiles[plane][x].length - 1, cy + radius); ++y)
-			{
-				Tile tile = tiles[plane][x][y];
-				if (tile == null)
-				{
-					continue;
-				}
-
-				SceneTilePaint paint = tile.getSceneTilePaint();
-				if (paint != null)
-				{
-					++painted;
-					textureIds.add(paint.getTexture());
-
-					int[][][] h = scene.getTileHeights();
-					int hx = x + SCENE_OFFSET;
-					int hy = y + SCENE_OFFSET;
-					if (WaterDetector.isWaterTile(
-						paint.getSwColor(), paint.getSeColor(), paint.getNeColor(), paint.getNwColor(),
-						h[plane][hx][hy], h[plane][hx + 1][hy],
-						h[plane][hx + 1][hy + 1], h[plane][hx][hy + 1]))
-					{
-						++autoWater;
-					}
-					else
-					{
-						sampleColors.add(paint.getSwColor() & 0xFFFF);
-					}
-				}
-
-				SceneTileModel model = tile.getSceneTileModel();
-				if (model != null)
-				{
-					++shaped;
-					int[] tri = model.getTriangleTextureId();
-					if (tri != null)
-					{
-						for (int t : tri)
-						{
-							textureIds.add(t);
-						}
-					}
-				}
-
-				overlayIds.add((int) overlays[plane][x][y]);
-				underlayIds.add((int) underlays[plane][x][y]);
-			}
-		}
-
-		say("[GPU v2] Within " + radius + " tiles: " + painted + " painted, " + shaped + " shaped");
-		say("[GPU v2] auto-detected as water: " + autoWater + " of " + painted + " painted tiles");
-		say("[GPU v2] texture ids: " + textureIds);
-		say("[GPU v2] overlay ids: " + overlayIds);
-		say("[GPU v2] underlay ids: " + underlayIds);
-
-		/*
-		 * If the detector found nothing, the colours it rejected are the useful evidence -
-		 * they say whether the water is outside the hue band, too washed out, or on a slope.
-		 * Guessing at that from a screenshot is how the first three attempts at water went.
-		 */
-		if (autoWater == 0 && !sampleColors.isEmpty())
-		{
-			StringBuilder sb = new StringBuilder("[GPU v2] rejected colours (hue/sat/lum):");
-			int shown = 0;
-			for (int hsl : sampleColors)
-			{
-				if (shown++ >= 6)
-				{
-					break;
-				}
-				sb.append(' ').append((hsl >> 10) & 0x3F)
-					.append('/').append((hsl >> 7) & 0x7)
-					.append('/').append(hsl & 0x7F);
-			}
-			say(sb.toString());
-			say("[GPU v2] (water needs hue 33-46, sat 2+, lum 8-110, and a level tile)");
-		}
 	}
 
 	private void say(String msg)

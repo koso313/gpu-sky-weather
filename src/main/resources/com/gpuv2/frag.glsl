@@ -43,15 +43,7 @@ uniform float gradeSaturation;
 uniform float gradeTemperature;
 
 
-// Water. waterFlags[i] is 1.0 for texture ids treated as water; waterAuto turns on the
-// per-tile classification SceneUploader wrote into fWaterTile. The two are additive - the
-// id list stays useful for water the classifier can't reach, like swamp.
-uniform float waterFlags[TEXTURE_COUNT];
-uniform float waterAuto;
-uniform float waterStrength;
-uniform float waterChoppiness;
-uniform float waterTime;
-uniform vec3 waterTint;
+// Still needed by wet-ground puddles, height fog and aerial perspective.
 uniform vec3 cameraPos;
 
 // Ground weather. Both 0 leaves surfaces untouched.
@@ -90,7 +82,6 @@ uniform vec3 lightSunDir;
 in vec4 fColor;
 noperspective centroid in float fHsl;
 flat in int fTextureId;
-flat in int fWaterTile;
 in vec2 fUv;
 in float fFogAmount;
 in vec3 fWorldPos;
@@ -294,60 +285,6 @@ vec3 applyWetGround(vec3 c, vec3 n)
 }
 
 /*
- * Water surface: animated ripple normal, sky reflection weighted by Fresnel, and a
- * specular glint from the sun.
- *
- * Deliberately analytic rather than texture-driven - crossing sine waves at different
- * frequencies avoid the cost and the asset of a normal map, and at OSRS's scale the
- * difference isn't visible.
- *
- * World Y is negative-up, so the ripple normal points along -Y.
- */
-vec3 applyWater(vec3 c)
-{
-  vec2 p = fWorldPos.xz;
-  float t = waterTime;
-
-  /*
-   * Wave directions are rotated off the axes and the frequencies are non-harmonic, so
-   * the ripples don't resonate with the tile grid. World units are ~128 per tile, so
-   * these wavelengths span several tiles - axis-aligned waves near 1 cycle/tile print
-   * the tile grid back as a checkerboard.
-   */
-  vec2 d1 = vec2(0.80, 0.60);
-  vec2 d2 = vec2(-0.45, 0.89);
-  vec2 d3 = vec2(0.31, -0.95);
-
-  float w1 = sin(dot(p, d1) * 0.0031 + t * 0.9);
-  float w2 = sin(dot(p, d2) * 0.0053 - t * 0.7);
-  float w3 = sin(dot(p, d3) * 0.0087 + t * 1.3);
-
-  float rx = w1 * 0.6 + w2 * 0.32 + w3 * 0.16;
-  float rz = w1 * 0.34 - w2 * 0.58 + w3 * 0.21;
-
-  // Larger vertical term = flatter water; choppiness scales the horizontal wobble.
-  vec3 n = normalize(vec3(rx * waterChoppiness, -4.0, rz * waterChoppiness));
-
-  vec3 v = normalize(cameraPos - fWorldPos);
-  float facing = clamp(dot(n, v), 0.0, 1.0);
-
-  // Schlick-style Fresnel: grazing angles reflect the sky, straight-down shows the water.
-  float fresnel = 0.02 + 0.98 * pow(1.0 - facing, 5.0);
-
-  vec3 body = mix(c, c * waterTint, 0.65);
-  vec3 surface = mix(body, fogColor.rgb, clamp(fresnel, 0.0, 0.85));
-
-  // Sun glint. lightSunDir is uploaded regardless of whether scene lighting is on.
-  // Softer exponent than a true specular lobe: a tight highlight on these broad waves
-  // bands into hard edges rather than reading as glitter.
-  vec3 h = normalize(normalize(lightSunDir) + v);
-  float spec = pow(clamp(dot(n, h), 0.0, 1.0), 24.0);
-  surface += vec3(1.0, 0.97, 0.9) * spec * 0.30;
-
-  return mix(c, surface, waterStrength);
-}
-
-/*
  * Point lights from fires and torches.
  *
  * Inverse-square falloff cut off at the light's radius, so a light cannot reach further
@@ -468,19 +405,11 @@ void main() {
 #endif
 
   vec3 shaded = c.rgb;
-  bool byTexture = fTextureId > 0 && waterFlags[fTextureId - 1] > 0.5;
-  bool byShape = waterAuto > 0.5 && fWaterTile > 0;
-  bool isWater = waterStrength > 0.001 && (byTexture || byShape);
-  if (isWater) {
-    shaded = applyWater(shaded);
-  }
 
   // Reconstructed once and shared by lighting and the ground weather below.
   vec3 n = faceNormal();
 
-  // Ground weather doesn't apply to water - snow doesn't settle on a river and it is
-  // already wet.
-  if (!isWater && n != vec3(0.0)) {
+  if (n != vec3(0.0)) {
     if (groundSnow > 0.001) {
       shaded = applySnowCover(shaded, n);
     }
