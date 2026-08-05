@@ -67,6 +67,9 @@ uniform vec2 textureAnimations[TEXTURE_COUNT];
 out vec4 fColor;
 noperspective centroid out float fHsl;
 flat out int fTextureId;
+// 1 when SceneUploader classified this terrain tile as water. Flat, because it is a
+// per-tile decision - interpolating it would smear the effect across the shoreline.
+flat out int fWaterTile;
 out vec2 fUv;
 out float fFogAmount;
 // World position, so the fragment shader can derive a face normal from its
@@ -106,6 +109,7 @@ void main() {
 #endif
 
   fTextureId = tex.x;  // the texture id + 1
+  fWaterTile = tex.w;
   fUv = vec2(float(tex.y) / 256.f, float(tex.z) / 256.f);
   if (fTextureId > 0) {
     vec2 textureAnim = textureAnimations[min(fTextureId - 1, TEXTURE_COUNT - 1)];

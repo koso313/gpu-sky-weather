@@ -1141,13 +1141,27 @@ public interface GpuPluginConfig extends Config
 	@ConfigItem(
 		keyName = "waterEnabled",
 		name = "Enable water",
-		description = "Animate surfaces whose texture id is listed below.",
+		description = "Animated water surfaces, found automatically.",
 		position = 61,
 		section = waterSection
 	)
 	default boolean waterEnabled()
 	{
 		return false;
+	}
+
+	@ConfigItem(
+		keyName = "waterAutoDetect",
+		name = "Find water automatically",
+		description = "Detect water from the shape and colour of the ground, with no ids to "
+			+ "enter. Catches seas, lakes, rivers and pools. Misses murky green water such "
+			+ "as swamp, which is too close to grass to tell apart - add those below.",
+		position = 62,
+		section = waterSection
+	)
+	default boolean waterAutoDetect()
+	{
+		return true;
 	}
 
 	@Range(
@@ -1194,15 +1208,16 @@ public interface GpuPluginConfig extends Config
 
 	@ConfigItem(
 		keyName = "waterTextureIds",
-		name = "Water texture ids",
-		description = "Comma-separated texture ids treated as water. Stand near water and "
-			+ "type ::watertex in chat to find the ids in that area.",
-		position = 65,
+		name = "Extra water texture ids",
+		description = "Added to whatever is found automatically, for water the detector "
+			+ "misses. Comma-separated. Stand near the water and type ::watertex in chat to "
+			+ "find the ids there.",
+		position = 68,
 		section = waterSection
 	)
 	default String waterTextureIds()
 	{
-		return "25";
+		return "";
 	}
 
 	// --------------------------------------------------------- Post-processing

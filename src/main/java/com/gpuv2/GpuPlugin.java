@@ -514,6 +514,7 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 	private int uniHeightFogTop;
 	private int uniHeightFogDepth;
 	private int uniWaterFlags;
+	private int uniWaterAuto;
 	private int uniWaterStrength;
 	private int uniWaterChoppiness;
 	private int uniWaterTime;
@@ -1062,6 +1063,7 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 		uniHeightFogTop = glGetUniformLocation(glProgram, "heightFogTop");
 		uniHeightFogDepth = glGetUniformLocation(glProgram, "heightFogDepth");
 		uniWaterFlags = glGetUniformLocation(glProgram, "waterFlags");
+		uniWaterAuto = glGetUniformLocation(glProgram, "waterAuto");
 		uniWaterStrength = glGetUniformLocation(glProgram, "waterStrength");
 		uniWaterChoppiness = glGetUniformLocation(glProgram, "waterChoppiness");
 		uniWaterTime = glGetUniformLocation(glProgram, "waterTime");
@@ -1967,6 +1969,7 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 			waterFlags = buildWaterFlags(config.waterTextureIds());
 		}
 		glUniform1fv(uniWaterFlags, waterFlags);
+		glUniform1f(uniWaterAuto, config.waterAutoDetect() ? 1f : 0f);
 
 		glUniform1f(uniWaterChoppiness, config.waterChoppiness() / 100f);
 		glUniform1f(uniWaterTime, (System.nanoTime() % 1_000_000_000_000L) / 1e9f);
@@ -4299,8 +4302,10 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 		Set<Integer> textureIds = new TreeSet<>();
 		Set<Integer> overlayIds = new TreeSet<>();
 		Set<Integer> underlayIds = new TreeSet<>();
+		Set<Integer> sampleColors = new TreeSet<>();
 		int painted = 0;
 		int shaped = 0;
+		int autoWater = 0;
 
 		// Sample a patch around the player rather than a single tile - the tile you stand
 		// on is often the bank, not the water.
@@ -4320,6 +4325,21 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 				{
 					++painted;
 					textureIds.add(paint.getTexture());
+
+					int[][][] h = scene.getTileHeights();
+					int hx = x + SCENE_OFFSET;
+					int hy = y + SCENE_OFFSET;
+					if (WaterDetector.isWaterTile(
+						paint.getSwColor(), paint.getSeColor(), paint.getNeColor(), paint.getNwColor(),
+						h[plane][hx][hy], h[plane][hx + 1][hy],
+						h[plane][hx + 1][hy + 1], h[plane][hx][hy + 1]))
+					{
+						++autoWater;
+					}
+					else
+					{
+						sampleColors.add(paint.getSwColor() & 0xFFFF);
+					}
 				}
 
 				SceneTileModel model = tile.getSceneTileModel();
@@ -4342,10 +4362,33 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 		}
 
 		say("[GPU v2] Within " + radius + " tiles: " + painted + " painted, " + shaped + " shaped");
+		say("[GPU v2] auto-detected as water: " + autoWater + " of " + painted + " painted tiles");
 		say("[GPU v2] texture ids: " + textureIds);
 		say("[GPU v2] overlay ids: " + overlayIds);
 		say("[GPU v2] underlay ids: " + underlayIds);
-		say("[GPU v2] (texture id -1 means untextured - those tiles cannot be matched by texture)");
+
+		/*
+		 * If the detector found nothing, the colours it rejected are the useful evidence -
+		 * they say whether the water is outside the hue band, too washed out, or on a slope.
+		 * Guessing at that from a screenshot is how the first three attempts at water went.
+		 */
+		if (autoWater == 0 && !sampleColors.isEmpty())
+		{
+			StringBuilder sb = new StringBuilder("[GPU v2] rejected colours (hue/sat/lum):");
+			int shown = 0;
+			for (int hsl : sampleColors)
+			{
+				if (shown++ >= 6)
+				{
+					break;
+				}
+				sb.append(' ').append((hsl >> 10) & 0x3F)
+					.append('/').append((hsl >> 7) & 0x7)
+					.append('/').append(hsl & 0x7F);
+			}
+			say(sb.toString());
+			say("[GPU v2] (water needs hue 33-46, sat 2+, lum 8-110, and a level tile)");
+		}
 	}
 
 	private void say(String msg)

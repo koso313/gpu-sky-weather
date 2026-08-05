@@ -43,8 +43,11 @@ uniform float gradeSaturation;
 uniform float gradeTemperature;
 
 
-// Water. waterFlags[i] is 1.0 for texture ids treated as water.
+// Water. waterFlags[i] is 1.0 for texture ids treated as water; waterAuto turns on the
+// per-tile classification SceneUploader wrote into fWaterTile. The two are additive - the
+// id list stays useful for water the classifier can't reach, like swamp.
 uniform float waterFlags[TEXTURE_COUNT];
+uniform float waterAuto;
 uniform float waterStrength;
 uniform float waterChoppiness;
 uniform float waterTime;
@@ -87,6 +90,7 @@ uniform vec3 lightSunDir;
 in vec4 fColor;
 noperspective centroid in float fHsl;
 flat in int fTextureId;
+flat in int fWaterTile;
 in vec2 fUv;
 in float fFogAmount;
 in vec3 fWorldPos;
@@ -464,7 +468,9 @@ void main() {
 #endif
 
   vec3 shaded = c.rgb;
-  bool isWater = waterStrength > 0.001 && fTextureId > 0 && waterFlags[fTextureId - 1] > 0.5;
+  bool byTexture = fTextureId > 0 && waterFlags[fTextureId - 1] > 0.5;
+  bool byShape = waterAuto > 0.5 && fWaterTile > 0;
+  bool isWater = waterStrength > 0.001 && (byTexture || byShape);
   if (isWater) {
     shaded = applyWater(shaded);
   }

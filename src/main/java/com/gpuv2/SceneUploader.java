@@ -487,23 +487,36 @@ class SceneUploader
 
 		int tex = tile.getTexture() + 1;
 
+		/*
+		 * The 4th component of the texture attribute is spare - only x (texture id) and
+		 * y/z (uv) are read - so the water flag rides along there rather than growing the
+		 * vertex. Classified here, at scene load, because this is where corner heights and
+		 * unlit corner colours are both to hand; the fragment shader can see neither.
+		 *
+		 * Written unconditionally rather than behind the config toggle, so switching auto
+		 * detection on and off takes effect immediately instead of waiting for the scene
+		 * to be re-uploaded. The shader decides whether to act on it.
+		 */
+		int water = WaterDetector.isWaterTile(swColor, seColor, neColor, nwColor,
+			swHeight, seHeight, neHeight, nwHeight) ? 1 : 0;
+
 		vertexBuffer.put22224(lx2, ly2, lz2, hsl2);
-		vertexBuffer.put2222(tex, 256, 256, 0);
+		vertexBuffer.put2222(tex, 256, 256, water);
 
 		vertexBuffer.put22224(lx3, ly3, lz3, hsl3);
-		vertexBuffer.put2222(tex, 0, 256, 0);
+		vertexBuffer.put2222(tex, 0, 256, water);
 
 		vertexBuffer.put22224(lx1, ly1, lz1, hsl1);
-		vertexBuffer.put2222(tex, 256, 0, 0);
+		vertexBuffer.put2222(tex, 256, 0, water);
 
 		vertexBuffer.put22224(lx0, ly0, lz0, hsl0);
-		vertexBuffer.put2222(tex, 0, 0, 0);
+		vertexBuffer.put2222(tex, 0, 0, water);
 
 		vertexBuffer.put22224(lx1, ly1, lz1, hsl1);
-		vertexBuffer.put2222(tex, 256, 0, 0);
+		vertexBuffer.put2222(tex, 256, 0, water);
 
 		vertexBuffer.put22224(lx3, ly3, lz3, hsl3);
-		vertexBuffer.put2222(tex, 0, 256, 0);
+		vertexBuffer.put2222(tex, 0, 256, water);
 
 		return 6;
 	}
@@ -558,14 +571,19 @@ class SceneUploader
 			int lz2 = vertexZ[vertex2] - basez;
 
 			int tex = triangleTextures != null ? triangleTextures[i] + 1 : 0;
+
+			// Shaped tiles are how the client cuts the diagonal where water meets land, so
+			// skipping them would leave a hard sawtooth edge along every shoreline.
+			int water = WaterDetector.isWaterFace(hsl0, hsl1, hsl2, ly0, ly1, ly2) ? 1 : 0;
+
 			vertexBuffer.put22224(lx0, ly0, lz0, hsl0);
-			vertexBuffer.put2222(tex, (int) ((vertexX[vertex0] - lx) * 2f), (int) ((vertexZ[vertex0] - lz) * 2f), 0);
+			vertexBuffer.put2222(tex, (int) ((vertexX[vertex0] - lx) * 2f), (int) ((vertexZ[vertex0] - lz) * 2f), water);
 
 			vertexBuffer.put22224(lx1, ly1, lz1, hsl1);
-			vertexBuffer.put2222(tex, (int) ((vertexX[vertex1] - lx) * 2f), (int) ((vertexZ[vertex1] - lz) * 2f), 0);
+			vertexBuffer.put2222(tex, (int) ((vertexX[vertex1] - lx) * 2f), (int) ((vertexZ[vertex1] - lz) * 2f), water);
 
 			vertexBuffer.put22224(lx2, ly2, lz2, hsl2);
-			vertexBuffer.put2222(tex, (int) ((vertexX[vertex2] - lx) * 2f), (int) ((vertexZ[vertex2] - lz) * 2f), 0);
+			vertexBuffer.put2222(tex, (int) ((vertexX[vertex2] - lx) * 2f), (int) ((vertexZ[vertex2] - lz) * 2f), water);
 		}
 
 		return cnt;
