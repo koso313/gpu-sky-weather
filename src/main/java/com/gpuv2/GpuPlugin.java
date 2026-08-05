@@ -349,6 +349,10 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 	private int uniSkyToneMap;
 	private int uniToneMap;
 	private int uniSmoothLighting;
+	private int uniDebugNormals;
+
+	/** Toggled by ::normals, for checking whether smooth lighting is reaching the shader. */
+	private boolean debugNormals;
 	private int uniSkyMeteorSamples;
 	private int uniSkyCloudOctaves;
 	private int uniSkyMeteorActive;
@@ -1098,6 +1102,7 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 		uniGradeTemperature = glGetUniformLocation(glProgram, "gradeTemperature");
 		uniToneMap = glGetUniformLocation(glProgram, "toneMap");
 		uniSmoothLighting = glGetUniformLocation(glProgram, "smoothLighting");
+		uniDebugNormals = glGetUniformLocation(glProgram, "debugNormals");
 		uniLightStrength = glGetUniformLocation(glProgram, "lightStrength");
 		uniLightAmbient = glGetUniformLocation(glProgram, "lightAmbient");
 		uniLightSunColor = glGetUniformLocation(glProgram, "lightSunColor");
@@ -1723,6 +1728,7 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 		glUniform1f(uniGradeTemperature, temperature);
 		glUniform1f(uniToneMap, fx ? config.toneMapping() / 100f : 0f);
 		glUniform1f(uniSmoothLighting, config.smoothLighting() ? 1f : 0f);
+		glUniform1f(uniDebugNormals, debugNormals ? 1f : 0f);
 
 		glUniform1f(uniAerial, fx ? config.aerialPerspective() / 100f : 0f);
 		glUniform1f(uniUnderground, fx ? undergroundFactor() : 0f);
@@ -4519,6 +4525,13 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 		else if (event.getCommand().equals("lightids"))
 		{
 			reportNearbyObjectIds();
+		}
+		else if (event.getCommand().equals("normals"))
+		{
+			debugNormals = !debugNormals;
+			say("[GPU v2] Normal view " + (debugNormals ? "on" : "off")
+				+ (debugNormals ? " - flat triangles mean no vertex normal, gradients mean"
+					+ " smooth. Toggle 'Smooth lighting' to compare." : ""));
 		}
 	}
 

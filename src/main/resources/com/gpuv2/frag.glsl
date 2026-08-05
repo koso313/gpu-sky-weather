@@ -45,6 +45,8 @@ uniform float gradeTemperature;
 uniform float toneMap;
 // 1 to light with interpolated vertex normals, 0 for flat per-face normals.
 uniform float smoothLighting;
+// Diagnostic: paint the shading normal as colour instead of lighting the scene.
+uniform float debugNormals;
 
 
 // Still needed by wet-ground puddles, height fog and aerial perspective.
@@ -491,6 +493,19 @@ void main() {
 
   // Shadowed and lit before fog, so fogged distance blends toward the sky colour rather
   // than having those terms applied on top of it.
+  /*
+   * Normal visualiser. Whether smooth lighting is doing anything is close to impossible to
+   * judge by eye once it has been through the light term, the baked vertex colours and the
+   * grade - so this shows the normal itself. Flat shading paints each triangle a single
+   * flat colour; smooth shading paints a gradient across it. The difference is unmissable,
+   * which is the point.
+   */
+  if (debugNormals > 0.5)
+  {
+    FragColor = vec4(n * 0.5 + 0.5, 1.0);
+    return;
+  }
+
   vec3 mixedColor = mix(shaded, fogColor.rgb, fFogAmount);
 
   /*
