@@ -4210,7 +4210,7 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 			}
 			else
 			{
-				String desc = FlameDetector.describe(model.getUnlitFaceColors());
+				String desc = FlameDetector.describe(model.getFaceColors1());
 				// Only worth printing where there is warmth to explain.
 				if (!desc.contains("warm=0"))
 				{

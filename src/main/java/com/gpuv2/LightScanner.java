@@ -295,7 +295,7 @@ class LightScanner
 		try
 		{
 			Model model = renderable.getModel();
-			return model != null && FlameDetector.looksLikeFlame(model.getUnlitFaceColors());
+			return model != null && FlameDetector.looksLikeFlame(model.getFaceColors1());
 		}
 		catch (RuntimeException ex)
 		{
@@ -430,7 +430,7 @@ class LightScanner
 	static boolean isBurning(Renderable renderable, Model model)
 	{
 		return renderable instanceof DynamicObject
-			&& FlameDetector.looksLikeFlame(model.getUnlitFaceColors());
+			&& FlameDetector.looksLikeFlame(model.getFaceColors1());
 	}
 
 	/** The model behind a renderable, or null if it is not built yet. */

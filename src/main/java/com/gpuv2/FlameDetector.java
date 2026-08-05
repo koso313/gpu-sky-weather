@@ -10,11 +10,14 @@ package com.gpuv2;
  * added to it.
  *
  * <p>What a flame does have is its colour. Fire is painted in a narrow band of bright,
- * heavily saturated orange that almost nothing else in the game uses at that intensity -
- * and critically, the test reads {@code getUnlitFaceColors()} rather than the lit ones.
- * The lit colours have already had scene lighting folded into them, which flattens hue and
- * saturation towards a plain brightness value; judging hue from those would be reading a
- * number that is no longer there.
+ * heavily saturated orange that almost nothing else in the game uses at that intensity.
+ *
+ * <p>Reads {@code getFaceColors1()}, the lit colours, because {@code getUnlitFaceColors()}
+ * comes back null for scene models - ::lightids reported "no faces" for every animated
+ * object nearby. Lit is fine here, unlike for terrain: model lighting is applied by moving
+ * the luminance component of the packed HSL, so hue and saturation survive it. That is not
+ * true of {@code SceneTilePaint}, whose corner colours are bare light levels with no hue in
+ * them at all - which is why saturation carries more of the decision here than brightness.
  *
  * <p>Colour alone is not enough - a yellow banner is bright and orange-ish too - so
  * {@link LightScanner} only asks this of objects that are also animated. Fire flickers;
@@ -46,10 +49,11 @@ final class FlameDetector
 	static final int MIN_SATURATION = 5;
 
 	/**
-	 * And it is bright. Together with the saturation floor this is the whole discriminator:
-	 * dark orange is timber, pale orange is sand, but bright saturated orange is burning.
+	 * And it is bright. Kept lower than a flame's painted brightness because these are lit
+	 * colours: scene lighting moves luminance in both directions, and a torch in a dark
+	 * corner at night is still a torch.
 	 */
-	static final int MIN_LUMINANCE = 70;
+	static final int MIN_LUMINANCE = 55;
 
 	/**
 	 * How much of the model has to be alight. A torch is mostly bracket, so this is
@@ -65,29 +69,31 @@ final class FlameDetector
 	}
 
 	/**
-	 * @param unlitFaceColors from {@code Model.getUnlitFaceColors()}, packed HSL per face
+	 * @param faceColors from {@code Model.getFaceColors1()}, packed HSL per face. Hidden
+	 *                   faces come through as -1, which masks to a hue well outside the
+	 *                   fire arc and so cannot pass.
 	 */
-	static boolean looksLikeFlame(short[] unlitFaceColors)
+	static boolean looksLikeFlame(int[] faceColors)
 	{
-		if (unlitFaceColors == null)
+		if (faceColors == null)
 		{
 			return false;
 		}
 
-		int hot = burningFaces(unlitFaceColors);
-		return hot >= MIN_FACES && hot >= unlitFaceColors.length * MIN_FRACTION;
+		int hot = burningFaces(faceColors);
+		return hot >= MIN_FACES && hot >= faceColors.length * MIN_FRACTION;
 	}
 
 	/** How many faces are painted like fire. Reported by ::lightids so the call is visible. */
-	static int burningFaces(short[] unlitFaceColors)
+	static int burningFaces(int[] faceColors)
 	{
-		if (unlitFaceColors == null)
+		if (faceColors == null)
 		{
 			return 0;
 		}
 
 		int hot = 0;
-		for (short c : unlitFaceColors)
+		for (int c : faceColors)
 		{
 			if (isFlameColor(c))
 			{
@@ -105,9 +111,9 @@ final class FlameDetector
 	 * different failures with two different fixes. No warm faces at all means the flame is
 	 * not in this model. Warm faces that did not pass means the thresholds are wrong.
 	 */
-	static String describe(short[] unlitFaceColors)
+	static String describe(int[] faceColors)
 	{
-		if (unlitFaceColors == null || unlitFaceColors.length == 0)
+		if (faceColors == null || faceColors.length == 0)
 		{
 			return "no faces";
 		}
@@ -115,7 +121,7 @@ final class FlameDetector
 		StringBuilder warm = new StringBuilder();
 		int shown = 0;
 		int seenWarm = 0;
-		for (short c : unlitFaceColors)
+		for (int c : faceColors)
 		{
 			int hsl = c & 0xFFFF;
 			if (((hsl >> HUE_SHIFT) & HUE_MASK) > MAX_HUE)
@@ -134,11 +140,11 @@ final class FlameDetector
 			}
 		}
 
-		return "fire=" + burningFaces(unlitFaceColors) + "/" + unlitFaceColors.length
+		return "fire=" + burningFaces(faceColors) + "/" + faceColors.length
 			+ " warm=" + seenWarm + (seenWarm > 0 ? " [" + warm.toString().trim() + "]" : "");
 	}
 
-	static boolean isFlameColor(short packed)
+	static boolean isFlameColor(int packed)
 	{
 		int hsl = packed & 0xFFFF;
 		return ((hsl >> HUE_SHIFT) & HUE_MASK) <= MAX_HUE
