@@ -2379,8 +2379,16 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 	 */
 	private LocalTime skyTime()
 	{
-		int preview = config.previewHour();
-		return preview < 0 ? LocalTime.now() : LocalTime.of(preview % 24, 0);
+		int preview = config.previewMinute();
+		if (preview < 0)
+		{
+			return LocalTime.now();
+		}
+
+		// Minutes past midnight rather than a whole hour, so a drag through dawn passes
+		// through every colour on the way instead of landing on the hour marks.
+		int m = preview % 1440;
+		return LocalTime.of(m / 60, m % 60);
 	}
 
 	/**
@@ -2600,12 +2608,12 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 	private float skySeconds()
 	{
 		float elapsed = monotonicSeconds();
-		int preview = config.previewHour();
+		int preview = config.previewMinute();
 
-		// Anchor: the hour being previewed, or where the real clock was when we started.
+		// Anchor: the time being previewed, or where the real clock was when we started.
 		// Adding elapsed to it keeps the value strictly increasing, so it neither steps at
 		// hour boundaries nor jumps at midnight the way seconds-of-day would.
-		float base = preview < 0 ? skyClockStartSeconds : (preview % 24) * 3600f;
+		float base = preview < 0 ? skyClockStartSeconds : (preview % 1440) * 60f;
 
 		/*
 		 * Speed scales the clock rather than the drift rates, so it carries into the

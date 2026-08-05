@@ -565,17 +565,24 @@ public interface GpuPluginConfig extends Config
 
 	@Range(
 		min = -1,
-		max = 23
+		max = 1439
 	)
 	@ConfigItem(
-		keyName = "previewHour",
-		name = "Preview hour",
-		description = "For 'Time of day': force a specific hour (0-23) to preview it. "
-			+ "-1 uses your real local time.",
+		keyName = "previewMinute",
+		name = "Preview time",
+		description = "For 'Time of day': hold the sky at a chosen time instead of following "
+			+ "your clock. -1 follows the real time."
+			+ "<br><br>"
+			+ "Measured in minutes past midnight, so it sweeps the whole day rather than "
+			+ "jumping an hour at a time: 360 is 06:00, 720 is midday, 1140 is 19:00."
+			+ "<br><br>"
+			+ "Everything the sky derives from time moves with it - colour, the sun and moon, "
+			+ "cloud drift and the light on the ground - so dragging through a sunrise shows "
+			+ "the whole transition rather than its endpoints.",
 		position = 33,
 		section = skySection
 	)
-	default int previewHour()
+	default int previewMinute()
 	{
 		return -1;
 	}
