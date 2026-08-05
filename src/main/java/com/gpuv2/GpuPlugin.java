@@ -308,6 +308,7 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 	private int uniSkyCloudOpacity;
 	private int uniSkyCloudSeal;
 	private int uniSkyDim;
+	private int uniSkySunOcclusion;
 	private int uniSkyMeteorSamples;
 	private int uniSkyCloudOctaves;
 	private int uniSkyMeteorActive;
@@ -1110,6 +1111,7 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 		uniSkyCloudOpacity = glGetUniformLocation(glSkyProgram, "cloudOpacity");
 		uniSkyCloudSeal = glGetUniformLocation(glSkyProgram, "cloudSeal");
 		uniSkyDim = glGetUniformLocation(glSkyProgram, "skyDim");
+		uniSkySunOcclusion = glGetUniformLocation(glSkyProgram, "sunOcclusion");
 		uniSkyMeteorSamples = glGetUniformLocation(glSkyProgram, "meteorSamples");
 		uniSkyCloudOctaves = glGetUniformLocation(glSkyProgram, "cloudOctaves");
 		uniSkyMeteorActive = glGetUniformLocation(glSkyProgram, "meteorActive");
@@ -1750,6 +1752,9 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 		glUniform1f(uniSkyCloudSeal,
 			weather.sealsSky() ? 0.88f * weatherIntensity() : 0f);
 		glUniform1f(uniSkyDim, skyBlackout);
+		// Scaled by intensity so the sun goes behind the cloud as the weather rolls in
+		// rather than snapping out the moment the spell begins.
+		glUniform1f(uniSkySunOcclusion, weather.sunHiding() * weatherIntensity());
 
 		// Shooting stars need a clear night sky, for the same reason the stars do.
 		float clearSky = Math.max(0f, 1f - clouds * 1.2f);

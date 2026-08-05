@@ -175,6 +175,22 @@ public class WeatherCycleTest
 		assertTrue(WeatherMode.BLIZZARD.hasPrecipitation());
 	}
 
+	/**
+	 * A storm with a visible sun does not read as a storm. Rain leaves it as a smear behind
+	 * the cloud rather than removing it, which is the difference between the two.
+	 */
+	@Test
+	public void weatherHidesTheSunBySeverity()
+	{
+		assertEquals(0f, WeatherMode.OFF.sunHiding(), 1e-6);
+		assertEquals(1f, WeatherMode.STORM.sunHiding(), 1e-6);
+		assertEquals(1f, WeatherMode.OVERCAST.sunHiding(), 1e-6);
+
+		float rain = WeatherMode.RAIN.sunHiding();
+		assertTrue("rain should dim the sun", rain > 0f);
+		assertTrue("rain should not remove it", rain < 1f);
+	}
+
 	@Test
 	public void guardsAgainstZeroPeriod()
 	{

@@ -8,12 +8,12 @@ package com.gpuv2.config;
  */
 public enum WeatherMode
 {
-	OFF("Off", false, false, 0f, 0x000000, 0f),
+	OFF("Off", false, false, 0f, 0x000000, 0f, 0f),
 	/**
 	 * Resolved to one of the real conditions by the weather cycle. Never reaches the
 	 * renderer itself, so its values here are unused placeholders.
 	 */
-	AUTO("Automatic", false, false, 0f, 0x000000, 0f),
+	AUTO("Automatic", false, false, 0f, 0x000000, 0f, 0f),
 	/**
 	 * Cloud and nothing else: a sealed deck, no precipitation.
 	 *
@@ -21,13 +21,15 @@ public enum WeatherMode
 	 * of that so the sun, moon and stars stay visible through the weather - here losing them
 	 * behind the cloud is the entire point, by day and by night alike.
 	 */
-	OVERCAST("Overcast", false, false, 0f, 0x8E969E, 0.95f),
-	RAIN("Rain", true, true, 0f, 0x7C848C, 0.60f),
-	STORM("Storm", true, true, 1f, 0x4A5057, 0.88f),
+	OVERCAST("Overcast", false, false, 0f, 0x8E969E, 0.95f, 1f),
+	// Rain leaves the sun as a dull smear behind the cloud rather than removing it; a storm
+	// takes it away entirely, which is most of what makes a storm feel like one.
+	RAIN("Rain", true, true, 0f, 0x7C848C, 0.60f, 0.70f),
+	STORM("Storm", true, true, 1f, 0x4A5057, 0.88f, 1f),
 	// Snow skies are bright and heavy rather than grey - the light bounces off the cloud
 	// base and the falling snow, so they read almost white.
-	SNOW("Snow", false, true, 0f, 0xD6DCE2, 0.75f),
-	BLIZZARD("Blizzard", false, true, 1f, 0xE6EBEF, 0.95f);
+	SNOW("Snow", false, true, 0f, 0xD6DCE2, 0.75f, 0f),
+	BLIZZARD("Blizzard", false, true, 1f, 0xE6EBEF, 0.95f, 0f);
 
 	private final String name;
 	private final boolean rainLike;
@@ -35,9 +37,10 @@ public enum WeatherMode
 	private final float heavy;
 	private final int overcastColor;
 	private final float overcast;
+	private final float sunHiding;
 
 	WeatherMode(String name, boolean rainLike, boolean precipitates, float heavy,
-		int overcastColor, float overcast)
+		int overcastColor, float overcast, float sunHiding)
 	{
 		this.name = name;
 		this.rainLike = rainLike;
@@ -45,6 +48,23 @@ public enum WeatherMode
 		this.heavy = heavy;
 		this.overcastColor = overcastColor;
 		this.overcast = overcast;
+		this.sunHiding = sunHiding;
+	}
+
+	/**
+	 * How far the sun is hidden behind the weather, 0 untouched to 1 gone.
+	 *
+	 * <p>Kept separate from {@link #overcast()}, which is a sky colour and a cloud
+	 * thickness. Those are capped short of covering the sun on purpose, so without this the
+	 * sun burned merrily through a downpour - and a storm with a visible sun does not read
+	 * as a storm at all.
+	 *
+	 * <p>Snow and blizzard are left untouched deliberately. Their skies are bright rather
+	 * than dark, and the light in them plainly comes from somewhere.
+	 */
+	public float sunHiding()
+	{
+		return sunHiding;
 	}
 
 	/**

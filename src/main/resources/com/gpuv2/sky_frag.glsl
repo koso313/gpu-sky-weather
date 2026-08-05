@@ -31,6 +31,8 @@ uniform float cloudOpacity;
 uniform float cloudSeal;
 // 0 open air, 1 fully enclosed. Blacks the whole sky out underground.
 uniform float skyDim;
+// How far weather has hidden the sun, 0 clear to 1 gone entirely.
+uniform float sunOcclusion;
 
 /*
  * Shooting stars. Whether one is flying, and where, is decided on the CPU rather than
@@ -690,7 +692,11 @@ void main()
 	if (showSun > 0.5 && day > 0.001)
 	{
 		const float SUN_DISC_COS = 0.9975;
-		float vis = horizonFade * day;
+
+		// Weather puts the sun behind cloud. Applied to vis, which both the disc and the
+		// glare are scaled by, so it dims together rather than leaving a bare disc hanging
+		// in a rainstorm with its halo switched off.
+		float vis = horizonFade * day * (1.0 - sunOcclusion);
 
 		// Glare is additive and goes down first, so the disc blazes on top of it.
 		col += sunGlareColor(dir) * vis;
