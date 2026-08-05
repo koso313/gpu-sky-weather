@@ -43,6 +43,8 @@ uniform float gradeSaturation;
 uniform float gradeTemperature;
 // Highlight roll-off, 0 off. See tonemap.glsl.
 uniform float toneMap;
+// 1 to light with interpolated vertex normals, 0 for flat per-face normals.
+uniform float smoothLighting;
 
 
 // Still needed by wet-ground puddles, height fog and aerial perspective.
@@ -87,6 +89,7 @@ flat in int fTextureId;
 in vec2 fUv;
 in float fFogAmount;
 in vec3 fWorldPos;
+in vec3 fNormal;
 #ifdef ZBUF_DEBUG
 in float fDepth;
 #endif
@@ -134,6 +137,31 @@ vec3 faceNormal()
   vec3 n = cross(dFdx(fWorldPos), dFdy(fWorldPos));
   float len = length(n);
   return len < 1e-6 ? vec3(0.0) : n / len;
+}
+
+/*
+ * The normal to light with.
+ *
+ * Prefers the interpolated vertex normal, which is what makes a curved surface shade
+ * continuously instead of as a set of flat panels. Falls back to the face normal wherever
+ * there isn't one - terrain, and models the client never computed normals for - so those
+ * keep lighting exactly as they did rather than going black.
+ *
+ * A flat surface is unaffected either way: averaging identical normals returns the same
+ * normal, so walls and floors shade the same under both.
+ */
+vec3 shadingNormal()
+{
+  if (smoothLighting > 0.5)
+  {
+    float len = length(fNormal);
+    if (len > 1e-4)
+    {
+      return fNormal / len;
+    }
+  }
+
+  return faceNormal();
 }
 
 /*
@@ -410,7 +438,7 @@ void main() {
   vec3 shaded = c.rgb;
 
   // Reconstructed once and shared by lighting and the ground weather below.
-  vec3 n = faceNormal();
+  vec3 n = shadingNormal();
 
   if (n != vec3(0.0)) {
     if (groundSnow > 0.001) {

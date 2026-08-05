@@ -348,6 +348,7 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 	private int uniSkySunOcclusion;
 	private int uniSkyToneMap;
 	private int uniToneMap;
+	private int uniSmoothLighting;
 	private int uniSkyMeteorSamples;
 	private int uniSkyCloudOctaves;
 	private int uniSkyMeteorActive;
@@ -1096,6 +1097,7 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 		uniGradeSaturation = glGetUniformLocation(glProgram, "gradeSaturation");
 		uniGradeTemperature = glGetUniformLocation(glProgram, "gradeTemperature");
 		uniToneMap = glGetUniformLocation(glProgram, "toneMap");
+		uniSmoothLighting = glGetUniformLocation(glProgram, "smoothLighting");
 		uniLightStrength = glGetUniformLocation(glProgram, "lightStrength");
 		uniLightAmbient = glGetUniformLocation(glProgram, "lightAmbient");
 		uniLightSunColor = glGetUniformLocation(glProgram, "lightSunColor");
@@ -1720,6 +1722,7 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 		}
 		glUniform1f(uniGradeTemperature, temperature);
 		glUniform1f(uniToneMap, fx ? config.toneMapping() / 100f : 0f);
+		glUniform1f(uniSmoothLighting, config.smoothLighting() ? 1f : 0f);
 
 		glUniform1f(uniAerial, fx ? config.aerialPerspective() / 100f : 0f);
 		glUniform1f(uniUnderground, fx ? undergroundFactor() : 0f);

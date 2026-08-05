@@ -239,6 +239,25 @@ public interface GpuPluginConfig extends Config
 	}
 
 	@ConfigItem(
+		keyName = "smoothLighting",
+		name = "Smooth lighting",
+		description = "Light curved surfaces smoothly instead of one flat panel per "
+			+ "triangle."
+			+ "<br><br>"
+			+ "Most visible on trees, characters and rounded roofs, and easiest to see with "
+			+ "Sun strength turned up. Flat walls and floors are unchanged."
+			+ "<br><br>"
+			+ "Terrain keeps its flat shading either way - the game provides no normals for "
+			+ "it, and inventing them would round off corners that are meant to be sharp.",
+		position = 137,
+		section = displaySection
+	)
+	default boolean smoothLighting()
+	{
+		return true;
+	}
+
+	@ConfigItem(
 		keyName = "smoothBanding",
 		name = "Remove colour banding",
 		description = "Smooths out the colour banding present in the CPU renderer.",

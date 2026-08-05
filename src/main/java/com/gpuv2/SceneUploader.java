@@ -47,6 +47,9 @@ import net.runelite.client.callback.RenderCallbackManager;
 @Slf4j
 class SceneUploader
 {
+	/** Packed vertex normals for the model being uploaded, parallel to the position arrays. */
+	private final int[] modelNormals;
+
 	private final int[] modelLocalXI;
 	private final int[] modelLocalYI;
 	private final int[] modelLocalZI;
@@ -59,6 +62,7 @@ class SceneUploader
 	SceneUploader(RenderCallbackManager renderCallbackManager)
 	{
 		this.renderCallbackManager = renderCallbackManager;
+		modelNormals = new int[ModelUploader.MAX_VERTEX_COUNT];
 		modelLocalXI = new int[ModelUploader.MAX_VERTEX_COUNT];
 		modelLocalYI = new int[ModelUploader.MAX_VERTEX_COUNT];
 		modelLocalZI = new int[ModelUploader.MAX_VERTEX_COUNT];
@@ -602,17 +606,41 @@ class SceneUploader
 			orientCos = Perspective.COSINE[orient];
 		}
 
+		/*
+		 * The client computes vertex normals itself, so these are read rather than derived.
+		 * Null for models it never needed them for, in which case the normal is left as NONE
+		 * and the shader falls back to the flat one it has always used.
+		 */
+		final int[] normalX = model.getVertexNormalsX();
+		final int[] normalY = model.getVertexNormalsY();
+		final int[] normalZ = model.getVertexNormalsZ();
+		final boolean haveNormals = normalX != null && normalY != null && normalZ != null;
+
 		for (int v = 0; v < vertexCount; ++v)
 		{
 			int vx = (int) vertexX[v];
 			int vy = (int) vertexY[v];
 			int vz = (int) vertexZ[v];
 
+			int nx = haveNormals ? normalX[v] : 0;
+			int ny = haveNormals ? normalY[v] : 0;
+			int nz = haveNormals ? normalZ[v] : 0;
+
 			if (orient != 0)
 			{
 				int x0 = vx;
 				vx = vz * orientSin + x0 * orientCos >> 16;
 				vz = vz * orientCos - x0 * orientSin >> 16;
+
+				/*
+				 * Normals turn with the object. Rotating the geometry and not its normals
+				 * would light a rotated bench as though it still faced the way it was
+				 * modelled - so the same rotation is applied, without the translation, since
+				 * a direction has no position.
+				 */
+				int n0 = nx;
+				nx = nz * orientSin + n0 * orientCos >> 16;
+				nz = nz * orientCos - n0 * orientSin >> 16;
 			}
 
 			vx += x;
@@ -622,6 +650,7 @@ class SceneUploader
 			modelLocalXI[v] = vx;
 			modelLocalYI[v] = vy;
 			modelLocalZI[v] = vz;
+			modelNormals[v] = haveNormals ? NormalPacking.pack(nx, ny, nz) : NormalPacking.NONE;
 		}
 
 		int len = 0;
@@ -676,13 +705,13 @@ class SceneUploader
 			GpuIntBuffer buf = alpha ? ab : vb;
 
 			buf.put22224(vx1, vy1, vz1, alphaBias | color1);
-			buf.put2222(texture, su0, sv0, 0);
+			buf.put2222(texture, su0, sv0, modelNormals[triangleA]);
 
 			buf.put22224(vx2, vy2, vz2, alphaBias | color2);
-			buf.put2222(texture, su1, sv1, 0);
+			buf.put2222(texture, su1, sv1, modelNormals[triangleB]);
 
 			buf.put22224(vx3, vy3, vz3, alphaBias | color3);
-			buf.put2222(texture, su2, sv2, 0);
+			buf.put2222(texture, su2, sv2, modelNormals[triangleC]);
 
 			len += 3;
 		}

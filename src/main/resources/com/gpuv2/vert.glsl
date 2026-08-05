@@ -68,6 +68,13 @@ out vec4 fColor;
 noperspective centroid out float fHsl;
 flat out int fTextureId;
 out vec2 fUv;
+/*
+ * Vertex normal, interpolated across the triangle - which is the whole point: averaging
+ * the normals of the faces meeting at a vertex and blending between them is what turns a
+ * faceted surface smooth. Zero means the geometry had no normal, and the fragment shader
+ * falls back to the flat one it derives from screen-space derivatives.
+ */
+out vec3 fNormal;
 out float fFogAmount;
 // World position, so the fragment shader can derive a face normal from its
 // screen-space derivatives. The vertex format carries no normals.
@@ -107,6 +114,33 @@ void main() {
 
   fTextureId = tex.x;  // the texture id + 1
   fUv = vec2(float(tex.y) / 256.f, float(tex.z) / 256.f);
+
+  /*
+   * Octahedral decode of the normal packed into the spare component. See NormalPacking:
+   * two signed bytes of a sphere unfolded onto an octahedron, which fits a direction into
+   * the 16 bits that were already free rather than growing the vertex.
+   */
+  int packedNormal = tex.w & 0xFFFF;
+  if (packedNormal == 0) {
+    fNormal = vec3(0.0);
+  } else {
+    vec2 oct = vec2(
+      float((packedNormal >> 8) & 0xFF),
+      float(packedNormal & 0xFF));
+    // Back to signed: values above 127 are negative.
+    oct = mix(oct, oct - 256.0, step(128.0, oct)) / 127.0;
+
+    vec3 n = vec3(oct, 1.0 - abs(oct.x) - abs(oct.y));
+    // Fold the lower hemisphere back out.
+    if (n.z < 0.0) {
+      n.xy = (1.0 - abs(n.yx)) * vec2(
+        n.x >= 0.0 ? 1.0 : -1.0,
+        n.y >= 0.0 ? 1.0 : -1.0);
+    }
+
+    // Into world space, so it agrees with the light direction the scene lighting uses.
+    fNormal = normalize(mat3(entityProj) * n);
+  }
   if (fTextureId > 0) {
     vec2 textureAnim = textureAnimations[min(fTextureId - 1, TEXTURE_COUNT - 1)];
     fUv += float(tick) * textureAnim * TEXTURE_ANIM_UNIT;
