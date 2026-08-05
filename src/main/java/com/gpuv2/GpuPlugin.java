@@ -1722,7 +1722,11 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 		}
 		glUniform1f(uniGradeTemperature, temperature);
 		glUniform1f(uniToneMap, fx ? config.toneMapping() / 100f : 0f);
-		glUniform1f(uniSmoothLighting, config.smoothLighting() ? 1f : 0f);
+		boolean smooth = config.smoothLighting();
+		glUniform1f(uniSmoothLighting, smooth ? 1f : 0f);
+		// Mirrored to the uploaders so they can skip computing normals the shader is about
+		// to ignore. Turning the feature off now gives the work back, not just the look.
+		NormalPacking.smoothLighting = smooth;
 
 		glUniform1f(uniAerial, fx ? config.aerialPerspective() / 100f : 0f);
 		glUniform1f(uniUnderground, fx ? undergroundFactor() : 0f);

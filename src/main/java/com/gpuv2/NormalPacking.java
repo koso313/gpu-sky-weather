@@ -28,6 +28,20 @@ final class NormalPacking
 	 */
 	static final int NONE = 0;
 
+	/**
+	 * Whether smooth lighting is switched on, mirrored from config.
+	 *
+	 * <p>Static, because the model uploaders run on render threads that have no config of
+	 * their own and are hot enough that threading one through per call would be worse than
+	 * a volatile read. Written once a frame, read many times.
+	 *
+	 * <p>It gates the animated model path only. Scene geometry is uploaded once and kept, so
+	 * gating that would leave static scenery flat until the next scene load - the setting
+	 * would appear to do nothing, which is precisely the confusion this feature already
+	 * caused once. Animated models are rebuilt every frame, so there the switch is instant.
+	 */
+	static volatile boolean smoothLighting = true;
+
 	private NormalPacking()
 	{
 	}

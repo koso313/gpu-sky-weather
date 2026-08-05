@@ -64,6 +64,17 @@ class ModelUploader
 			normalAccZ[v] = 0;
 		}
 
+		/*
+		 * With the feature off, the shader ignores whatever this produces - so producing it
+		 * is a full pass over every face of every animated model, every frame, thrown away.
+		 * Zeroed accumulators pack the "no normal" sentinel, which is what flat shading
+		 * wants anyway.
+		 */
+		if (!NormalPacking.smoothLighting)
+		{
+			return;
+		}
+
 		for (int f = 0; f < faceCount; ++f)
 		{
 			int a = indices1[f];
