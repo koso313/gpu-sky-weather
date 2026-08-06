@@ -8,11 +8,13 @@ public class GpuV2PluginTest
 {
 	public static void main(String[] args) throws Exception
 	{
-		// Both are loaded so they can be compared side by side: the renderer fork, and the
-		// same sky rebuilt on the core GPU plugin's extension API. Only one can be on at a
-		// time in practice - the fork owns the draw callbacks, the extension needs the
-		// stock GPU plugin to own them instead.
-		ExternalPluginManager.loadBuiltin(GpuPlugin.class, SkyExtensionPlugin.class);
+		// Only the extension is loaded while testing the port. Loading the fork as well
+		// makes the two fight over the renderer slot: the fork disables whatever else holds
+		// it on startup, and the stock GPU plugin silently refuses to start when it is
+		// taken, so the stock plugin the extension needs can never come up.
+		//
+		// Swap back to GpuPlugin.class to run the fork.
+		ExternalPluginManager.loadBuiltin(SkyExtensionPlugin.class);
 		RuneLite.main(args);
 	}
 }

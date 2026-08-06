@@ -206,6 +206,15 @@ public class SkyExtension extends GpuExtension
 		computeBodyDirection(dayFraction, sunDir);
 		computeBodyDirection(dayFraction + 0.5f, moonDir);
 
+		/*
+		 * Saved rather than assumed. The renderer draws the scene straight after this with
+		 * whatever program and VAO were bound before the call, so putting back a guess -
+		 * program 0, VAO 0 - leaves it drawing the world with no program at all, and
+		 * nothing but the sky appears.
+		 */
+		int prevProgram = glGetInteger(GL_CURRENT_PROGRAM);
+		int prevVao = glGetInteger(GL_VERTEX_ARRAY_BINDING);
+
 		glUseProgram(program);
 		glBindVertexArray(vao);
 		glDisable(GL_DEPTH_TEST);
@@ -261,8 +270,8 @@ public class SkyExtension extends GpuExtension
 		glDepthMask(true);
 		glEnable(GL_DEPTH_TEST);
 		glEnable(GL_BLEND);
-		glBindVertexArray(0);
-		glUseProgram(0);
+		glBindVertexArray(prevVao);
+		glUseProgram(prevProgram);
 
 		return true;
 	}

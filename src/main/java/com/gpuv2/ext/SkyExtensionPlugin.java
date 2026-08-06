@@ -6,6 +6,7 @@ import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.Client;
 import net.runelite.client.config.ConfigManager;
 import net.runelite.client.plugins.Plugin;
+import net.runelite.client.plugins.PluginDependency;
 import net.runelite.client.plugins.PluginDescriptor;
 import net.runelite.client.plugins.gpu.api.GpuApi;
 
@@ -16,6 +17,13 @@ import net.runelite.client.plugins.gpu.api.GpuApi;
  * shutdown. No renderer, no draw callbacks, no conflict with anything else drawing the
  * world - which is the point of the exercise.
  */
+/*
+ * Required, and not obviously so. GpuApi is bound in the GPU plugin's own
+ * configure(Binder), and RuneLite gives each plugin a child injector built from its
+ * declared dependencies - so without this the binding is simply not in scope and the
+ * plugin fails to instantiate with "No implementation for GpuApi was bound".
+ */
+@PluginDependency(net.runelite.client.plugins.gpu.GpuPlugin.class)
 @PluginDescriptor(
 	name = "GPU v2 Sky",
 	description = "Day/night sky, sun, moon, stars and aurora, drawn as a GPU plugin extension",
