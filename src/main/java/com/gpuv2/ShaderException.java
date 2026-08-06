@@ -24,7 +24,7 @@
  */
 package com.gpuv2;
 
-class ShaderException extends RuntimeException
+public class ShaderException extends RuntimeException
 {
 	ShaderException(String message)
 	{

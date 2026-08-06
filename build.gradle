@@ -13,7 +13,11 @@ repositories {
 	mavenCentral()
 }
 
-def runeLiteVersion = 'latest.release'
+// Pinned to Adam's gpu-api branch, built and published locally with
+// `./gradlew publishAllToMavenLocal` from a checkout of
+// https://github.com/Adam-/runelite/tree/gpu-api
+// Revert to 'latest.release' to build against the released client instead.
+def runeLiteVersion = '1.12.34-SNAPSHOT'
 def pluginMainClass = 'com.gpuv2.GpuV2PluginTest'
 
 dependencies {
