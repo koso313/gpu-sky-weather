@@ -858,13 +858,13 @@ public interface GpuV2ExtensionConfig extends Config
 	@ConfigItem(
 		keyName = "rainSoundId",
 		name = "Rain sound id",
-		description = "In-game sound effect id for rain. 3122 is the game's rain. 0 is silent.",
+		description = "In-game sound effect id for rain. 8738 is a steady rain, 3122 a lighter one. 0 is silent.",
 		position = 54,
 		section = weatherSection
 	)
 	default int rainSoundId()
 	{
-		return 3122;
+		return 8738;
 	}
 
 	@Range(
@@ -881,7 +881,7 @@ public interface GpuV2ExtensionConfig extends Config
 	)
 	default int rainSoundRepeat()
 	{
-		return 4;
+		return 3;
 	}
 
 	@ConfigItem(
@@ -900,13 +900,13 @@ public interface GpuV2ExtensionConfig extends Config
 	@ConfigItem(
 		keyName = "snowSoundId",
 		name = "Snow sound id",
-		description = "In-game sound effect id for snow. 1861 is the game's blizzard. 0 is silent.",
+		description = "In-game sound effect id for snow. 1862 is wind, 1861 a blizzard. 0 is silent.",
 		position = 57,
 		section = weatherSection
 	)
 	default int snowSoundId()
 	{
-		return 1861;
+		return 1862;
 	}
 
 	@Range(
