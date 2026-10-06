@@ -238,22 +238,36 @@ vec3 gv2_applyWetGround(vec3 c, vec3 n)
   vec3 wet = mix(c * 0.66, c, 0.25);
   c = mix(c, wet, flat_ * gv2_groundWet * 0.85);
 
-  // Same scale reasoning as the snow drift above - puddles pool over several tiles.
+  /*
+   * Puddles only where the ground is close to level. Water does not sit on a slope, and
+   * letting it pool on anything merely gentle covered rolling ground in blotches.
+   */
+  float level = smoothstep(0.86, 0.98, up);
+
+  // Same scale reasoning as the snow drift above - puddles pool over several tiles. The
+  // threshold is high, so they are the occasional pool rather than half the ground.
   float pool = gv2_gNoise(gv2_worldPos.xz * 0.0022) * 0.65 + gv2_gNoise(gv2_worldPos.xz * 0.0065) * 0.35;
-  float puddle = smoothstep(0.60, 0.76, pool) * flat_ * gv2_groundWet;
+  float puddle = smoothstep(0.66, 0.80, pool) * level * gv2_groundWet;
   if (puddle < 0.001)
   {
     return c;
   }
 
+  /*
+   * Shallow water over the ground: the ground a little darker, with the sky lying on it.
+   *
+   * The reflection has a floor. Fresnel alone gives almost none looking straight down,
+   * and the game's camera mostly looks down - so a puddle was nothing but its darkening,
+   * and read as a stain on the ground rather than as water.
+   */
   vec3 v = normalize(gv2_cameraPos - gv2_worldPos);
   float fresnel = 0.04 + 0.96 * pow(1.0 - clamp(dot(n, v), 0.0, 1.0), 5.0);
-  vec3 surface = mix(c * 0.55, gv2_fogColor, clamp(fresnel, 0.0, 0.75));
+  vec3 surface = mix(c * 0.80, gv2_fogColor, clamp(0.30 + fresnel, 0.0, 0.80));
 
   vec3 h = normalize(normalize(gv2_lightSunDir) + v);
   surface += vec3(1.0, 0.98, 0.92) * pow(clamp(dot(n, h), 0.0, 1.0), 48.0) * 0.4;
 
-  return mix(c, surface, clamp(puddle, 0.0, 1.0));
+  return mix(c, surface, clamp(puddle, 0.0, 0.85));
 }
 
 /*

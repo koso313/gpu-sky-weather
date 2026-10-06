@@ -647,7 +647,7 @@ public interface GpuV2ExtensionConfig extends Config
 	@ConfigItem(
 		keyName = "cloudShadows",
 		name = "Cloud shadows",
-		description = "Cloud shadows drifting over the ground by day. 0 off, max 100.",
+		description = "Cloud shadows drifting over the ground on clear days. 0 off, max 100.",
 		position = 423,
 		section = cloudSection
 	)
@@ -761,7 +761,7 @@ public interface GpuV2ExtensionConfig extends Config
 	@ConfigItem(
 		keyName = "groundWet",
 		name = "Wet ground and puddles",
-		description = "Darker wet ground and puddles while it rains. 0 off, max 100.",
+		description = "Darker wet ground, and puddles on level ground, while it rains. 0 off, max 100.",
 		position = 47,
 		section = weatherSection
 	)

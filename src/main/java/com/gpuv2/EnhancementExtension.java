@@ -1004,7 +1004,11 @@ class EnhancementExtension extends GpuExtension
 
 			// Fades out after dark - there is no sunlight left for clouds to block.
 			float day = 1f - SkyGradient.nightFactorAt(skyTime());
-			shadow = config.cloudShadows() / 100f * cover * day;
+			// A cloud shadow is a patch where the sun is blocked beside a patch where it is not.
+			// Once the weather has taken the sun away entirely there is nothing to block, and the
+			// weather's own dimming already covers the whole ground evenly.
+			float sun = 1f - weather.sunHiding() * weatherIntensity();
+			shadow = config.cloudShadows() / 100f * cover * day * sun;
 		}
 
 		glUniform1f(uniCloudShadow, shadow);
