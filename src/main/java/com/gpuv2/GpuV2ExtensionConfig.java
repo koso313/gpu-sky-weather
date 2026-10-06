@@ -32,7 +32,6 @@ import net.runelite.client.config.ConfigSection;
 import net.runelite.client.config.Range;
 import static com.gpuv2.GpuPlugin.MAX_FOG_DEPTH;
 import com.gpuv2.config.GraphicsPreset;
-import com.gpuv2.config.SkyMode;
 import com.gpuv2.config.WeatherMode;
 
 /*
@@ -239,7 +238,7 @@ public interface GpuV2ExtensionConfig extends Config
 
 	@ConfigSection(
 		name = "Sky",
-		description = "Sky colour and time of day.",
+		description = "The time of day the sky is drawn for, and whether there is a sky underground.",
 		position = 30
 	)
 	String skySection = "skySection";
@@ -284,32 +283,6 @@ public interface GpuV2ExtensionConfig extends Config
 		position = 42
 	)
 	String cloudSection = "cloudSection";
-
-	@ConfigItem(
-		keyName = "skyMode",
-		name = "Sky colour",
-		description = "Where the sky and fog colour come from. Game default uses the area's "
-			+ "own, Custom colour uses the one below, Time of day follows your clock "
-			+ "through dawn, day, dusk and night.",
-		position = 31,
-		section = skySection
-	)
-	default SkyMode skyMode()
-	{
-		return SkyMode.TIME_OF_DAY;
-	}
-
-	@ConfigItem(
-		keyName = "skyColor",
-		name = "Custom colour",
-		description = "Sky and fog colour when Sky colour is set to Custom colour.",
-		position = 32,
-		section = skySection
-	)
-	default Color skyColor()
-	{
-		return new Color(0x87, 0xCE, 0xEB);
-	}
 
 	@Range(
 		min = -1,
@@ -1130,8 +1103,7 @@ public interface GpuV2ExtensionConfig extends Config
 	@ConfigItem(
 		keyName = "lightFollowsTime",
 		name = "Follow time of day",
-		description = "Dims and cools the world at night in step with the sky. Needs Sky colour "
-			+ "set to Time of day.",
+		description = "Dims and cools the world at night in step with the sky.",
 		position = 57,
 		section = lightSection
 	)
@@ -1199,8 +1171,7 @@ public interface GpuV2ExtensionConfig extends Config
 	@ConfigItem(
 		keyName = "godRays",
 		name = "God rays",
-		description = "Light shafts from the sun while it is in view. Needs Sky colour set to "
-			+ "Time of day. 0 off, max 100.",
+		description = "Light shafts from the sun while it is in view. 0 off, max 100.",
 		position = 74,
 		section = postSection
 	)
@@ -1307,8 +1278,7 @@ public interface GpuV2ExtensionConfig extends Config
 		keyName = "autoTemperature",
 		name = "Auto colour temperature",
 		description = "Warms the picture at sunrise and sunset and cools it at night. "
-			+ "Temperature below becomes an offset. Needs Sky colour set to Time of "
-			+ "day.",
+			+ "Temperature below becomes an offset.",
 		position = 805,
 		section = postSection
 	)

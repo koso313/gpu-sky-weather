@@ -849,7 +849,9 @@ class EnhancementExtension extends GpuExtension
 	 */
 	private SkyMode effectiveSkyMode()
 	{
-		return enhancements() ? config.skyMode() : SkyMode.GAME;
+		// The time-of-day sky is the plugin; there is no setting to swap it for a flat
+		// colour or the game's own. Only the Default preset stands it down.
+		return enhancements() ? SkyMode.TIME_OF_DAY : SkyMode.GAME;
 	}
 
 	private WeatherMode activeWeather()
@@ -1178,9 +1180,6 @@ class EnhancementExtension extends GpuExtension
 		int sky;
 		switch (effectiveSkyMode())
 		{
-			case CUSTOM:
-				sky = config.skyColor().getRGB() & 0xFFFFFF;
-				break;
 			case TIME_OF_DAY:
 				sky = SkyGradient.colorAt(skyTime());
 				break;

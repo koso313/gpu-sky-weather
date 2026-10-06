@@ -121,7 +121,7 @@ plugin panel. The sections are:
 |---|---|
 | **Display** | Tone mapping, FXAA, sharpening, vignette |
 | **Performance** | Effect quality, post-processing switch, performance overlay |
-| **Sky** | Sky colour mode, time of day, preview time, underground sky |
+| **Sky** | Preview time, underground sky |
 | **Fog** | Distance fog, ground mist, aerial perspective |
 | **Sun and moon** | The discs themselves, glare, moon phases |
 | **Stars and aurora** | Starfield, shooting stars, aurora |
