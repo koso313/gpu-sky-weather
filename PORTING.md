@@ -1,4 +1,4 @@
-# Porting gpu-v2 to the GPU extension API
+# GPU Sky/Weather: porting gpu-v2 to the GPU extension API
 
 Notes from rebuilding this plugin on Adam's `gpu-api` branch
 (https://github.com/Adam-/runelite/tree/gpu-api) instead of on a fork of the renderer.
@@ -83,4 +83,4 @@ well covers it.
 
 Build Adam's branch to the local Maven repository, keep `runeLiteVersion` in
 `build.gradle` at `1.13.0-SNAPSHOT`, then `./gradlew run`. Enable the stock **GPU** plugin
-and **GPU v2 (extension)**. `master` is the fork and builds against the released client.
+and **GPU Sky/Weather (extension)**. `master` is the fork and builds against the released client.

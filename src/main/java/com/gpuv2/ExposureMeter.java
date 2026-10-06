@@ -148,12 +148,12 @@ final class ExposureMeter implements PBOListener
 				measured = sum / n;
 				if (samples++ == 0)
 				{
-					log.info("gpu-v2 exposure: first frame from the PBO listener, {}x{}, brightness {}",
+					log.info("GPU Sky/Weather exposure: first frame from the PBO listener, {}x{}, brightness {}",
 						width, height, String.format("%.3f", measured));
 				}
 				else if (samples % 100 == 0)
 				{
-					log.debug("gpu-v2 exposure: {} frames delivered, {} sampled, brightness {}, exposure {}",
+					log.debug("GPU Sky/Weather exposure: {} frames delivered, {} sampled, brightness {}, exposure {}",
 						frames, samples, String.format("%.3f", measured), String.format("%.3f", exposure));
 				}
 			}

@@ -32,7 +32,7 @@ import net.runelite.client.ui.overlay.OverlayManager;
  */
 @PluginDependency(net.runelite.client.plugins.gpu.GpuPlugin.class)
 @PluginDescriptor(
-	name = "GPU v2 (extension)",
+	name = "GPU Sky/Weather (extension)",
 	description = "Day/night sky, weather, fog and dynamic lighting, as an extension of the GPU plugin",
 	tags = {"gpu", "sky", "weather", "hd", "fog", "lighting"},
 	enabledByDefault = false
@@ -119,14 +119,14 @@ public class GpuV2ExtensionPlugin extends Plugin
 		if (registered && gpuRunning())
 		{
 			gpuApi.unregisterExtension(this, extension);
-			log.info("gpu-v2 extension unregistered");
+			log.info("GPU Sky/Weather unregistered");
 		}
 		else if (registered)
 		{
 			// Unregistering recompiles the GPU plugin's shaders, and doing that with no GL
 			// context takes the JVM down. The extension is left in place, switched off.
 			extension.setEnabled(false);
-			log.info("gpu-v2 extension left registered but switched off: GPU plugin is not running");
+			log.info("GPU Sky/Weather left registered but switched off: GPU plugin is not running");
 		}
 
 		registered = false;
@@ -198,7 +198,7 @@ public class GpuV2ExtensionPlugin extends Plugin
 
 			if (!gpuPluginActive())
 			{
-				log.info("gpu-v2 extension waiting: GPU plugin is not running");
+				log.info("GPU Sky/Weather waiting: GPU plugin is not running");
 				return true;
 			}
 
@@ -210,7 +210,7 @@ public class GpuV2ExtensionPlugin extends Plugin
 			gpuApi.registerExtension(this, pending);
 			registered = true;
 			syncExposureListener();
-			log.info("gpu-v2 extension registered");
+			log.info("GPU Sky/Weather registered");
 			return true;
 		});
 	}
@@ -233,13 +233,13 @@ public class GpuV2ExtensionPlugin extends Plugin
 			extension.exposureMeter().reset();
 			gpuApi.registerPBOListener(extension.exposureMeter());
 			listening = true;
-			log.info("gpu-v2 extension: listening for frames (auto exposure on)");
+			log.info("GPU Sky/Weather: listening for frames (auto exposure on)");
 		}
 		else if (!wanted && listening)
 		{
 			gpuApi.unregisterPBOListener(extension.exposureMeter());
 			listening = false;
-			log.info("gpu-v2 extension: stopped listening for frames after {} delivered",
+			log.info("GPU Sky/Weather: stopped listening for frames after {} delivered",
 				extension.exposureMeter().framesDelivered());
 		}
 	}

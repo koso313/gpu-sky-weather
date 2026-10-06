@@ -334,7 +334,7 @@ class EnhancementExtension extends GpuExtension
 		uniEnabled = glGetUniformLocation(sceneProgram, "gv2_enabled");
 		uniFogColor = glGetUniformLocation(sceneProgram, "gv2_fogColor");
 		uniFogDepth = glGetUniformLocation(sceneProgram, "gv2_fogDepth");
-		log.info("gpu-v2 extension: scene program {}, enabled uniform at {}", program, uniEnabled);
+		log.info("GPU Sky/Weather: scene program {}, enabled uniform at {}", program, uniEnabled);
 
 		createPrograms();
 	}
@@ -379,7 +379,7 @@ class EnhancementExtension extends GpuExtension
 		}
 		catch (ShaderException ex)
 		{
-			log.error("gpu-v2 extension: shader compilation failed", ex);
+			log.error("GPU Sky/Weather: shader compilation failed", ex);
 			glSkyProgram = 0;
 			glWeatherProgram = 0;
 			return;
@@ -435,7 +435,7 @@ class EnhancementExtension extends GpuExtension
 		uniWeatherLight = glGetUniformLocation(glWeatherProgram, "weatherLight");
 		uniWeatherSkyColor = glGetUniformLocation(glWeatherProgram, "weatherSkyColor");
 
-		log.info("gpu-v2 extension: sky program {}, weather program {}", glSkyProgram, glWeatherProgram);
+		log.info("GPU Sky/Weather: sky program {}, weather program {}", glSkyProgram, glWeatherProgram);
 	}
 
 	// ------------------------------------------------------------------ per frame
