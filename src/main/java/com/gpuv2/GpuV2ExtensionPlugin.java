@@ -1,9 +1,10 @@
-package com.gpuv2.ext;
+package com.gpuv2;
 
 import com.google.inject.Provides;
 import javax.inject.Inject;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.Client;
+import net.runelite.api.events.GameTick;
 import net.runelite.client.callback.ClientThread;
 import net.runelite.client.config.ConfigManager;
 import net.runelite.client.eventbus.Subscribe;
@@ -12,30 +13,30 @@ import net.runelite.client.plugins.Plugin;
 import net.runelite.client.plugins.PluginDependency;
 import net.runelite.client.plugins.PluginDescriptor;
 import net.runelite.client.plugins.PluginManager;
-import net.runelite.client.plugins.gpu.GpuPlugin;
 import net.runelite.client.plugins.gpu.api.GpuApi;
 
 /**
- * Registers the sky as an extension of the core GPU plugin.
+ * The plugin as an extension of the core GPU plugin: sky, weather and lighting, with the
+ * renderer itself left to the core plugin.
  *
- * <p>The whole plugin is this: inject the API, hand it an extension, take it back on
- * shutdown. No renderer, no draw callbacks, no conflict with anything else drawing the
- * world - which is the point of the exercise.
+ * <p>Nothing here draws the world. It injects into the renderer's scene shader and is
+ * called back around its draw, so it runs alongside whatever else is extending the same
+ * renderer instead of replacing it.
  */
 /*
  * Required, and not obviously so. GpuApi comes from the GPU plugin's public module, and
  * RuneLite only puts that in scope for plugins that declare the dependency - without this
  * the plugin fails to instantiate with "No implementation for GpuApi was bound".
  */
-@PluginDependency(GpuPlugin.class)
+@PluginDependency(net.runelite.client.plugins.gpu.GpuPlugin.class)
 @PluginDescriptor(
-	name = "GPU v2 Sky",
-	description = "Day/night sky, sun, moon, stars and aurora, drawn as a GPU plugin extension",
-	tags = {"gpu", "sky", "weather", "hd"},
+	name = "GPU v2 (extension)",
+	description = "Day/night sky, weather, fog and dynamic lighting, as an extension of the GPU plugin",
+	tags = {"gpu", "sky", "weather", "hd", "fog", "lighting"},
 	enabledByDefault = false
 )
 @Slf4j
-public class SkyExtensionPlugin extends Plugin
+public class GpuV2ExtensionPlugin extends Plugin
 {
 	@Inject
 	private Client client;
@@ -50,22 +51,25 @@ public class SkyExtensionPlugin extends Plugin
 	private PluginManager pluginManager;
 
 	@Inject
-	private SkyExtensionConfig config;
+	private ConfigManager configManager;
 
-	private SkyExtension extension;
+	@Inject
+	private GpuV2ExtensionConfig config;
+
+	private EnhancementExtension extension;
 	private boolean registered;
 
 	@Provides
-	SkyExtensionConfig provideConfig(ConfigManager configManager)
+	GpuV2ExtensionConfig provideConfig(ConfigManager configManager)
 	{
-		return configManager.getConfig(SkyExtensionConfig.class);
+		return configManager.getConfig(GpuV2ExtensionConfig.class);
 	}
 
 	@Override
 	protected void startUp()
 	{
-		extension = new SkyExtension(client, config);
-		registerIfGpuRunning();
+		extension = new EnhancementExtension(client, config, configManager);
+		registerWhenGpuReady();
 	}
 
 	@Override
@@ -74,14 +78,14 @@ public class SkyExtensionPlugin extends Plugin
 		if (registered && gpuRunning())
 		{
 			gpuApi.unregisterExtension(this, extension);
-			log.info("gpu-v2 sky extension unregistered");
+			log.info("gpu-v2 extension unregistered");
 		}
 		else if (registered)
 		{
 			// Unregistering recompiles the GPU plugin's shaders, and doing that with no GL
 			// context takes the JVM down. The extension is left in place, switched off.
 			extension.setEnabled(false);
-			log.info("gpu-v2 sky extension left registered but switched off: GPU plugin is not running");
+			log.info("gpu-v2 extension left registered but switched off: GPU plugin is not running");
 		}
 
 		registered = false;
@@ -91,9 +95,18 @@ public class SkyExtensionPlugin extends Plugin
 	@Subscribe
 	public void onPluginChanged(PluginChanged event)
 	{
-		if (event.getPlugin() instanceof GpuPlugin && event.isLoaded())
+		if (event.getPlugin() instanceof net.runelite.client.plugins.gpu.GpuPlugin && event.isLoaded())
 		{
-			registerIfGpuRunning();
+			registerWhenGpuReady();
+		}
+	}
+
+	@Subscribe
+	public void onGameTick(GameTick tick)
+	{
+		if (registered && extension != null)
+		{
+			extension.onGameTick();
 		}
 	}
 
@@ -104,9 +117,9 @@ public class SkyExtensionPlugin extends Plugin
 	 * the client thread until the GPU plugin has installed itself as the renderer, which it
 	 * does only once its context exists.
 	 */
-	private void registerIfGpuRunning()
+	private void registerWhenGpuReady()
 	{
-		final SkyExtension pending = extension;
+		final EnhancementExtension pending = extension;
 		clientThread.invokeLater(() ->
 		{
 			if (registered || extension != pending)
@@ -116,7 +129,7 @@ public class SkyExtensionPlugin extends Plugin
 
 			if (!gpuPluginActive())
 			{
-				log.info("gpu-v2 sky extension waiting: GPU plugin is not running");
+				log.info("gpu-v2 extension waiting: GPU plugin is not running");
 				return true;
 			}
 
@@ -127,22 +140,22 @@ public class SkyExtensionPlugin extends Plugin
 
 			gpuApi.registerExtension(this, pending);
 			registered = true;
-			log.info("gpu-v2 sky extension registered");
+			log.info("gpu-v2 extension registered");
 			return true;
 		});
 	}
 
-	/** Whether the stock GPU plugin currently owns the renderer, and so has a GL context. */
+	/** Whether the core GPU plugin currently owns the renderer, and so has a GL context. */
 	private boolean gpuRunning()
 	{
-		return client.getDrawCallbacks() instanceof GpuPlugin;
+		return client.getDrawCallbacks() instanceof net.runelite.client.plugins.gpu.GpuPlugin;
 	}
 
 	private boolean gpuPluginActive()
 	{
 		for (Plugin plugin : pluginManager.getPlugins())
 		{
-			if (plugin instanceof GpuPlugin)
+			if (plugin instanceof net.runelite.client.plugins.gpu.GpuPlugin)
 			{
 				return pluginManager.isPluginActive(plugin);
 			}
