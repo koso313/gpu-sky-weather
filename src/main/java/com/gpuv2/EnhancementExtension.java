@@ -227,6 +227,11 @@ class EnhancementExtension extends GpuExtension
 	private float autoFade = 1f;
 	private long lastAutoNanos;
 
+	// When the rain and snow sounds are next due. They are one-shot effects with no way to
+	// ask how long they run, so they are re-triggered on a timer the user can match to them.
+	private long nextRainSoundNanos;
+	private long nextSnowSoundNanos;
+
 	private long thunderDueNanos;
 	// No thunder is queued before this. Without it every strike of a busy storm brought its
 	// own, which at a few seconds apart is one continuous noise.
@@ -578,6 +583,7 @@ class EnhancementExtension extends GpuExtension
 		lastCameraPitchRad = client.getCameraFpPitch();
 		updateAutoWeather();
 		playDueThunder();
+		playWeatherSounds();
 		// Advanced once here, then read from the field everywhere else this frame - easing
 		// that stepped on every read would settle at a rate depending on how many callers
 		// happened to ask.
@@ -939,6 +945,36 @@ class EnhancementExtension extends GpuExtension
 		// The gap is a floor, stretched by up to half again so claps do not fall on a beat.
 		float gapSeconds = Math.max(5, config.thunderGap()) * (1f + seed * 0.5f);
 		thunderQuietUntilNanos = now + (long) (gapSeconds * 1e9);
+	}
+
+	/**
+	 * Keeps the rain or snow sound going while that weather is falling.
+	 *
+	 * <p>Nothing plays under a roof, or while a spell is still building or has nearly
+	 * passed - a full downpour of sound over the first few drops is the wrong way round.
+	 */
+	private void playWeatherSounds()
+	{
+		WeatherMode weather = activeWeather();
+		if (!weather.hasPrecipitation() || skyBlackout > 0.5f || weatherIntensity() < 0.35f)
+		{
+			return;
+		}
+
+		long now = System.nanoTime();
+		if (weather.isRainLike())
+		{
+			if (config.rainSound() && config.rainSoundId() > 0 && now >= nextRainSoundNanos)
+			{
+				client.playSoundEffect(config.rainSoundId());
+				nextRainSoundNanos = now + Math.max(1, config.rainSoundRepeat()) * 1_000_000_000L;
+			}
+		}
+		else if (config.snowSound() && config.snowSoundId() > 0 && now >= nextSnowSoundNanos)
+		{
+			client.playSoundEffect(config.snowSoundId());
+			nextSnowSoundNanos = now + Math.max(1, config.snowSoundRepeat()) * 1_000_000_000L;
+		}
 	}
 
 	private void playDueThunder()

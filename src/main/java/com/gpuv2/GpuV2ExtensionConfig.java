@@ -842,6 +842,90 @@ public interface GpuV2ExtensionConfig extends Config
 		return 9474;
 	}
 
+	@ConfigItem(
+		keyName = "rainSound",
+		name = "Rain sound",
+		description = "Plays a rain sound while it rains or storms. Uses your in-game sound "
+			+ "effect volume, and stops underground.",
+		position = 53,
+		section = weatherSection
+	)
+	default boolean rainSound()
+	{
+		return false;
+	}
+
+	@ConfigItem(
+		keyName = "rainSoundId",
+		name = "Rain sound id",
+		description = "In-game sound effect id for rain. 3122 is the game's rain. 0 is silent.",
+		position = 54,
+		section = weatherSection
+	)
+	default int rainSoundId()
+	{
+		return 3122;
+	}
+
+	@Range(
+		min = 1,
+		max = 60
+	)
+	@ConfigItem(
+		keyName = "rainSoundRepeat",
+		name = "Rain sound repeat",
+		description = "Seconds between plays of the rain sound. Match it to the sound's length: "
+			+ "lower overlaps it, higher leaves gaps. 1 to 60.",
+		position = 55,
+		section = weatherSection
+	)
+	default int rainSoundRepeat()
+	{
+		return 4;
+	}
+
+	@ConfigItem(
+		keyName = "snowSound",
+		name = "Snow sound",
+		description = "Plays a wind sound while it snows or there is a blizzard. Uses your "
+			+ "in-game sound effect volume, and stops underground.",
+		position = 56,
+		section = weatherSection
+	)
+	default boolean snowSound()
+	{
+		return false;
+	}
+
+	@ConfigItem(
+		keyName = "snowSoundId",
+		name = "Snow sound id",
+		description = "In-game sound effect id for snow. 1861 is the game's blizzard. 0 is silent.",
+		position = 57,
+		section = weatherSection
+	)
+	default int snowSoundId()
+	{
+		return 1861;
+	}
+
+	@Range(
+		min = 1,
+		max = 60
+	)
+	@ConfigItem(
+		keyName = "snowSoundRepeat",
+		name = "Snow sound repeat",
+		description = "Seconds between plays of the snow sound. Match it to the sound's length: "
+			+ "lower overlaps it, higher leaves gaps. 1 to 60.",
+		position = 58,
+		section = weatherSection
+	)
+	default int snowSoundRepeat()
+	{
+		return 4;
+	}
+
 	// ---------------------------------------------------------------- Lighting
 
 	@ConfigSection(
