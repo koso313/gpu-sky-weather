@@ -1,98 +1,86 @@
 # Porting gpu-v2 to the GPU extension API
 
-Notes from rebuilding this plugin's sky on Adam's `gpu-api` branch
-(https://github.com/Adam-/runelite/tree/gpu-api) instead of forking the renderer.
+Notes from rebuilding this plugin on Adam's `gpu-api` branch
+(https://github.com/Adam-/runelite/tree/gpu-api) instead of on a fork of the renderer.
 
-Tested against `ff01a5857` ("Revert 'add a scope for each extension'"), built locally with
-`./gradlew publishAllToMavenLocal` and consumed as `1.12.34-SNAPSHOT`.
+Tested against `6b5a9193f` ("add pbo callback"), built locally with
+`./gradlew publishAllToMavenLocal` and consumed as `1.13.0-SNAPSHOT`.
 
-## Result: it works
+## Result
 
-The gpu-v2 sky renders through the extension API with no renderer fork - horizon
-gradient, zenith, stars, cloud bands, sun and moon - with the world drawing over it
-correctly and the stock GPU plugin owning the scene. 302 fps, zero GL errors.
+Nearly all of the plugin now runs as an extension, with the core GPU plugin owning the
+renderer:
 
-The sky was a good candidate because it already owned its program and uniforms, and its
-vertex shader builds a fullscreen triangle from `gl_VertexID`, so it needs no vertex
-buffer and never touches the scene shader. `SkyExtension.java` is the port.
+- **Sky** - day/night gradient, sun, moon and phases, stars, shooting stars, aurora,
+  clouds, lightning bolts. Drawn from `drawSkybox()` with its own program.
+- **Scene** - ambient and sun lighting, point lights from fires and torches, fog colour
+  and depth, ground mist, aerial perspective, cloud shadows, snow and wet ground,
+  underground darkening, tone mapping, colour grading. Injected through the four
+  `rlst_*` hooks and driven by uniforms set on the program from `onProgramCreate`.
+- **Weather particles, bloom, god rays, FXAA, sharpening, vignette** - drawn from
+  `onPostDrawToplevel()` into the scene framebuffer that is still bound there.
 
-## What the API is
+Code: `EnhancementExtension`, `PostEffects`, `GpuV2ExtensionPlugin`, and the
+`ext_*.glsl` shader fragments.
 
-- `GpuApi` - `registerExtension(Plugin, GpuExtension)` / `unregisterExtension(...)`
-- `GpuExtension` - `onContextCreate()`, `onContextDestroy()`,
-  `getShaderExtension(String hook)`, `drawSkybox()`, `onPostDrawToplevel()`
-- Four shader injection sites: `rlst_vert_definitions`, `rlst_vert_main_post`,
-  `rlst_frag_definitions`, `rlst_frag_main_post`
-- A UBO carrying `worldProj`, `cameraPos`, `cameraYaw`, `cameraPitch`
+## How the uniforms get set
 
-## Things that cost time
+`onProgramCreate(int program)` hands over the scene program; uniform locations are looked
+up there, again after every recompile. Values are pushed each frame from `drawSkybox()`,
+which runs with the scene program bound just before the scene is drawn. In areas with a
+skybox model that call does not happen, so they are pushed from `onPostDrawToplevel()`
+instead and take effect a frame later.
 
-### registerExtension does not call onContextCreate
+Everything injected is prefixed `gv2_` and gated on one uniform that defaults to zero, so
+the renderer's output is untouched until values have been pushed.
 
-An extension registered while the GPU plugin is already running never gets
-`onContextCreate()`, so it never builds its program and silently draws nothing. It stays
-inert until the context happens to be recreated - toggling the GPU plugin off and on.
+## Problems in the branch
 
-Measured:
+**Registering an extension with no GL context crashes the JVM.** `registerExtension` calls
+`recompileShaders()`, which calls `shutdownProgram()` -> `glDeleteProgram`. With the GPU
+plugin switched off there is no context and the process dies with an access violation:
 
 ```
-21:42:34  gpu-v2 sky extension registered        <- plugin enabled
-21:42:45  context created, program 3             <- only after cycling the GPU plugin
+EXCEPTION_ACCESS_VIOLATION
+j  org.lwjgl.opengl.GL20C.glDeleteProgram(I)V+0
+j  net.runelite.client.plugins.gpu.GpuPlugin.shutdownProgram()V+3
+j  net.runelite.client.plugins.gpu.GpuPlugin.lambda$recompileShaders$6()V+12
 ```
 
-`registerExtension` already calls `recompileShaders()`; calling `onContextCreate()` on
-the new extension when a context exists would match it.
+Seen at client startup with an extension plugin enabled and the GPU plugin disabled.
+Worked around here by waiting until `client.getDrawCallbacks()` is the GPU plugin before
+registering. `unregisterExtension` takes the same path and is avoided the same way.
 
-### Extensions must restore program and VAO themselves
+**`drawSkybox` is skipped where the scene has a skybox model**, so an extension cannot
+replace the sky there, and has no pre-scene callback at all in those areas. Read from the
+code; not hit in testing.
 
-`drawSkybox()` runs inside the renderer's own draw, and the scene is drawn immediately
-after with whatever program and VAO are bound. Restoring the obvious-looking defaults -
-program 0, VAO 0 - leaves the renderer drawing the world with no program bound: the sky
-appears and nothing else does.
+**`registerExtension` does not call `onContextCreate`** for an extension registered while
+the plugin is running. It does now get `onProgramCreate`, so building programs there as
+well covers it.
 
-Saving `GL_CURRENT_PROGRAM` and `GL_VERTEX_ARRAY_BINDING` on entry and restoring them
-fixes it. Worth either documenting on the interface or wrapping the call.
+## Things an extension author needs to know
 
-### @PluginDependency is required and not obvious
+- `@PluginDependency(GpuPlugin.class)` is required to get `GpuApi` injected.
+- GL state is the extension's to save and restore. Program, VAO, blend, depth, cull,
+  viewport, texture and framebuffer bindings all matter; the renderer carries straight on
+  with whatever is left bound.
+- Static scenery is drawn with its zone offset in `base`; players, NPCs and other dynamic
+  models are drawn with `base` at zero. That is the only way found to tell them apart in
+  the shader (used here to keep snow off characters).
+- `client.getCameraFpYaw()` / `getCameraFpPitch()` are in radians and match what the
+  renderer uses. The integer accessors are in a different unit.
 
-`GpuApi` is bound in `GpuPlugin.configure(Binder)`, so it is only in scope for plugins
-that declare `@PluginDependency(GpuPlugin.class)`. Without it, instantiation fails with
-"No implementation for GpuApi was bound", which does not point at the cause.
+## What still does not port
 
-## What does not port
+- **Smooth lighting** - needs per-vertex normals, and `Model.getVertexNormalsX/Y/Z()` is
+  null for scene models. No way to attach per-vertex data.
+- **Hiding trees and ground clutter** - needs a hook at scene upload.
+- **Draw distance, anti-aliasing, frame rate, threads, UI scaling** - the core plugin's
+  own settings now.
 
-**Per-frame uniforms on the scene program.** The largest gap. `rlst_frag_definitions` can
-declare uniforms, but nothing can set them before the scene draws - `onContextCreate` runs
-once, `onPostDrawToplevel` runs after. Everything time-varying here needs them: fog colour
-and depth, sun direction, ambient and sun colour, weather gloom, lightning flash.
+## To run it
 
-A possible workaround, untested: grab `GL_CURRENT_PROGRAM` during `onPostDrawToplevel` and
-set uniforms for the *next* frame, since uniform values persist in the program object. One
-frame of latency, and fragile.
-
-**Per-vertex data.** `Model.getVertexNormalsX/Y/Z()` is null for every scene model measured
-here (0 with, 14061 without), so smooth lighting means computing normals at upload and
-oct-encoding them into a spare short in the vertex attribute. With the vertex format owned
-by the renderer there is no way to attach that.
-
-**Scene upload filtering.** Hiding trees and ground clutter happens at upload, cheaper than
-hiding it downstream. No hook. Upload runs on `[Map Loader]`, not the render thread.
-
-**Post-processing** would need the scene colour texture, which is not handed over.
-`glCopyTexImage2D` from the bound framebuffer would probably serve.
-
-## Two smaller things in the branch
-
-`drawSkybox` only fires when the scene has no skybox model - the extension call sits inside
-the `skybox == null` branch of `GpuPlugin.drawSkybox`, so in any area that defines one,
-extensions are never asked and a plugin-drawn sky would vanish there. Not hit in testing.
-
-`extensionDrawSkybox()`'s return value is discarded. `ExtensionManager` ORs it across
-extensions, `GpuPlugin` ignores the result, and the `glClear` already happens before the
-call. Nothing decides what happens when two extensions both return true.
-
-## Verdict
-
-The API fits this plugin. The sky - the biggest single piece - runs on it today, and losing
-the fork would be a straight win. Getting the rest across needs a way to set uniforms per
-frame; the vertex and upload hooks matter less and have plausible workarounds.
+Build Adam's branch to the local Maven repository, keep `runeLiteVersion` in
+`build.gradle` at `1.13.0-SNAPSHOT`, then `./gradlew run`. Enable the stock **GPU** plugin
+and **GPU v2 (extension)**. `master` is the fork and builds against the released client.
