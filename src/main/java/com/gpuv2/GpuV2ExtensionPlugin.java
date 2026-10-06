@@ -70,6 +70,7 @@ public class GpuV2ExtensionPlugin extends Plugin
 	private EnhancementExtension extension;
 	private PerformanceOverlay performanceOverlay;
 	private boolean registered;
+	private boolean listening;
 
 	@Provides
 	GpuV2ExtensionConfig provideConfig(ConfigManager configManager)
@@ -101,6 +102,12 @@ public class GpuV2ExtensionPlugin extends Plugin
 	@Override
 	protected void shutDown()
 	{
+		if (listening && extension != null)
+		{
+			gpuApi.unregisterPBOListener(extension.exposureMeter());
+			listening = false;
+		}
+
 		if (performanceOverlay != null)
 		{
 			overlayManager.remove(performanceOverlay);
@@ -141,6 +148,11 @@ public class GpuV2ExtensionPlugin extends Plugin
 		if (!GpuV2ExtensionConfig.GROUP.equals(event.getGroup()))
 		{
 			return;
+		}
+
+		if ("autoExposure".equals(event.getKey()))
+		{
+			syncExposureListener();
 		}
 
 		if ("perfShowGpu".equals(event.getKey()) || "perfOverlay".equals(event.getKey()))
@@ -197,9 +209,39 @@ public class GpuV2ExtensionPlugin extends Plugin
 
 			gpuApi.registerExtension(this, pending);
 			registered = true;
+			syncExposureListener();
 			log.info("gpu-v2 extension registered");
 			return true;
 		});
+	}
+
+	/**
+	 * Listens for frames only while auto exposure is switched on. With a listener
+	 * registered the GPU plugin reads every finished frame back off the card, which is not
+	 * worth paying for a setting that is off.
+	 */
+	private void syncExposureListener()
+	{
+		if (extension == null)
+		{
+			return;
+		}
+
+		boolean wanted = registered && config.autoExposure() > 0;
+		if (wanted && !listening)
+		{
+			extension.exposureMeter().reset();
+			gpuApi.registerPBOListener(extension.exposureMeter());
+			listening = true;
+			log.info("gpu-v2 extension: listening for frames (auto exposure on)");
+		}
+		else if (!wanted && listening)
+		{
+			gpuApi.unregisterPBOListener(extension.exposureMeter());
+			listening = false;
+			log.info("gpu-v2 extension: stopped listening for frames after {} delivered",
+				extension.exposureMeter().framesDelivered());
+		}
 	}
 
 	/** Whether the core GPU plugin currently owns the renderer, and so has a GL context. */

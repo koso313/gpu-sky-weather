@@ -8,6 +8,7 @@ uniform vec2 texel;      // 1 / resolution
 uniform float useFxaa;
 uniform float sharpen;   // 0 disables
 uniform float vignette;  // 0 disables
+uniform float exposure;  // brightness multiplier; 0 means not set, and is treated as 1
 
 float luma(vec3 c)
 {
@@ -66,6 +67,11 @@ void main()
 	vec2 uv = fNdc * 0.5 + 0.5;
 
 	vec3 col = useFxaa > 0.5 ? fxaa(uv) : texture(src, uv).rgb;
+
+	if (exposure > 0.001)
+	{
+		col *= exposure;
+	}
 
 	if (sharpen > 0.001)
 	{

@@ -237,6 +237,10 @@ class EnhancementExtension extends GpuExtension
 	private float thunderSeed;
 
 	private final PostEffects post = new PostEffects();
+	private final ExposureMeter exposureMeter;
+	// The multiplier the last frame was drawn with, which the meter needs to make sense of
+	// what it reads back.
+	private float exposureApplied = 1f;
 	private final FrameStats frameStats;
 
 	// Kept for the god-ray pass, which projects the sun with the angles the frame was drawn at.
@@ -248,6 +252,7 @@ class EnhancementExtension extends GpuExtension
 		FrameStats frameStats)
 	{
 		this.frameStats = frameStats;
+		this.exposureMeter = new ExposureMeter(client);
 		this.client = client;
 		this.config = config;
 		this.configManager = configManager;
@@ -520,7 +525,18 @@ class EnhancementExtension extends GpuExtension
 				// Only worked out when shafts are wanted - it is the one input here that
 				// costs anything to produce.
 				boolean sunInView = config.godRays() > 0 && updateSunScreenPos();
-				post.run(config, vaoSkyHandle, glState.viewport, sunInView ? sunScreen : null, sunRayFade);
+
+				float night = effectiveSkyMode() == SkyMode.TIME_OF_DAY
+					? SkyGradient.nightFactorAt(skyTime())
+					: 0f;
+				exposureApplied = exposureMeter.update(config.autoExposure() / 100f, night, exposureApplied);
+
+				post.run(config, vaoSkyHandle, glState.viewport, sunInView ? sunScreen : null, sunRayFade,
+					exposureApplied);
+			}
+			else
+			{
+				exposureApplied = 1f;
 			}
 
 			// After the effects, so precipitation falls in front of the finished image
@@ -535,6 +551,15 @@ class EnhancementExtension extends GpuExtension
 		{
 			glState.restore();
 		}
+	}
+
+	/**
+	 * The frame listener behind auto exposure. Registered with the GPU plugin only while
+	 * the setting is on, since a listener makes it read every frame back off the card.
+	 */
+	ExposureMeter exposureMeter()
+	{
+		return exposureMeter;
 	}
 
 	/** Rescans for light sources. Called on the game tick, on the client thread. */

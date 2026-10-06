@@ -71,6 +71,7 @@ final class PostEffects
 	private int uniPostFxaa;
 	private int uniPostSharpen;
 	private int uniPostVignette;
+	private int uniPostExposure;
 
 	private int uniRaySrc;
 	private int uniRayPass;
@@ -109,6 +110,7 @@ final class PostEffects
 		uniPostFxaa = glGetUniformLocation(glPostProgram, "useFxaa");
 		uniPostSharpen = glGetUniformLocation(glPostProgram, "sharpen");
 		uniPostVignette = glGetUniformLocation(glPostProgram, "vignette");
+		uniPostExposure = glGetUniformLocation(glPostProgram, "exposure");
 
 		uniRaySrc = glGetUniformLocation(glGodrayProgram, "src");
 		uniRayPass = glGetUniformLocation(glGodrayProgram, "rayPass");
@@ -157,12 +159,15 @@ final class PostEffects
 	 * @param sunScreen  the sun's position in 0..1 viewport space, or null when it is not
 	 *                   somewhere shafts could come from
 	 * @param sunRayFade how much daylight is left for shafts, 0..1
+	 * @param exposure   brightness multiplier for the whole picture, 1 for none
 	 */
-	void run(GpuV2ExtensionConfig config, int vao, int[] viewport, float[] sunScreen, float sunRayFade)
+	void run(GpuV2ExtensionConfig config, int vao, int[] viewport, float[] sunScreen, float sunRayFade,
+		float exposure)
 	{
 		final boolean bloom = config.bloomEnabled();
 		final boolean rays = config.godRays() > 0 && sunScreen != null;
-		final boolean imagePass = config.fxaa() || config.sharpen() > 0 || config.vignette() > 0;
+		final boolean exposed = Math.abs(exposure - 1f) > 0.004f;
+		final boolean imagePass = config.fxaa() || config.sharpen() > 0 || config.vignette() > 0 || exposed;
 		if (!bloom && !rays && !imagePass)
 		{
 			return;
@@ -211,7 +216,7 @@ final class PostEffects
 
 		if (imagePass)
 		{
-			// Redraws the scene through FXAA, sharpening and vignette, over itself.
+			// Redraws the scene through FXAA, sharpening, vignette and exposure, over itself.
 			glBindFramebuffer(GL_FRAMEBUFFER, sceneFbo);
 			glViewport(vx, vy, w, h);
 			glUseProgram(glPostProgram);
@@ -221,6 +226,7 @@ final class PostEffects
 			glUniform1f(uniPostFxaa, config.fxaa() ? 1f : 0f);
 			glUniform1f(uniPostSharpen, config.sharpen() / 100f * 0.5f);
 			glUniform1f(uniPostVignette, config.vignette() / 100f * 0.8f);
+			glUniform1f(uniPostExposure, exposed ? exposure : 1f);
 			glDrawArrays(GL_TRIANGLES, 0, 3);
 		}
 

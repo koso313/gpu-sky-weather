@@ -1401,6 +1401,29 @@ public interface GpuV2ExtensionConfig extends Config
 	}
 
 	@Range(
+		max = 100
+	)
+	@ConfigItem(
+		keyName = "autoExposure",
+		name = "Auto exposure",
+		description = "Lets the picture adjust to how bright the scene is, the way eyes do. "
+			+ "Step out of somewhere dark and it is too bright for a moment, then settles; "
+			+ "go into the dark and it slowly becomes readable. 0 disables."
+			+ "<br><br>"
+			+ "Kept narrow on purpose, so night stays dark and snow stays bright."
+			+ "<br><br>"
+			+ "Experimental. It works by having the GPU plugin read each finished frame back "
+			+ "off the graphics card, which costs a little frame rate while this is on, and "
+			+ "needs Post-processing switched on.",
+		position = 765,
+		section = postSection
+	)
+	default int autoExposure()
+	{
+		return 0;
+	}
+
+	@Range(
 		min = 25,
 		max = 250
 	)
