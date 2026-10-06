@@ -47,7 +47,7 @@ import net.runelite.api.coords.LocalPoint;
 class LightScanner
 {
 	/**
-	 * Hard ceiling on lights drawn at once. Must match MAX_LIGHTS in frag.glsl.
+	 * Hard ceiling on lights drawn at once. Must match GSW_MAX_LIGHTS in ext_frag_defs.glsl.
 	 *
 	 * <p>This is the size of the shader's uniform arrays, so it is fixed at compile time.
 	 * How many of the slots are actually used is a setting, because every one of them costs

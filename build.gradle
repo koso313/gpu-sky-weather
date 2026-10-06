@@ -44,8 +44,8 @@ tasks.register('run', JavaExec) {
 	mainClass = pluginMainClass
 
 	// Required: ExternalPluginManager.loadBuiltin refuses to run without assertions.
-	// This means the ported renderer's asserts are live in the dev client when they are
-	// not in production, so draw-path guards must catch Throwable, not just Exception.
+	// This means asserts are live in the dev client when they are not in production, so
+	// draw-path guards must catch Throwable, not just Exception.
 	jvmArgs "-ea"
 	args "--developer-mode", "--debug"
 }

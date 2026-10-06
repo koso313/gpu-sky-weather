@@ -82,15 +82,7 @@ public class GpuSkyWeatherPlugin extends Plugin
 	protected void startUp()
 	{
 		extension = new SkyWeatherExtension(client, config, configManager, frameStats);
-		/*
-		 * Built by hand rather than injected. The overlay reads the full plugin's settings
-		 * interface, and binding that interface in this plugin's module makes RuneLite show
-		 * it as this plugin's settings panel - every renderer setting of the fork, none of
-		 * which do anything here. Both interfaces share a group and keys, so the overlay
-		 * still follows the switches in the panel that is shown.
-		 */
-		performanceOverlay = new PerformanceOverlay(
-			configManager.getConfig(GpuPluginConfig.class), frameStats, gpuMonitor);
+		performanceOverlay = new PerformanceOverlay(config, frameStats, gpuMonitor);
 		overlayManager.add(performanceOverlay);
 		if (config.perfOverlay() && config.perfShowGpu())
 		{

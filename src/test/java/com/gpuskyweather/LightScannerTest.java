@@ -153,15 +153,15 @@ public class LightScannerTest
 	public void lightCeilingMatchesTheShaderArray() throws Exception
 	{
 		String frag;
-		try (InputStream in = getClass().getResourceAsStream("/com/gpuskyweather/frag.glsl"))
+		try (InputStream in = getClass().getResourceAsStream("/com/gpuskyweather/ext_frag_defs.glsl"))
 		{
-			assertNotNull("frag.glsl not on the test classpath", in);
+			assertNotNull("ext_frag_defs.glsl not on the test classpath", in);
 			frag = new BufferedReader(new InputStreamReader(in, StandardCharsets.UTF_8))
 				.lines().collect(Collectors.joining("\n"));
 		}
 
-		Matcher m = Pattern.compile("#define\\s+MAX_LIGHTS\\s+(\\d+)").matcher(frag);
-		assertTrue("frag.glsl declares no MAX_LIGHTS", m.find());
+		Matcher m = Pattern.compile("#define\\s+GSW_MAX_LIGHTS\\s+(\\d+)").matcher(frag);
+		assertTrue("ext_frag_defs.glsl declares no GSW_MAX_LIGHTS", m.find());
 		assertEquals(Integer.parseInt(m.group(1)), LightScanner.MAX_LIGHTS);
 	}
 

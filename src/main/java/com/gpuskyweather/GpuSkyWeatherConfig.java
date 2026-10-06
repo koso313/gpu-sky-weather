@@ -30,16 +30,13 @@ import net.runelite.client.config.ConfigGroup;
 import net.runelite.client.config.ConfigItem;
 import net.runelite.client.config.ConfigSection;
 import net.runelite.client.config.Range;
-import static com.gpuskyweather.GpuPlugin.MAX_FOG_DEPTH;
 import com.gpuskyweather.config.WeatherMode;
 
 /*
- * The settings of the full plugin that the extension build can honour, under the same
- * group and key names - so everything already tuned there carries straight over, and the
- * two builds stay in step while both exist.
+ * Settings for the sky, weather, lighting and post-processing this plugin adds.
  *
- * Left out: whatever belongs to the renderer itself (draw distance, anti-aliasing, frame
- * rate, threads, scaling), which the core GPU plugin now owns, and what has no hook yet.
+ * Whatever belongs to the renderer itself (draw distance, anti-aliasing, frame rate,
+ * scaling) is the GPU plugin's and is not repeated here.
  *
  * Key names must not change - they are what settings persist under.
  */
@@ -47,6 +44,8 @@ import com.gpuskyweather.config.WeatherMode;
 public interface GpuSkyWeatherConfig extends Config
 {
 	String GROUP = "gpuskyweather";
+
+	int MAX_FOG_DEPTH = 100;
 
 	// ------------------------------------------------------------------ Display
 

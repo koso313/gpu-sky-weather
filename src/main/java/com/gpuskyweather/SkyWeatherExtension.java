@@ -57,10 +57,6 @@ import net.runelite.client.plugins.gpu.api.GpuExtension;
  * {@link #onProgramCreate(int)}.
  * <li>Precipitation, in {@link #onPostDrawToplevel()}, over the finished scene.
  * </ul>
- *
- * <p>The logic for what the weather is, where the sun stands and how dark it should be is
- * the full plugin's, moved across as it stood. Only how the results reach the screen
- * differs.
  */
 @Slf4j
 class SkyWeatherExtension extends GpuExtension
@@ -746,10 +742,9 @@ class SkyWeatherExtension extends GpuExtension
 		}
 	}
 
-	// ------------------------------------------------------------------ carried over
+	// ------------------------------------------------------------------ sky, weather and light
 	//
-	// Everything below is the full plugin's own logic, unchanged except where it used to
-	// bind a framebuffer or restore GL state itself - the callbacks above own that now.
+	// Nothing below binds a framebuffer or restores GL state - the callbacks above own that.
 
 	/**
 	 * Fills {@link #sunDir} with the world-space direction toward the sun at the given

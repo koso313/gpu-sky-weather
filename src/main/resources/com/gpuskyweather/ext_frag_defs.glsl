@@ -38,11 +38,11 @@ uniform float gsw_aerial;
 uniform float gsw_underground;
 
 // Point lights from fires, torches and lanterns. Count 0 disables.
-#define GV2_MAX_LIGHTS 64
+#define GSW_MAX_LIGHTS 64
 uniform int gsw_lightCount;
-uniform vec3 gsw_lightPos[GV2_MAX_LIGHTS];
-uniform vec3 gsw_lightColor[GV2_MAX_LIGHTS];
-uniform float gsw_lightRadius[GV2_MAX_LIGHTS];
+uniform vec3 gsw_lightPos[GSW_MAX_LIGHTS];
+uniform vec3 gsw_lightColor[GSW_MAX_LIGHTS];
+uniform float gsw_lightRadius[GSW_MAX_LIGHTS];
 uniform float gsw_lightFlicker;
 
 // Ground mist. 0 disables.
@@ -292,7 +292,7 @@ vec3 gsw_applyPointLights(vec3 c, vec3 n)
 
   vec3 accum = vec3(0.0);
 
-  for (int i = 0; i < gsw_lightCount && i < GV2_MAX_LIGHTS; ++i)
+  for (int i = 0; i < gsw_lightCount && i < GSW_MAX_LIGHTS; ++i)
   {
     vec3 delta = gsw_lightPos[i] - gsw_worldPos;
     float dist = length(delta);

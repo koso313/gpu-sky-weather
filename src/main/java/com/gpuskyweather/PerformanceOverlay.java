@@ -45,7 +45,7 @@ class PerformanceOverlay extends Overlay
 	private static final int WARN_FPS = 60;
 	private static final int BAD_FPS = 30;
 
-	private final GpuPluginConfig config;
+	private final GpuSkyWeatherConfig config;
 	private final FrameStats stats;
 	private final GpuMonitor gpu;
 
@@ -55,7 +55,7 @@ class PerformanceOverlay extends Overlay
 	private long lastRefreshNanos;
 
 	@Inject
-	PerformanceOverlay(GpuPluginConfig config, FrameStats stats, GpuMonitor gpu)
+	PerformanceOverlay(GpuSkyWeatherConfig config, FrameStats stats, GpuMonitor gpu)
 	{
 		this.config = config;
 		this.stats = stats;

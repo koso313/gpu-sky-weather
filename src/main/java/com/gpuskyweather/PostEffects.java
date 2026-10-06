@@ -29,11 +29,10 @@ import static org.lwjgl.opengl.GL33C.*;
 import com.gpuskyweather.template.Template;
 
 /**
- * Bloom, god rays, and the anti-aliasing / sharpening / vignette pass, for the extension
- * build.
+ * Bloom, god rays, and the anti-aliasing / sharpening / vignette pass.
  *
- * <p>The full plugin ran these while moving the finished scene from its own framebuffer to
- * the window. An extension never sees that step, so they run here instead, in place: the
+ * <p>An extension never sees the renderer move the finished scene from its framebuffer to
+ * the window, so these run in place: the
  * scene is copied out of the renderer's framebuffer into a texture, and each effect is
  * drawn back over the same framebuffer it came from, before the renderer goes on to put it
  * on screen.
