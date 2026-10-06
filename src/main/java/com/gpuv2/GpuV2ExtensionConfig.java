@@ -858,7 +858,7 @@ public interface GpuV2ExtensionConfig extends Config
 	@ConfigItem(
 		keyName = "rainSoundId",
 		name = "Rain sound id",
-		description = "In-game sound effect id for rain. 8738 is a steady rain, 3122 a lighter one. 0 is silent.",
+		description = "In-game sound effect id for rain. 8738 and 3122 are both rain from the game. 0 is silent.",
 		position = 54,
 		section = weatherSection
 	)
@@ -900,7 +900,7 @@ public interface GpuV2ExtensionConfig extends Config
 	@ConfigItem(
 		keyName = "snowSoundId",
 		name = "Snow sound id",
-		description = "In-game sound effect id for snow. 1862 is wind, 1861 a blizzard. 0 is silent.",
+		description = "In-game sound effect id for snow. 1862 is the game's wind, 1861 its blizzard. 0 is silent.",
 		position = 57,
 		section = weatherSection
 	)
