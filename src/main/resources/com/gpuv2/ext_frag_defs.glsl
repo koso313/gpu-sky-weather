@@ -239,15 +239,17 @@ vec3 gv2_applyWetGround(vec3 c, vec3 n)
   c = mix(c, wet, flat_ * gv2_groundWet * 0.85);
 
   /*
-   * Puddles only where the ground is close to level. Water does not sit on a slope, and
-   * letting it pool on anything merely gentle covered rolling ground in blotches.
+   * Puddles favour level ground, but as a gradual preference and not a cutoff. The
+   * normal is one value per triangle, so anything sharp here draws the triangles: a pool
+   * would stop dead along the edge where one tilts a little more than its neighbour.
+   * A long gentle ramp makes that step small enough not to show.
    */
-  float level = smoothstep(0.86, 0.98, up);
+  float level = clamp((up - 0.70) / 0.30, 0.0, 1.0);
 
-  // Same scale reasoning as the snow drift above - puddles pool over several tiles. The
-  // threshold is high, so they are the occasional pool rather than half the ground.
-  float pool = gv2_gNoise(gv2_worldPos.xz * 0.0022) * 0.65 + gv2_gNoise(gv2_worldPos.xz * 0.0065) * 0.35;
-  float puddle = smoothstep(0.66, 0.80, pool) * level * gv2_groundWet;
+  // Small pools, a tile or two across, with a wide soft rim. World units are ~128 per
+  // tile.
+  float pool = gv2_gNoise(gv2_worldPos.xz * 0.0046) * 0.60 + gv2_gNoise(gv2_worldPos.xz * 0.0115) * 0.40;
+  float puddle = smoothstep(0.62, 0.86, pool) * level * gv2_groundWet;
   if (puddle < 0.001)
   {
     return c;
@@ -267,7 +269,7 @@ vec3 gv2_applyWetGround(vec3 c, vec3 n)
   vec3 h = normalize(normalize(gv2_lightSunDir) + v);
   surface += vec3(1.0, 0.98, 0.92) * pow(clamp(dot(n, h), 0.0, 1.0), 48.0) * 0.4;
 
-  return mix(c, surface, clamp(puddle, 0.0, 0.85));
+  return mix(c, surface, clamp(puddle, 0.0, 0.70));
 }
 
 /*
