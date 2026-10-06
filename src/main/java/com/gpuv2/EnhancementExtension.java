@@ -205,8 +205,18 @@ class EnhancementExtension extends GpuExtension
 
 	private final GlState glState = new GlState();
 
-	EnhancementExtension(Client client, GpuV2ExtensionConfig config, ConfigManager configManager)
+	private final PostEffects post = new PostEffects();
+	private final FrameStats frameStats;
+
+	// Kept for the god-ray pass, which projects the sun with the angles the frame was drawn at.
+	private float lastCameraPitchRad;
+	private final float[] sunScreen = new float[2];
+	private float sunRayFade;
+
+	EnhancementExtension(Client client, GpuV2ExtensionConfig config, ConfigManager configManager,
+		FrameStats frameStats)
 	{
+		this.frameStats = frameStats;
 		this.client = client;
 		this.config = config;
 		this.configManager = configManager;
@@ -243,6 +253,7 @@ class EnhancementExtension extends GpuExtension
 			glDeleteVertexArrays(vaoSkyHandle);
 			vaoSkyHandle = 0;
 		}
+		post.destroy();
 		sceneProgram = 0;
 	}
 
@@ -326,6 +337,7 @@ class EnhancementExtension extends GpuExtension
 			template.addInclude(EnhancementExtension.class);
 			glSkyProgram = SKY_PROGRAM.compile(template);
 			glWeatherProgram = WEATHER_PROGRAM.compile(template);
+			post.create(template);
 		}
 		catch (ShaderException ex)
 		{
@@ -449,6 +461,10 @@ class EnhancementExtension extends GpuExtension
 	@Override
 	public void onPostDrawToplevel()
 	{
+		// Timed here, once the frame's world is drawn, so what is measured is the interval
+		// between frames the player actually sees.
+		frameStats.frame(System.nanoTime());
+
 		if (!enabled || sceneProgram == 0)
 		{
 			return;
@@ -466,6 +482,16 @@ class EnhancementExtension extends GpuExtension
 			}
 			frameDone = false;
 
+			if (enhancements() && config.postProcessing() && post.ready())
+			{
+				// Only worked out when shafts are wanted - it is the one input here that
+				// costs anything to produce.
+				boolean sunInView = config.godRays() > 0 && updateSunScreenPos();
+				post.run(config, vaoSkyHandle, glState.viewport, sunInView ? sunScreen : null, sunRayFade);
+			}
+
+			// After the effects, so precipitation falls in front of the finished image
+			// rather than being blurred and bloomed along with it.
 			if (enhancements() && activeWeather().hasPrecipitation() && glWeatherProgram != 0)
 			{
 				int[] viewport = glState.viewport;
@@ -494,6 +520,7 @@ class EnhancementExtension extends GpuExtension
 	private void beginFrame()
 	{
 		lastCameraYawRad = client.getCameraFpYaw();
+		lastCameraPitchRad = client.getCameraFpPitch();
 		// Advanced once here, then read from the field everywhere else this frame - easing
 		// that stepped on every read would settle at a rate depending on how many callers
 		// happened to ask.
@@ -1632,5 +1659,71 @@ class EnhancementExtension extends GpuExtension
 
 		glDrawArrays(GL_TRIANGLES, 0, 3);
 
+	}
+	/**
+	 * Projects the sun onto the screen, storing it in {@link #sunScreen}.
+	 *
+	 * <p>Inverts what the sky shader does: that reconstructs a world ray from a pixel,
+	 * this takes the sun's world direction forward through the same rotations and
+	 * projection to find its pixel.
+	 *
+	 * @return false when the sun is behind the camera or too far outside the view for
+	 *         shafts to make sense, in which case the pass is skipped entirely
+	 */
+	private boolean updateSunScreenPos()
+	{
+		if (effectiveSkyMode() != SkyMode.TIME_OF_DAY)
+		{
+			// Without the procedural sky there is no sun on screen to radiate from.
+			return false;
+		}
+
+		LocalTime time = skyTime();
+		// No shafts after dark, and they ease off as the sun sets.
+		sunRayFade = 1f - SkyGradient.nightFactorAt(time);
+		if (sunRayFade < 0.02f)
+		{
+			return false;
+		}
+
+		computeSunDirection(time);
+
+		float cp = (float) Math.cos(lastCameraPitchRad);
+		float sp = (float) Math.sin(lastCameraPitchRad);
+		float cy = (float) Math.cos(lastCameraYawRad);
+		float sy = (float) Math.sin(lastCameraYawRad);
+
+		// Ry then Rx, the forward direction of the inverse used in the sky shader.
+		float ax = cy * sunDir[0] + sy * sunDir[2];
+		float ay = sunDir[1];
+		float az = -sy * sunDir[0] + cy * sunDir[2];
+
+		float bx = ax;
+		float by = cp * ay - sp * az;
+		float bz = sp * ay + cp * az;
+
+		if (bz <= 0.0001f)
+		{
+			// Behind the camera.
+			return false;
+		}
+
+		int vw = client.getViewportWidth();
+		int vh = client.getViewportHeight();
+		float scale = (float) client.getScale();
+		if (vw <= 0 || vh <= 0 || scale <= 0f)
+		{
+			return false;
+		}
+
+		float ndcX = scale * (2f / vw) * bx / bz;
+		float ndcY = -scale * (2f / vh) * by / bz;
+
+		sunScreen[0] = ndcX * 0.5f + 0.5f;
+		sunScreen[1] = ndcY * 0.5f + 0.5f;
+
+		// Well off-screen contributes nothing but still costs two full passes.
+		return sunScreen[0] > -0.6f && sunScreen[0] < 1.6f
+			&& sunScreen[1] > -0.6f && sunScreen[1] < 1.6f;
 	}
 }

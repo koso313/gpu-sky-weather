@@ -93,6 +93,58 @@ public interface GpuV2ExtensionConfig extends Config
 		return 0;
 	}
 
+	@ConfigItem(
+		keyName = "fxaa",
+		name = "FXAA",
+		description = "Post-process anti-aliasing. Smooths shader-drawn edges such as the "
+			+ "aurora, clouds and lightning, which MSAA cannot touch since they are not "
+			+ "geometry.",
+		position = 151,
+		section = displaySection
+	)
+	default boolean fxaa()
+	{
+		return false;
+	}
+
+	@Range(
+		max = 100
+	)
+	@ConfigItem(
+		keyName = "sharpen",
+		name = "Sharpening",
+		description = "Crispens edges and picks detail back out of textures. 0 disables."
+			+ "<br><br>"
+			+ "Pairs well with FXAA and with a render scale below 100, both of which soften "
+			+ "the image - this puts the bite back. Push it too far and edges grow bright "
+			+ "outlines.",
+		position = 152,
+		section = displaySection
+	)
+	default int sharpen()
+	{
+		return 10;
+	}
+
+	@Range(
+		max = 100
+	)
+	@ConfigItem(
+		keyName = "vignette",
+		name = "Vignette",
+		description = "Darkens the corners of the screen, drawing the eye toward the middle "
+			+ "and giving the picture a lens-like framing. 0 disables."
+			+ "<br><br>"
+			+ "A matter of taste rather than accuracy, and it works against you in dark "
+			+ "places where the corners are already hard to read.",
+		position = 153,
+		section = displaySection
+	)
+	default int vignette()
+	{
+		return 0;
+	}
+
 	// -------------------------------------------------------------- Performance
 
 	@ConfigSection(
@@ -103,6 +155,75 @@ public interface GpuV2ExtensionConfig extends Config
 		closedByDefault = true
 	)
 	String performanceSection = "performanceSection";
+
+	@ConfigItem(
+		keyName = "perfOverlay",
+		name = "Performance overlay",
+		description = "Show the current frame rate in the corner of the viewport. The "
+			+ "options below add to it and do nothing on their own.",
+		position = 30,
+		section = performanceSection
+	)
+	default boolean perfOverlay()
+	{
+		return false;
+	}
+
+	@ConfigItem(
+		keyName = "perfShowFrameTime",
+		name = "  Frame time",
+		description = "Average milliseconds per frame. Often more use than the frame rate: "
+			+ "the difference between 250 and 200 fps is under a millisecond, while the "
+			+ "difference between 60 and 30 is sixteen.",
+		position = 31,
+		section = performanceSection
+	)
+	default boolean perfShowFrameTime()
+	{
+		return true;
+	}
+
+	@ConfigItem(
+		keyName = "perfShowAverage",
+		name = "  Average FPS",
+		description = "Mean frame rate over the last thousand frames. Steadier than the live "
+			+ "reading, and the fair number to compare against after changing a setting.",
+		position = 32,
+		section = performanceSection
+	)
+	default boolean perfShowAverage()
+	{
+		return true;
+	}
+
+	@ConfigItem(
+		keyName = "perfShowLows",
+		name = "  1% lows",
+		description = "Frame rate of the slowest one percent of the last thousand frames - "
+			+ "what a stutter actually feels like, and the number an average hides.",
+		position = 33,
+		section = performanceSection
+	)
+	default boolean perfShowLows()
+	{
+		return true;
+	}
+
+	@ConfigItem(
+		keyName = "perfShowGpu",
+		name = "  GPU temperature",
+		description = "GPU temperature and utilisation. NVIDIA cards only: there is no way "
+			+ "to read either from Java, so this runs the nvidia-smi tool as a separate "
+			+ "process every two seconds while it is on. Hides itself on any machine where "
+			+ "that tool is not present. CPU temperature is not offered because Windows "
+			+ "does not report it on most desktops without extra drivers.",
+		position = 34,
+		section = performanceSection
+	)
+	default boolean perfShowGpu()
+	{
+		return true;
+	}
 
 	@Range(
 		min = 1,
@@ -119,6 +240,19 @@ public interface GpuV2ExtensionConfig extends Config
 	default int effectQuality()
 	{
 		return 3;
+	}
+
+	@ConfigItem(
+		keyName = "postProcessing",
+		name = "Post-processing",
+		description = "Master switch for bloom, god rays, FXAA, sharpening and vignette. "
+			+ "Turn off to see what they cost.",
+		position = 27,
+		section = performanceSection
+	)
+	default boolean postProcessing()
+	{
+		return true;
 	}
 
 	// --------------------------------------------------------------------- Sky
@@ -1079,6 +1213,101 @@ public interface GpuV2ExtensionConfig extends Config
 		closedByDefault = true
 	)
 	String postSection = "postSection";
+
+	@ConfigItem(
+		keyName = "bloomEnabled",
+		name = "Bloom",
+		description = "Bleed a glow out of bright parts of the scene. Costs a few extra "
+			+ "render passes.",
+		position = 71,
+		section = postSection
+	)
+	default boolean bloomEnabled()
+	{
+		return false;
+	}
+
+	@Range(
+		max = 99
+	)
+	@ConfigItem(
+		keyName = "bloomThreshold",
+		name = "Bloom threshold",
+		description = "How bright a pixel must be before it glows. Lower makes more of "
+			+ "the scene glow.",
+		position = 72,
+		section = postSection
+	)
+	default int bloomThreshold()
+	{
+		return 65;
+	}
+
+	@Range(
+		max = 200
+	)
+	@ConfigItem(
+		keyName = "bloomIntensity",
+		name = "Bloom intensity",
+		description = "Strength of the glow added back over the scene. Low is a subtle "
+			+ "softening around bright edges; high is a dreamy haze over everything that "
+			+ "passed the threshold.",
+		position = 73,
+		section = postSection
+	)
+	default int bloomIntensity()
+	{
+		return 60;
+	}
+
+	@Range(
+		max = 100
+	)
+	@ConfigItem(
+		keyName = "godRays",
+		name = "God rays",
+		description = "Strength of light shafts from the sun. 0 disables. Needs sky "
+			+ "colour set to 'Time of day', and only shows when the sun is in view.",
+		position = 74,
+		section = postSection
+	)
+	default int godRays()
+	{
+		return 0;
+	}
+
+	@Range(
+		max = 99
+	)
+	@ConfigItem(
+		keyName = "godRayThreshold",
+		name = "God ray threshold",
+		description = "How bright a pixel must be to cast a shaft. Lower catches more of "
+			+ "the sky.",
+		position = 75,
+		section = postSection
+	)
+	default int godRayThreshold()
+	{
+		return 55;
+	}
+
+	@Range(
+		min = 5,
+		max = 150
+	)
+	@ConfigItem(
+		keyName = "godRayLength",
+		name = "God ray length",
+		description = "How far the shafts stretch out from the sun. Short keeps them a halo "
+			+ "close around it; long reaches them across the sky.",
+		position = 76,
+		section = postSection
+	)
+	default int godRayLength()
+	{
+		return 80;
+	}
 
 	@Range(
 		min = 25,

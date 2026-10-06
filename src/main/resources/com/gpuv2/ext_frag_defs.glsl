@@ -179,8 +179,15 @@ vec3 gv2_applyHeightFog(vec3 c)
 vec3 gv2_applySnowCover(vec3 c, vec3 n)
 {
   float up = clamp(-n.y, 0.0, 1.0);
-  // Steep faces shed snow; the power sharpens the cutoff between flat and sloped.
-  float flat_ = pow(up, 3.0);
+  /*
+   * Steep faces shed snow; anything gentler than about forty-five degrees holds all of it.
+   *
+   * The normal here is per triangle, and terrain is a mesh of triangles each tilted a
+   * little differently. A cutoff that keeps falling across those small tilts gives every
+   * triangle its own amount of snow, and the ground comes out as a patchwork of facets.
+   * Saturating early means rolling ground is evenly covered and only real slopes thin out.
+   */
+  float flat_ = smoothstep(0.30, 0.70, up);
   if (flat_ < 0.01)
   {
     return c;
@@ -191,16 +198,22 @@ vec3 gv2_applySnowCover(vec3 c, vec3 n)
    * per tile, so anything much above 0.005 varies within a single tile and reads as
    * dirty speckle rather than snow.
    *
-   * Snow also lies as a near-continuous blanket with thinner patches, so this is mostly
-   * uniform coverage with the noise only taking a bite out of it - not noise deciding
-   * where snow exists at all.
+   * The thin patches let roughly half the ground through. With the slope no longer
+   * varying the cover from one triangle to the next, this is the only thing left to break
+   * it up, and a blanket that never thins turns the whole scene one flat white.
    */
   float drift = gv2_gNoise(gv2_worldPos.xz * 0.0018) * 0.65 + gv2_gNoise(gv2_worldPos.xz * 0.0055) * 0.35;
-  float patch = 0.72 + 0.28 * smoothstep(0.30, 0.70, drift);
+  float patch = 0.52 + 0.48 * smoothstep(0.28, 0.72, drift);
   float cover = clamp(patch * flat_ * gv2_groundSnow, 0.0, 1.0);
 
-  // Slightly blue-shadowed white rather than pure white, which reads as flat paint.
-  vec3 snow = vec3(0.94, 0.96, 1.0);
+  /*
+   * Slightly blue-shadowed white rather than pure white, and carrying the brightness of
+   * what it lies on. The game's own shading and its textures are in that brightness, so
+   * hills keep their relief and paths, bricks and roof tiles stay readable under the snow
+   * instead of everything flattening to one value.
+   */
+  float luma = dot(c, vec3(0.2126, 0.7152, 0.0722));
+  vec3 snow = vec3(0.94, 0.96, 1.0) * (0.68 + 0.32 * smoothstep(0.04, 0.42, luma));
   return mix(c, snow, cover);
 }
 
@@ -211,7 +224,8 @@ vec3 gv2_applySnowCover(vec3 c, vec3 n)
 vec3 gv2_applyWetGround(vec3 c, vec3 n)
 {
   float up = clamp(-n.y, 0.0, 1.0);
-  float flat_ = pow(up, 4.0);
+  // Saturates early for the same reason the snow does: see gv2_applySnowCover.
+  float flat_ = smoothstep(0.35, 0.75, up);
   if (flat_ < 0.01)
   {
     return c;

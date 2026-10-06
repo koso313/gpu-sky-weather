@@ -8,12 +8,14 @@ import net.runelite.api.events.GameTick;
 import net.runelite.client.callback.ClientThread;
 import net.runelite.client.config.ConfigManager;
 import net.runelite.client.eventbus.Subscribe;
+import net.runelite.client.events.ConfigChanged;
 import net.runelite.client.events.PluginChanged;
 import net.runelite.client.plugins.Plugin;
 import net.runelite.client.plugins.PluginDependency;
 import net.runelite.client.plugins.PluginDescriptor;
 import net.runelite.client.plugins.PluginManager;
 import net.runelite.client.plugins.gpu.api.GpuApi;
+import net.runelite.client.ui.overlay.OverlayManager;
 
 /**
  * The plugin as an extension of the core GPU plugin: sky, weather and lighting, with the
@@ -56,6 +58,18 @@ public class GpuV2ExtensionPlugin extends Plugin
 	@Inject
 	private GpuV2ExtensionConfig config;
 
+	@Inject
+	private OverlayManager overlayManager;
+
+	@Inject
+	private PerformanceOverlay performanceOverlay;
+
+	@Inject
+	private FrameStats frameStats;
+
+	@Inject
+	private GpuMonitor gpuMonitor;
+
 	private EnhancementExtension extension;
 	private boolean registered;
 
@@ -65,16 +79,36 @@ public class GpuV2ExtensionPlugin extends Plugin
 		return configManager.getConfig(GpuV2ExtensionConfig.class);
 	}
 
+	/**
+	 * The performance overlay was written against the full plugin's settings. Both
+	 * interfaces read the same group and keys, so handing it this one costs nothing and
+	 * saves a second copy of the overlay.
+	 */
+	@Provides
+	GpuPluginConfig provideFullConfig(ConfigManager configManager)
+	{
+		return configManager.getConfig(GpuPluginConfig.class);
+	}
+
 	@Override
 	protected void startUp()
 	{
-		extension = new EnhancementExtension(client, config, configManager);
+		extension = new EnhancementExtension(client, config, configManager, frameStats);
+		overlayManager.add(performanceOverlay);
+		if (config.perfOverlay() && config.perfShowGpu())
+		{
+			gpuMonitor.start();
+		}
 		registerWhenGpuReady();
 	}
 
 	@Override
 	protected void shutDown()
 	{
+		overlayManager.remove(performanceOverlay);
+		gpuMonitor.stop();
+		frameStats.reset();
+
 		if (registered && gpuRunning())
 		{
 			gpuApi.unregisterExtension(this, extension);
@@ -98,6 +132,29 @@ public class GpuV2ExtensionPlugin extends Plugin
 		if (event.getPlugin() instanceof net.runelite.client.plugins.gpu.GpuPlugin && event.isLoaded())
 		{
 			registerWhenGpuReady();
+		}
+	}
+
+	@Subscribe
+	public void onConfigChanged(ConfigChanged event)
+	{
+		if (!GpuV2ExtensionConfig.GROUP.equals(event.getGroup()))
+		{
+			return;
+		}
+
+		if ("perfShowGpu".equals(event.getKey()) || "perfOverlay".equals(event.getKey()))
+		{
+			// Started and stopped with the setting rather than left running, so nothing
+			// spawns processes for a readout that is switched off.
+			if (config.perfOverlay() && config.perfShowGpu())
+			{
+				gpuMonitor.start();
+			}
+			else
+			{
+				gpuMonitor.stop();
+			}
 		}
 	}
 
