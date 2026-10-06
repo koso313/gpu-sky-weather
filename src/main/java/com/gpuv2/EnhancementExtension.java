@@ -234,6 +234,9 @@ class EnhancementExtension extends GpuExtension
 	private int cachedDrawDistance = FALLBACK_DRAW_DISTANCE;
 
 	private long thunderDueNanos;
+	// No thunder is queued before this. Without it every strike of a busy storm brought its
+	// own, which at a few seconds apart is one continuous noise.
+	private long thunderQuietUntilNanos;
 	private float thunderSeed;
 
 	private final PostEffects post = new PostEffects();
@@ -956,13 +959,18 @@ class EnhancementExtension extends GpuExtension
 	 */
 	private void scheduleThunder(float seed)
 	{
-		if (!config.thunderSound() || skyBlackout > 0.5f)
+		long now = System.nanoTime();
+		if (!config.thunderSound() || skyBlackout > 0.5f || now < thunderQuietUntilNanos)
 		{
 			return;
 		}
 
 		thunderSeed = seed;
-		thunderDueNanos = System.nanoTime() + (long) ((0.4f + seed * 1.6f) * 1e9);
+		thunderDueNanos = now + (long) ((0.4f + seed * 1.6f) * 1e9);
+
+		// The gap is a floor, stretched by up to half again so claps do not fall on a beat.
+		float gapSeconds = Math.max(5, config.thunderGap()) * (1f + seed * 0.5f);
+		thunderQuietUntilNanos = now + (long) (gapSeconds * 1e9);
 	}
 
 	private void playDueThunder()

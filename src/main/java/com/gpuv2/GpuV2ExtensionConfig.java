@@ -53,10 +53,8 @@ public interface GpuV2ExtensionConfig extends Config
 	@ConfigItem(
 		keyName = "preset",
 		name = "Preset",
-		description = "Default renders the game with the GPU and nothing else - no sky, "
-			+ "weather, lighting, fog or post-processing. Custom uses everything you have "
-			+ "set below. Switching between them changes nothing you have configured, so "
-			+ "it is safe to flip back and forth to compare.",
+		description = "Default leaves the GPU plugin's picture untouched. Custom applies "
+			+ "everything below. Switching never changes your settings.",
 		position = 0
 	)
 	default GraphicsPreset preset()
@@ -68,8 +66,8 @@ public interface GpuV2ExtensionConfig extends Config
 
 	@ConfigSection(
 		name = "Display",
-		description = "Tone mapping and the finishing passes over the image. Draw distance and "
-			+ "anti-aliasing are set in the GPU plugin, which draws the world.",
+		description = "Tone mapping and the finishing passes over the picture. Draw distance "
+			+ "and anti-aliasing are set in the GPU plugin.",
 		position = 10
 	)
 	String displaySection = "displaySection";
@@ -80,11 +78,8 @@ public interface GpuV2ExtensionConfig extends Config
 	@ConfigItem(
 		keyName = "toneMapping",
 		name = "Tone mapping",
-		description = "Rolls bright areas off instead of letting them clip. Sunlit ground, "
-			+ "the sun itself and heavy snow skies all go past what the screen can show and "
-			+ "are currently cut flat white; this compresses them back into range so they "
-			+ "keep their shape. 0 disables. It does darken midtones slightly on the way, "
-			+ "which is why it is a slider rather than a switch.",
+		description = "Rolls off bright areas so they keep detail instead of clipping to white. "
+			+ "Darkens midtones slightly. 0 off, max 100.",
 		position = 136,
 		section = displaySection
 	)
@@ -96,9 +91,8 @@ public interface GpuV2ExtensionConfig extends Config
 	@ConfigItem(
 		keyName = "fxaa",
 		name = "FXAA",
-		description = "Post-process anti-aliasing. Smooths shader-drawn edges such as the "
-			+ "aurora, clouds and lightning, which the GPU plugin's anti-aliasing cannot touch since they are not "
-			+ "geometry.",
+		description = "Smooths the edges of clouds, aurora and lightning, which the GPU "
+			+ "plugin's anti-aliasing cannot reach.",
 		position = 151,
 		section = displaySection
 	)
@@ -113,11 +107,8 @@ public interface GpuV2ExtensionConfig extends Config
 	@ConfigItem(
 		keyName = "sharpen",
 		name = "Sharpening",
-		description = "Crispens edges and picks detail back out of textures. 0 disables."
-			+ "<br><br>"
-			+ "Pairs well with FXAA, which softens the image - this puts the bite back. "
-			+ "Push it too far and edges grow bright "
-			+ "outlines.",
+		description = "Crispens edges and texture detail. Too much puts outlines on edges. 0 "
+			+ "off, max 100.",
 		position = 152,
 		section = displaySection
 	)
@@ -132,11 +123,7 @@ public interface GpuV2ExtensionConfig extends Config
 	@ConfigItem(
 		keyName = "vignette",
 		name = "Vignette",
-		description = "Darkens the corners of the screen, drawing the eye toward the middle "
-			+ "and giving the picture a lens-like framing. 0 disables."
-			+ "<br><br>"
-			+ "A matter of taste rather than accuracy, and it works against you in dark "
-			+ "places where the corners are already hard to read.",
+		description = "Darkens the corners of the 3D view. 0 off, max 100.",
 		position = 153,
 		section = displaySection
 	)
@@ -149,9 +136,8 @@ public interface GpuV2ExtensionConfig extends Config
 
 	@ConfigSection(
 		name = "Performance",
-		description = "The performance overlay and the quality/cost trade-offs of this plugin's own "
-			+ "effects. Frame rate and threads are set in the GPU plugin. Also where the "
-			+ "performance overlay lives.",
+		description = "The performance overlay, and switches for the cost of this plugin's own "
+			+ "effects.",
 		position = 20,
 		closedByDefault = true
 	)
@@ -160,8 +146,8 @@ public interface GpuV2ExtensionConfig extends Config
 	@ConfigItem(
 		keyName = "perfOverlay",
 		name = "Performance overlay",
-		description = "Show the current frame rate in the corner of the viewport. The "
-			+ "options below add to it and do nothing on their own.",
+		description = "Shows the current frame rate in the corner of the view. The options "
+			+ "below add lines to it.",
 		position = 30,
 		section = performanceSection
 	)
@@ -173,9 +159,7 @@ public interface GpuV2ExtensionConfig extends Config
 	@ConfigItem(
 		keyName = "perfShowFrameTime",
 		name = "  Frame time",
-		description = "Average milliseconds per frame. Often more use than the frame rate: "
-			+ "the difference between 250 and 200 fps is under a millisecond, while the "
-			+ "difference between 60 and 30 is sixteen.",
+		description = "Adds average milliseconds per frame.",
 		position = 31,
 		section = performanceSection
 	)
@@ -187,8 +171,7 @@ public interface GpuV2ExtensionConfig extends Config
 	@ConfigItem(
 		keyName = "perfShowAverage",
 		name = "  Average FPS",
-		description = "Mean frame rate over the last thousand frames. Steadier than the live "
-			+ "reading, and the fair number to compare against after changing a setting.",
+		description = "Adds the mean frame rate over the last 1000 frames.",
 		position = 32,
 		section = performanceSection
 	)
@@ -200,8 +183,8 @@ public interface GpuV2ExtensionConfig extends Config
 	@ConfigItem(
 		keyName = "perfShowLows",
 		name = "  1% lows",
-		description = "Frame rate of the slowest one percent of the last thousand frames - "
-			+ "what a stutter actually feels like, and the number an average hides.",
+		description = "Adds the frame rate of the slowest 1% of the last 1000 frames, which is "
+			+ "what stutter feels like.",
 		position = 33,
 		section = performanceSection
 	)
@@ -213,11 +196,8 @@ public interface GpuV2ExtensionConfig extends Config
 	@ConfigItem(
 		keyName = "perfShowGpu",
 		name = "  GPU temperature",
-		description = "GPU temperature and utilisation. NVIDIA cards only: there is no way "
-			+ "to read either from Java, so this runs the nvidia-smi tool as a separate "
-			+ "process every two seconds while it is on. Hides itself on any machine where "
-			+ "that tool is not present. CPU temperature is not offered because Windows "
-			+ "does not report it on most desktops without extra drivers.",
+		description = "Adds GPU temperature and load. NVIDIA cards only: it runs nvidia-smi "
+			+ "every two seconds while on.",
 		position = 34,
 		section = performanceSection
 	)
@@ -233,8 +213,7 @@ public interface GpuV2ExtensionConfig extends Config
 	@ConfigItem(
 		keyName = "effectQuality",
 		name = "Effect quality",
-		description = "Sample counts for the expensive effects - god rays, cloud detail "
-			+ "and shooting star trails. 1 is cheapest, 3 is best.",
+		description = "Detail of god rays, clouds and shooting star trails. 1 cheapest, 3 best.",
 		position = 26,
 		section = performanceSection
 	)
@@ -246,8 +225,8 @@ public interface GpuV2ExtensionConfig extends Config
 	@ConfigItem(
 		keyName = "postProcessing",
 		name = "Post-processing",
-		description = "Master switch for bloom, god rays, FXAA, sharpening and vignette. "
-			+ "Turn off to see what they cost.",
+		description = "Master switch for bloom, god rays, FXAA, sharpening, vignette and auto "
+			+ "exposure.",
 		position = 27,
 		section = performanceSection
 	)
@@ -260,14 +239,14 @@ public interface GpuV2ExtensionConfig extends Config
 
 	@ConfigSection(
 		name = "Sky",
-		description = "Sky colour, time of day, fog and ground mist.",
+		description = "Sky colour and time of day.",
 		position = 30
 	)
 	String skySection = "skySection";
 
 	@ConfigSection(
 		name = "Fog",
-		description = "Distance haze and mist lying on the ground.",
+		description = "Distance fog, ground mist and haze.",
 		position = 32
 	)
 	String fogSection = "fogSection";
@@ -275,10 +254,8 @@ public interface GpuV2ExtensionConfig extends Config
 	@ConfigItem(
 		keyName = "fogEnabled",
 		name = "Enable fog",
-		description = "Master switch for distance fog, ground mist and aerial perspective."
-			+ "<br><br>"
-			+ "Fog fades the far edge of the scene into the sky colour, which hides the hard "
-			+ "line where drawing stops and makes a short draw distance far less obvious.",
+		description = "Master switch for fog depth and ground mist. Fog weather still brings "
+			+ "its own.",
 		position = 320,
 		section = fogSection
 	)
@@ -289,22 +266,21 @@ public interface GpuV2ExtensionConfig extends Config
 
 	@ConfigSection(
 		name = "Sun and moon",
-		description = "The sun and moon discs and the light they throw.",
+		description = "The sun and moon in the sky.",
 		position = 34
 	)
 	String sunMoonSection = "sunMoonSection";
 
 	@ConfigSection(
 		name = "Stars and aurora",
-		description = "Stars, shooting stars and the aurora. All of it is night-only and "
-			+ "hidden by cloud cover.",
+		description = "Stars, shooting stars and the aurora. Night only, and hidden by cloud.",
 		position = 38
 	)
 	String starSection = "starSection";
 
 	@ConfigSection(
 		name = "Clouds",
-		description = "Cloud cover, drift and the shadows they cast.",
+		description = "Cloud cover, drift and shadows.",
 		position = 42
 	)
 	String cloudSection = "cloudSection";
@@ -312,15 +288,9 @@ public interface GpuV2ExtensionConfig extends Config
 	@ConfigItem(
 		keyName = "skyMode",
 		name = "Sky colour",
-		description = "Where the sky - and the fog that fades into it - takes its colour from."
-			+ "<br><br>"
-			+ "'Game default' uses whatever the area itself specifies, as vanilla does. "
-			+ "'Custom colour' holds the single colour you pick below. 'Time of day' runs a "
-			+ "full day cycle from your system clock, shifting continuously through dawn, "
-			+ "midday, dusk and night."
-			+ "<br><br>"
-			+ "Several other settings - god rays, lights following time, auto colour "
-			+ "temperature - need 'Time of day', since the others have no clock to follow.",
+		description = "Where the sky and fog colour come from. Game default uses the area's "
+			+ "own, Custom colour uses the one below, Time of day follows your clock "
+			+ "through dawn, day, dusk and night.",
 		position = 31,
 		section = skySection
 	)
@@ -332,7 +302,7 @@ public interface GpuV2ExtensionConfig extends Config
 	@ConfigItem(
 		keyName = "skyColor",
 		name = "Custom colour",
-		description = "Sky and fog colour, used when sky colour is set to 'Custom colour'.",
+		description = "Sky and fog colour when Sky colour is set to Custom colour.",
 		position = 32,
 		section = skySection
 	)
@@ -348,15 +318,8 @@ public interface GpuV2ExtensionConfig extends Config
 	@ConfigItem(
 		keyName = "previewMinute",
 		name = "Preview time",
-		description = "For 'Time of day': hold the sky at a chosen time instead of following "
-			+ "your clock. -1 follows the real time."
-			+ "<br><br>"
-			+ "Measured in minutes past midnight, so it sweeps the whole day rather than "
-			+ "jumping an hour at a time: 360 is 06:00, 720 is midday, 1140 is 19:00."
-			+ "<br><br>"
-			+ "Everything the sky derives from time moves with it - colour, the sun and moon, "
-			+ "cloud drift and the light on the ground - so dragging through a sunrise shows "
-			+ "the whole transition rather than its endpoints.",
+		description = "Holds the sky at one time of day, in minutes past midnight: 360 is "
+			+ "06:00, 720 midday, 1140 19:00. -1 follows your clock, max 1439.",
 		position = 33,
 		section = skySection
 	)
@@ -371,9 +334,8 @@ public interface GpuV2ExtensionConfig extends Config
 	@ConfigItem(
 		keyName = "aerialPerspective",
 		name = "Aerial perspective",
-		description = "Distant scenery picks up the sky's colour, the way looking through "
-			+ "air does. Builds gradually with distance rather than only at the scene "
-			+ "edge like fog depth. 0 disables.",
+		description = "Tints distant scenery with the sky colour, building gradually with "
+			+ "distance. 0 off, max 100.",
 		position = 324,
 		section = fogSection
 	)
@@ -388,11 +350,8 @@ public interface GpuV2ExtensionConfig extends Config
 	@ConfigItem(
 		keyName = "fogDepth",
 		name = "Fog depth",
-		description = "How far in from the edge of the drawn world the fog begins, in tiles."
-			+ "<br><br>"
-			+ "Higher brings the haze closer and hides more of the distance; 0 disables it. "
-			+ "Because it fades to the sky colour, it changes through the day along with the "
-			+ "sky rather than staying a fixed grey.",
+		description = "How far in from the edge of the drawn world the fog reaches, in tiles. "
+			+ "Fades to the sky colour. 0 off, max 100.",
 		position = 321,
 		section = fogSection
 	)
@@ -404,11 +363,8 @@ public interface GpuV2ExtensionConfig extends Config
 	@ConfigItem(
 		keyName = "showSun",
 		name = "Sun",
-		description = "Draw a sun that rises in the east, crosses the sky through the day and "
-			+ "sets in the west, matching the game's own compass."
-			+ "<br><br>"
-			+ "Its height drives the sky colour, the direction of the lighting and the god "
-			+ "rays, so this is the anchor the rest of the time-of-day effects hang off.",
+		description = "Draws a sun that rises in the east and sets in the west. Weather hides "
+			+ "it.",
 		position = 340,
 		section = sunMoonSection
 	)
@@ -423,11 +379,7 @@ public interface GpuV2ExtensionConfig extends Config
 	@ConfigItem(
 		keyName = "sunGlow",
 		name = "Sun brightness",
-		description = "How fiercely the sun's disc burns. 0 leaves it a plain pale circle; "
-			+ "high makes it too bright to look at, with the glow bleeding into the sky "
-			+ "around it."
-			+ "<br><br>"
-			+ "Weather that hides the sun overrides this.",
+		description = "Brightness of the sun's disc. 0 to 250.",
 		position = 341,
 		section = sunMoonSection
 	)
@@ -442,11 +394,7 @@ public interface GpuV2ExtensionConfig extends Config
 	@ConfigItem(
 		keyName = "sunGlare",
 		name = "Sun glare",
-		description = "Halo and streaks radiating from the sun, as a camera lens or a squint "
-			+ "would give you. 0 disables."
-			+ "<br><br>"
-			+ "Strongest when the sun is low and pointed at, and hidden by weather that takes "
-			+ "the sun away.",
+		description = "Halo and streaks around the sun. 0 off, max 250.",
 		position = 342,
 		section = sunMoonSection
 	)
@@ -458,11 +406,7 @@ public interface GpuV2ExtensionConfig extends Config
 	@ConfigItem(
 		keyName = "showMoon",
 		name = "Moon",
-		description = "Draw a moon. It rides opposite the sun, so it rises as the sun sets "
-			+ "and is up through the night."
-			+ "<br><br>"
-			+ "Its position tracks the phase as a real moon does - a crescent sits near the "
-			+ "sun and follows it down, a full moon is high at midnight.",
+		description = "Draws a moon, up through the night.",
 		position = 343,
 		section = sunMoonSection
 	)
@@ -474,11 +418,7 @@ public interface GpuV2ExtensionConfig extends Config
 	@ConfigItem(
 		keyName = "moonPhases",
 		name = "Moon phases",
-		description = "Let the moon wax and wane from night to night rather than staying "
-			+ "permanently full."
-			+ "<br><br>"
-			+ "The phase also decides where the moon sits and how much light it throws, so a "
-			+ "new moon leaves genuinely darker nights than a full one.",
+		description = "Lets the moon wax and wane. Off keeps it full.",
 		position = 345,
 		section = sunMoonSection
 	)
@@ -494,9 +434,8 @@ public interface GpuV2ExtensionConfig extends Config
 	@ConfigItem(
 		keyName = "moonCycleDays",
 		name = "Moon cycle length",
-		description = "Days for a full new-to-full-to-new cycle. 29 matches the real "
-			+ "lunar calendar but changes only slightly per night; lower makes the "
-			+ "phases visibly move.",
+		description = "Days for one full cycle of phases. 29 matches the real moon, lower "
+			+ "changes faster. 1 to 30.",
 		position = 346,
 		section = sunMoonSection
 	)
@@ -512,8 +451,8 @@ public interface GpuV2ExtensionConfig extends Config
 	@ConfigItem(
 		keyName = "moonPhasePreview",
 		name = "Force moon phase",
-		description = "-1 uses the cycle above. 0-100 pins a phase for a look: 0 new, "
-			+ "50 full, 100 new again.",
+		description = "Pins the moon's phase: 0 new, 50 full, 100 new again. -1 follows the "
+			+ "cycle.",
 		position = 347,
 		section = sunMoonSection
 	)
@@ -528,11 +467,7 @@ public interface GpuV2ExtensionConfig extends Config
 	@ConfigItem(
 		keyName = "moonGlow",
 		name = "Moon brightness",
-		description = "How brightly the moon's disc and its halo shine. 0 leaves the moon "
-			+ "drawn but unlit."
-			+ "<br><br>"
-			+ "Only the lit crescent is affected, so a thin moon stays dim however high this "
-			+ "goes.",
+		description = "Brightness of the moon's disc and halo. 0 to 250.",
 		position = 344,
 		section = sunMoonSection
 	)
@@ -544,11 +479,7 @@ public interface GpuV2ExtensionConfig extends Config
 	@ConfigItem(
 		keyName = "nightSky",
 		name = "Stars at night",
-		description = "Draw a starfield after dark. Fades in as the sky darkens and out again "
-			+ "at dawn, and cloud cover and weather hide it."
-			+ "<br><br>"
-			+ "The field is fixed to the sky rather than the camera, so stars hold their "
-			+ "places as you turn.",
+		description = "Draws stars after dark. Cloud and weather hide them.",
 		position = 380,
 		section = starSection
 	)
@@ -564,8 +495,7 @@ public interface GpuV2ExtensionConfig extends Config
 	@ConfigItem(
 		keyName = "starDensity",
 		name = "Star density",
-		description = "How many stars fill the sky. Low gives a handful of bright ones, high "
-			+ "gives a dense field with faint stars between them.",
+		description = "How many stars fill the sky. 1 to 100.",
 		position = 381,
 		section = starSection
 	)
@@ -580,12 +510,7 @@ public interface GpuV2ExtensionConfig extends Config
 	@ConfigItem(
 		keyName = "cloudAmount",
 		name = "Cloud cover",
-		description = "How much of the sky is covered by cloud. 0 disables clouds entirely, "
-			+ "low gives scattered fair-weather puffs, high gives a broken deck with only "
-			+ "gaps of blue."
-			+ "<br><br>"
-			+ "Weather raises this on its own while it runs, so an overcast day closes over "
-			+ "whatever you set here.",
+		description = "How much of the sky is cloud. Weather adds more. 0 off, max 100.",
 		position = 420,
 		section = cloudSection
 	)
@@ -600,11 +525,7 @@ public interface GpuV2ExtensionConfig extends Config
 	@ConfigItem(
 		keyName = "cloudOpacity",
 		name = "Cloud strength",
-		description = "How solid the clouds look against the sky. Low gives thin haze you can "
-			+ "see through, high gives opaque cloud with definite edges."
-			+ "<br><br>"
-			+ "Separate from cloud cover, which is how much sky they take up rather than how "
-			+ "dense they are.",
+		description = "How solid the clouds look, from thin haze to opaque. 0 to 100.",
 		position = 421,
 		section = cloudSection
 	)
@@ -620,8 +541,7 @@ public interface GpuV2ExtensionConfig extends Config
 	@ConfigItem(
 		keyName = "cloudSpeed",
 		name = "Cloud speed",
-		description = "How fast clouds drift and reshape. 1 is a realistic crawl, "
-			+ "3 is a brisk sky.",
+		description = "How fast clouds drift and reshape. 1 slow, 3 brisk.",
 		position = 422,
 		section = cloudSection
 	)
@@ -636,9 +556,7 @@ public interface GpuV2ExtensionConfig extends Config
 	@ConfigItem(
 		keyName = "shootingStars",
 		name = "Shooting stars",
-		description = "Meteors streaking across the night sky. 0 off, 1 rare (roughly one "
-			+ "every few minutes), 2 shows them constantly so the speed can be judged. "
-			+ "Needs stars enabled and a clear sky.",
+		description = "Meteors crossing the night sky. 0 off, 1 rare, 2 constant.",
 		position = 385,
 		section = starSection
 	)
@@ -654,7 +572,7 @@ public interface GpuV2ExtensionConfig extends Config
 	@ConfigItem(
 		keyName = "shootingStarSpeed",
 		name = "Shooting star speed",
-		description = "How fast they cross the sky. 1 is a slow drift, 3 is a quick flash.",
+		description = "How fast shooting stars cross the sky. 1 slow, 3 fast.",
 		position = 386,
 		section = starSection
 	)
@@ -666,8 +584,7 @@ public interface GpuV2ExtensionConfig extends Config
 	@ConfigItem(
 		keyName = "shootingStarSound",
 		name = "Shooting star sound",
-		description = "Play a sound when a shooting star appears. Off by default, since a "
-			+ "chime with no in-game cause behind it can be misleading.",
+		description = "Plays a sound when a shooting star appears.",
 		position = 387,
 		section = starSection
 	)
@@ -679,11 +596,8 @@ public interface GpuV2ExtensionConfig extends Config
 	@ConfigItem(
 		keyName = "shootingStarSoundId",
 		name = "Sound effect id",
-		description = "Which in-game sound effect to play. 0 is silence, so the sound can be "
-			+ "switched on without anything arbitrary playing until you pick one."
-			+ "<br><br>"
-			+ "Any sound effect id works - type whichever you prefer. 3924 is a coin tinkle, "
-			+ "200 a teleport whoosh, 3925 a bell ding.",
+		description = "In-game sound effect id to play. 0 is silent. 3924 is a coin tinkle, "
+			+ "3925 a bell.",
 		position = 388,
 		section = starSection
 	)
@@ -695,8 +609,7 @@ public interface GpuV2ExtensionConfig extends Config
 	@ConfigItem(
 		keyName = "aurora",
 		name = "Aurora",
-		description = "Shimmering curtains low in the northern sky on clear nights. "
-			+ "Cloud cover hides it.",
+		description = "Shimmering curtains low in the northern sky on clear nights.",
 		position = 382,
 		section = starSection
 	)
@@ -712,8 +625,7 @@ public interface GpuV2ExtensionConfig extends Config
 	@ConfigItem(
 		keyName = "auroraStrength",
 		name = "Aurora strength",
-		description = "How bright the aurora burns. Low is a faint green suggestion near the "
-			+ "horizon, high is unmistakable curtains reaching up the sky.",
+		description = "Brightness of the aurora. 1 to 100.",
 		position = 383,
 		section = starSection
 	)
@@ -729,8 +641,7 @@ public interface GpuV2ExtensionConfig extends Config
 	@ConfigItem(
 		keyName = "auroraSpeed",
 		name = "Aurora speed",
-		description = "How fast the aurora churns. 1 is a slow lava-lamp drift, "
-			+ "3 is restless.",
+		description = "How fast the aurora moves. 1 slow, 3 restless.",
 		position = 384,
 		section = starSection
 	)
@@ -745,8 +656,7 @@ public interface GpuV2ExtensionConfig extends Config
 	@ConfigItem(
 		keyName = "heightFog",
 		name = "Ground mist",
-		description = "Mist pooling in low ground and valleys. 0 disables. Fog weather "
-			+ "brings its own on top of this.",
+		description = "Mist that pools in low ground. 0 off, max 100.",
 		position = 322,
 		section = fogSection
 	)
@@ -762,8 +672,8 @@ public interface GpuV2ExtensionConfig extends Config
 	@ConfigItem(
 		keyName = "heightFogDepth",
 		name = "Ground mist depth",
-		description = "How deep the mist lies, in tiles. Lower keeps it hugging the "
-			+ "ground; higher fills valleys.",
+		description = "How deep the mist lies, in tiles. Low hugs the ground, high fills "
+			+ "valleys. 1 to 40.",
 		position = 323,
 		section = fogSection
 	)
@@ -778,8 +688,7 @@ public interface GpuV2ExtensionConfig extends Config
 	@ConfigItem(
 		keyName = "cloudShadows",
 		name = "Cloud shadows",
-		description = "Drift cloud shadows across the world, matching the deck overhead. "
-			+ "0 disables.",
+		description = "Cloud shadows drifting over the ground by day. 0 off, max 100.",
 		position = 423,
 		section = cloudSection
 	)
@@ -792,7 +701,7 @@ public interface GpuV2ExtensionConfig extends Config
 
 	@ConfigSection(
 		name = "Weather",
-		description = "Rain, snow, storms and what they leave on the ground.",
+		description = "Rain, snow, storms and fog, and what they leave on the ground.",
 		position = 40
 	)
 	String weatherSection = "weatherSection";
@@ -800,17 +709,8 @@ public interface GpuV2ExtensionConfig extends Config
 	@ConfigItem(
 		keyName = "weather",
 		name = "Weather",
-		description = "What the weather is doing. Precipitation is drawn in front of the "
-			+ "world and behind the interface, and each condition also settles the sky to "
-			+ "match - there is no raining out of a clear blue sky."
-			+ "<br><br>"
-			+ "'Off' and 'Sunny' both leave the sky exactly as you configured it. 'Overcast' "
-			+ "seals the deck over without anything falling. 'Fog' does the same and fills the "
-			+ "air with mist, so the distance closes in. Rain, storm, snow and blizzard "
-			+ "each take the sun away and darken the light beneath them."
-			+ "<br><br>"
-			+ "'Automatic' changes it on its own over time, keeping clear skies roughly two "
-			+ "thirds of the time so that weather stays worth noticing.",
+		description = "The weather. Each condition changes the sky and light to match. Off and "
+			+ "Sunny are both clear, and Automatic changes it over time.",
 		position = 41,
 		section = weatherSection
 	)
@@ -826,8 +726,8 @@ public interface GpuV2ExtensionConfig extends Config
 	@ConfigItem(
 		keyName = "autoWeatherPeriod",
 		name = "Automatic: changes every",
-		description = "Minutes each spell of weather lasts on 'Automatic', including the "
-			+ "time it spends building and easing off.",
+		description = "Minutes each spell of Automatic weather lasts, including building up and "
+			+ "easing off. 1 to 60.",
 		position = 42,
 		section = weatherSection
 	)
@@ -839,14 +739,8 @@ public interface GpuV2ExtensionConfig extends Config
 	@ConfigItem(
 		keyName = "weatherFollowsRegion",
 		name = "Automatic: follow the region",
-		description = "Let 'Automatic' weather suit where you are standing."
-			+ "<br><br>"
-			+ "The desert stays dry, the mountains and the far north get snow where "
-			+ "elsewhere would get rain, Morytania is wet and often foggy, and Karamja "
-			+ "rains hard but never snows. Everywhere else is as before."
-			+ "<br><br>"
-			+ "Crossing between them fades one kind of weather out and the next in. Off "
-			+ "draws from one table everywhere, so it can snow in Al Kharid.",
+		description = "Makes Automatic weather suit the area: dry desert, snow in the mountains "
+			+ "and far north, wet and foggy Morytania, rain but no snow on Karamja.",
 		position = 43,
 		section = weatherSection
 	)
@@ -862,11 +756,7 @@ public interface GpuV2ExtensionConfig extends Config
 	@ConfigItem(
 		keyName = "weatherAmount",
 		name = "Amount",
-		description = "How much rain or snow falls. Low is a light scattering, high is a "
-			+ "downpour thick enough to see through."
-			+ "<br><br>"
-			+ "Storm and blizzard already fall harder than rain and snow, so this scales on "
-			+ "top of whichever condition is running rather than replacing it.",
+		description = "How heavily rain or snow falls. 1 to 100.",
 		position = 44,
 		section = weatherSection
 	)
@@ -881,8 +771,8 @@ public interface GpuV2ExtensionConfig extends Config
 	@ConfigItem(
 		keyName = "weatherWind",
 		name = "Wind strength",
-		description = "How hard the wind blows precipitation sideways, and how much it "
-			+ "gusts. 0 makes it fall straight down.",
+		description = "How far the wind blows rain and snow sideways. 0 falls straight down, "
+			+ "max 200.",
 		position = 45,
 		section = weatherSection
 	)
@@ -897,10 +787,7 @@ public interface GpuV2ExtensionConfig extends Config
 	@ConfigItem(
 		keyName = "groundSnow",
 		name = "Snow on the ground",
-		description = "Settles snow on upward-facing surfaces while it is snowing - ground, "
-			+ "rooftops and the tops of scenery, but not walls. 0 disables."
-			+ "<br><br>"
-			+ "Builds up as the snow falls and melts away again once it stops.",
+		description = "Snow settling on the ground and scenery while it snows. 0 off, max 100.",
 		position = 46,
 		section = weatherSection
 	)
@@ -915,8 +802,7 @@ public interface GpuV2ExtensionConfig extends Config
 	@ConfigItem(
 		keyName = "groundWet",
 		name = "Wet ground and puddles",
-		description = "Darkens the ground and pools reflective puddles while it is "
-			+ "raining. 0 disables.",
+		description = "Darker wet ground and puddles while it rains. 0 off, max 100.",
 		position = 47,
 		section = weatherSection
 	)
@@ -928,10 +814,8 @@ public interface GpuV2ExtensionConfig extends Config
 	@ConfigItem(
 		keyName = "lightning",
 		name = "Lightning",
-		description = "Flashes and bolts of lightning during a storm."
-			+ "<br><br>"
-			+ "Each strike lights the world as well as the sky, so the ground and everything "
-			+ "on it flares for the instant the bolt is out. Storms only.",
+		description = "Lightning bolts and flashes during a storm, lighting the world as well "
+			+ "as the sky.",
 		position = 48,
 		section = weatherSection
 	)
@@ -947,8 +831,7 @@ public interface GpuV2ExtensionConfig extends Config
 	@ConfigItem(
 		keyName = "lightningFrequency",
 		name = "Lightning frequency",
-		description = "How often lightning strikes during a storm. 1 is occasional, "
-			+ "2 is frequent, 3 is near-constant.",
+		description = "How often lightning strikes. 1 occasional, 3 near-constant.",
 		position = 49,
 		section = weatherSection
 	)
@@ -960,12 +843,8 @@ public interface GpuV2ExtensionConfig extends Config
 	@ConfigItem(
 		keyName = "thunderSound",
 		name = "Thunder",
-		description = "Play thunder a moment after each lightning strike. Off by default, "
-			+ "since a sound with nothing in the game behind it can be misleading."
-			+ "<br><br>"
-			+ "Uses the game's sound effects, so it follows your sound effect volume and "
-			+ "is silent if that is muted. With lightning set to near-constant this is a "
-			+ "lot of thunder.",
+		description = "Plays thunder after a lightning strike, no more often than the gap "
+			+ "below. Uses your in-game sound effect volume.",
 		position = 50,
 		section = weatherSection
 	)
@@ -974,26 +853,42 @@ public interface GpuV2ExtensionConfig extends Config
 		return false;
 	}
 
+	@Range(
+		min = 5,
+		max = 120
+	)
+	@ConfigItem(
+		keyName = "thunderGap",
+		name = "Thunder gap",
+		description = "Shortest time between thunderclaps, in seconds. Lightning strikes inside "
+			+ "the gap stay silent. 5 to 120.",
+		position = 51,
+		section = weatherSection
+	)
+	default int thunderGap()
+	{
+		return 25;
+	}
+
 	@ConfigItem(
 		keyName = "thunderSoundId",
 		name = "Thunder sound id",
-		description = "0 picks from the game's own seven rolls of thunder, a different one "
-			+ "each strike. Any other in-game sound effect id plays that one every time - "
-			+ "3762 is a single heavy crack.",
-		position = 51,
+		description = "In-game sound effect id for thunder. 9474 is a low rumble. 0 picks from "
+			+ "the game's seven thunder rolls.",
+		position = 52,
 		section = weatherSection
 	)
 	default int thunderSoundId()
 	{
-		return 0;
+		return 9474;
 	}
 
 	// ---------------------------------------------------------------- Lighting
 
 	@ConfigSection(
 		name = "Lighting",
-		description = "Ambient and directional light layered over the game's own shading, "
-			+ "plus the dynamic lights cast by fires, torches and lanterns.",
+		description = "Ambient, sun and moon light over the game's own shading, and light from "
+			+ "fires and torches.",
 		position = 50,
 		closedByDefault = true
 	)
@@ -1005,11 +900,8 @@ public interface GpuV2ExtensionConfig extends Config
 	@ConfigItem(
 		keyName = "lightStrength",
 		name = "Lighting strength",
-		description = "Master strength for the ambient and sun lighting below. 0 disables "
-			+ "them entirely and leaves the game's own shading untouched."
-			+ "<br><br>"
-			+ "This lighting is layered over vanilla shading rather than replacing it, so a "
-			+ "little goes a long way - high values wash out the original art.",
+		description = "Overall strength of the ambient, sun and moon light below. A little goes "
+			+ "a long way. 0 off, max 100.",
 		position = 51,
 		section = lightSection
 	)
@@ -1021,10 +913,7 @@ public interface GpuV2ExtensionConfig extends Config
 	@ConfigItem(
 		keyName = "lightAmbientColor",
 		name = "Ambient colour",
-		description = "Colour of the light filling faces the sun does not reach."
-			+ "<br><br>"
-			+ "Stands in for skylight, so a cool blue reads as a clear day and a warm tone as "
-			+ "firelit or overcast. This is what sets the colour of your shadows.",
+		description = "Colour of the light in shadow, which sets the colour of your shadows.",
 		position = 52,
 		section = lightSection
 	)
@@ -1039,11 +928,8 @@ public interface GpuV2ExtensionConfig extends Config
 	@ConfigItem(
 		keyName = "lightAmbientStrength",
 		name = "Ambient strength",
-		description = "How much ambient light there is. Raise it to lift shadows and flatten "
-			+ "the scene, lower it for deeper contrast between lit and unlit faces."
-			+ "<br><br>"
-			+ "Balance this against Sun strength: ambient sets the floor, the sun sets how "
-			+ "far above it the lit side rises.",
+		description = "How much ambient light. Higher lifts shadows and flattens the scene. 0 "
+			+ "to 200.",
 		position = 53,
 		section = lightSection
 	)
@@ -1055,11 +941,7 @@ public interface GpuV2ExtensionConfig extends Config
 	@ConfigItem(
 		keyName = "lightSunColor",
 		name = "Sun colour",
-		description = "Colour of the light thrown by the sun onto faces angled toward it."
-			+ "<br><br>"
-			+ "Warm tones read as low sun and late afternoon, near-white as midday. Works "
-			+ "against the ambient colour - the wider apart the two, the more the shading "
-			+ "reads as sunlight rather than brightness.",
+		description = "Colour of sunlight on faces turned toward the sun.",
 		position = 54,
 		section = lightSection
 	)
@@ -1074,11 +956,7 @@ public interface GpuV2ExtensionConfig extends Config
 	@ConfigItem(
 		keyName = "lightSunStrength",
 		name = "Sun strength",
-		description = "How hard the sun lights faces turned toward it."
-			+ "<br><br>"
-			+ "This is what gives objects a lit side and a shaded side, so it does most of "
-			+ "the work of making things look solid. Turn it up when judging whether Smooth "
-			+ "lighting is doing anything.",
+		description = "How strongly the sun lights faces turned toward it. 0 to 200.",
 		position = 55,
 		section = lightSection
 	)
@@ -1093,15 +971,8 @@ public interface GpuV2ExtensionConfig extends Config
 	@ConfigItem(
 		keyName = "lightMoonStrength",
 		name = "Moon strength",
-		description = "How much light the moon throws at night, from wherever it is in the "
-			+ "sky. 0 disables."
-			+ "<br><br>"
-			+ "Follows the moon itself: brightest under a full moon high in the sky, nothing "
-			+ "at new moon, before it rises, or when the weather has hidden it. A full moon "
-			+ "also lifts the darkest the night gets a little, and a new moon lowers it."
-			+ "<br><br>"
-			+ "Scaled by Lighting strength like the sun, so at a low Lighting strength it is "
-			+ "subtle.",
+		description = "How much light the moon throws at night, following its phase and height. "
+			+ "0 off, max 200.",
 		position = 56,
 		section = lightSection
 	)
@@ -1116,9 +987,8 @@ public interface GpuV2ExtensionConfig extends Config
 	@ConfigItem(
 		keyName = "dynamicLights",
 		name = "Dynamic lights",
-		description = "Brightness of light cast by fires, torches, lanterns and braziers. "
-			+ "0 to 10, where 0 is off and 10 is brightest. Sources are found "
-			+ "automatically by name - no setup needed.",
+		description = "Brightness of light from fires, torches, lanterns and braziers, which "
+			+ "are found automatically. 0 off, max 10.",
 		position = 557,
 		section = lightSection
 	)
@@ -1130,9 +1000,8 @@ public interface GpuV2ExtensionConfig extends Config
 	@ConfigItem(
 		keyName = "undergroundSky",
 		name = "Sky in caves and dungeons",
-		description = "Keep drawing the sky underground. Off blacks it out in caves, "
-			+ "dungeons and raids, and stops weather falling indoors - there is no sky "
-			+ "above you down there, so a sunset through the ceiling gives the game away.",
+		description = "Keeps the sky and weather in caves, dungeons and raids. Off blacks the "
+			+ "sky out and stops weather underground.",
 		position = 305,
 		section = skySection
 	)
@@ -1144,14 +1013,8 @@ public interface GpuV2ExtensionConfig extends Config
 	@ConfigItem(
 		keyName = "daytimeLights",
 		name = "Lights during the day",
-		description = "Keep dynamic lights burning around the clock."
-			+ "<br><br>"
-			+ "Off follows the sky clock instead, fading them in through dusk and out again "
-			+ "at dawn - firelight pooling on the ground under a midday sun is what gives the "
-			+ "effect away."
-			+ "<br><br>"
-			+ "Has no effect unless the sky is set to time of day, since nothing else has a "
-			+ "clock to follow. Underground is always treated as night either way.",
+		description = "Keeps dynamic lights on by day. Off fades them in at dusk and out at "
+			+ "dawn.",
 		position = 558,
 		section = lightSection
 	)
@@ -1163,9 +1026,7 @@ public interface GpuV2ExtensionConfig extends Config
 	@ConfigItem(
 		keyName = "lightColour",
 		name = "Light colour",
-		description = "Colour cast by dynamic lights onto the ground and nearby scenery. "
-			+ "Warm orange reads as firelight; cooler tones suit lanterns and magical "
-			+ "sources.",
+		description = "Colour of the light from fires and torches.",
 		position = 559,
 		section = lightSection
 	)
@@ -1177,11 +1038,8 @@ public interface GpuV2ExtensionConfig extends Config
 	@ConfigItem(
 		keyName = "lightColourFromSource",
 		name = "Colour from the source",
-		description = "Let a light that is plainly not fire cast its own colour - a blue "
-			+ "flame lights the ground blue, a green lantern green."
-			+ "<br><br>"
-			+ "Ordinary fire, in every shade from red to yellow, still takes the Light colour "
-			+ "above. Off gives every light that one colour.",
+		description = "Lets a light that is not fire-coloured cast its own colour, such as a "
+			+ "blue flame or a green lantern.",
 		position = 560,
 		section = lightSection
 	)
@@ -1197,8 +1055,7 @@ public interface GpuV2ExtensionConfig extends Config
 	@ConfigItem(
 		keyName = "lightRadius",
 		name = "Light radius",
-		description = "How far a single light reaches, in tiles. Raising this also widens "
-			+ "the area searched for lights, so distant ones keep working.",
+		description = "How far each light reaches, in tiles. 1 to 40.",
 		position = 561,
 		section = lightSection
 	)
@@ -1214,10 +1071,8 @@ public interface GpuV2ExtensionConfig extends Config
 	@ConfigItem(
 		keyName = "maxLights",
 		name = "Max lights at once",
-		description = "How many lights can be drawn together. Somewhere dense this is what "
-			+ "limits how far lighting reaches, since only the nearest ones fit - raise it "
-			+ "to light more of the street. Each costs a little performance everywhere on "
-			+ "screen, so raise it only as far as you need.",
+		description = "How many lights are drawn at once, nearest first. More costs frame rate. "
+			+ "4 to 64.",
 		position = 563,
 		section = lightSection
 	)
@@ -1232,10 +1087,8 @@ public interface GpuV2ExtensionConfig extends Config
 	@ConfigItem(
 		keyName = "lightSearchDistance",
 		name = "Light search distance",
-		description = "How far out lights are looked for, in tiles. 0 follows your draw "
-			+ "distance, so anything on screen can light. Raise it only alongside 'Max "
-			+ "lights at once' - finding more lights does nothing if there is no room to "
-			+ "draw them.",
+		description = "How far out lights are looked for, in tiles. 0 follows the GPU plugin's "
+			+ "draw distance, max 60.",
 		position = 564,
 		section = lightSection
 	)
@@ -1250,11 +1103,7 @@ public interface GpuV2ExtensionConfig extends Config
 	@ConfigItem(
 		keyName = "lightFlicker",
 		name = "Light flicker",
-		description = "How much firelight wavers and breathes. 0 is a steady glow, high is a "
-			+ "guttering flame."
-			+ "<br><br>"
-			+ "Each light flickers on its own rhythm, so a row of torches does not pulse in "
-			+ "unison.",
+		description = "How much firelight wavers. 0 steady, max 200.",
 		position = 562,
 		section = lightSection
 	)
@@ -1269,8 +1118,7 @@ public interface GpuV2ExtensionConfig extends Config
 	@ConfigItem(
 		keyName = "undergroundDarkening",
 		name = "Underground darkening",
-		description = "Darken, cool and desaturate underground areas, where there is no "
-			+ "daylight. 0 disables.",
+		description = "Darkens and cools caves and dungeons. 0 off, max 100.",
 		position = 565,
 		section = lightSection
 	)
@@ -1282,11 +1130,8 @@ public interface GpuV2ExtensionConfig extends Config
 	@ConfigItem(
 		keyName = "lightFollowsTime",
 		name = "Follow time of day",
-		description = "Dim and cool the world at night in step with the sky, so dusk falls on "
-			+ "the ground as well as overhead."
-			+ "<br><br>"
-			+ "Only applies when sky colour is set to 'Time of day' - the other modes have no "
-			+ "clock to follow. Off keeps the world lit the same however late it is.",
+		description = "Dims and cools the world at night in step with the sky. Needs Sky colour "
+			+ "set to Time of day.",
 		position = 57,
 		section = lightSection
 	)
@@ -1299,7 +1144,7 @@ public interface GpuV2ExtensionConfig extends Config
 
 	@ConfigSection(
 		name = "Post-processing",
-		description = "Bloom, god rays, colour grading and colourblindness correction.",
+		description = "Bloom, god rays, auto exposure and colour grading.",
 		position = 70,
 		closedByDefault = true
 	)
@@ -1308,8 +1153,7 @@ public interface GpuV2ExtensionConfig extends Config
 	@ConfigItem(
 		keyName = "bloomEnabled",
 		name = "Bloom",
-		description = "Bleed a glow out of bright parts of the scene. Costs a few extra "
-			+ "render passes.",
+		description = "Adds a soft glow around bright parts of the scene.",
 		position = 71,
 		section = postSection
 	)
@@ -1324,8 +1168,8 @@ public interface GpuV2ExtensionConfig extends Config
 	@ConfigItem(
 		keyName = "bloomThreshold",
 		name = "Bloom threshold",
-		description = "How bright a pixel must be before it glows. Lower makes more of "
-			+ "the scene glow.",
+		description = "How bright something must be before it glows. Lower makes more glow. 0 "
+			+ "to 99.",
 		position = 72,
 		section = postSection
 	)
@@ -1340,9 +1184,7 @@ public interface GpuV2ExtensionConfig extends Config
 	@ConfigItem(
 		keyName = "bloomIntensity",
 		name = "Bloom intensity",
-		description = "Strength of the glow added back over the scene. Low is a subtle "
-			+ "softening around bright edges; high is a dreamy haze over everything that "
-			+ "passed the threshold.",
+		description = "Strength of the glow. 0 to 200.",
 		position = 73,
 		section = postSection
 	)
@@ -1357,8 +1199,8 @@ public interface GpuV2ExtensionConfig extends Config
 	@ConfigItem(
 		keyName = "godRays",
 		name = "God rays",
-		description = "Strength of light shafts from the sun. 0 disables. Needs sky "
-			+ "colour set to 'Time of day', and only shows when the sun is in view.",
+		description = "Light shafts from the sun while it is in view. Needs Sky colour set to "
+			+ "Time of day. 0 off, max 100.",
 		position = 74,
 		section = postSection
 	)
@@ -1373,8 +1215,7 @@ public interface GpuV2ExtensionConfig extends Config
 	@ConfigItem(
 		keyName = "godRayThreshold",
 		name = "God ray threshold",
-		description = "How bright a pixel must be to cast a shaft. Lower catches more of "
-			+ "the sky.",
+		description = "How bright the sky must be to cast a shaft. Lower catches more. 0 to 99.",
 		position = 75,
 		section = postSection
 	)
@@ -1390,8 +1231,7 @@ public interface GpuV2ExtensionConfig extends Config
 	@ConfigItem(
 		keyName = "godRayLength",
 		name = "God ray length",
-		description = "How far the shafts stretch out from the sun. Short keeps them a halo "
-			+ "close around it; long reaches them across the sky.",
+		description = "How far the shafts reach from the sun. 5 to 150.",
 		position = 76,
 		section = postSection
 	)
@@ -1406,15 +1246,8 @@ public interface GpuV2ExtensionConfig extends Config
 	@ConfigItem(
 		keyName = "autoExposure",
 		name = "Auto exposure",
-		description = "Lets the picture adjust to how bright the scene is, the way eyes do. "
-			+ "Step out of somewhere dark and it is too bright for a moment, then settles; "
-			+ "go into the dark and it slowly becomes readable. 0 disables."
-			+ "<br><br>"
-			+ "Kept narrow on purpose, so night stays dark and snow stays bright."
-			+ "<br><br>"
-			+ "Experimental. It works by having the GPU plugin read each finished frame back "
-			+ "off the graphics card, which costs a little frame rate while this is on, and "
-			+ "needs Post-processing switched on.",
+		description = "Adjusts brightness as you move between dark and bright places. "
+			+ "Experimental, and costs a little frame rate while on. 0 off, max 100.",
 		position = 765,
 		section = postSection
 	)
@@ -1430,7 +1263,7 @@ public interface GpuV2ExtensionConfig extends Config
 	@ConfigItem(
 		keyName = "gradeGamma",
 		name = "Gamma",
-		description = "Midtone brightness. 100 is neutral; lower is darker, higher is brighter.",
+		description = "Midtone brightness. 100 is neutral. 25 to 250.",
 		position = 77,
 		section = postSection
 	)
@@ -1446,8 +1279,7 @@ public interface GpuV2ExtensionConfig extends Config
 	@ConfigItem(
 		keyName = "gradeContrast",
 		name = "Contrast",
-		description = "Separation between lights and darks. 100 is neutral; higher deepens "
-			+ "shadows and brightens highlights, lower flattens the image toward grey.",
+		description = "Contrast between light and dark. 100 is neutral. 25 to 250.",
 		position = 78,
 		section = postSection
 	)
@@ -1462,9 +1294,7 @@ public interface GpuV2ExtensionConfig extends Config
 	@ConfigItem(
 		keyName = "gradeSaturation",
 		name = "Saturation",
-		description = "Colour intensity. 100 is neutral, 0 is greyscale, and above 100 pushes "
-			+ "colours harder - useful for bringing the original art's palette back after "
-			+ "heavy lighting has washed it out.",
+		description = "Colour intensity. 0 is greyscale, 100 neutral, max 250.",
 		position = 79,
 		section = postSection
 	)
@@ -1476,9 +1306,9 @@ public interface GpuV2ExtensionConfig extends Config
 	@ConfigItem(
 		keyName = "autoTemperature",
 		name = "Auto colour temperature",
-		description = "Warm the image at sunrise and sunset and cool it at night, "
-			+ "following the sky clock. The slider below becomes an offset. Needs sky "
-			+ "colour set to 'Time of day'.",
+		description = "Warms the picture at sunrise and sunset and cools it at night. "
+			+ "Temperature below becomes an offset. Needs Sky colour set to Time of "
+			+ "day.",
 		position = 805,
 		section = postSection
 	)
@@ -1494,7 +1324,8 @@ public interface GpuV2ExtensionConfig extends Config
 	@ConfigItem(
 		keyName = "gradeTemperature",
 		name = "Temperature",
-		description = "Colour warmth. 0 is neutral, positive is warmer, negative is cooler.",
+		description = "Colour warmth. Negative is cooler, positive warmer, 0 neutral. -100 to "
+			+ "100.",
 		position = 80,
 		section = postSection
 	)
