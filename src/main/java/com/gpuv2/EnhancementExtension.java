@@ -205,6 +205,28 @@ class EnhancementExtension extends GpuExtension
 
 	private final GlState glState = new GlState();
 
+	// How long one spell of weather takes to give way to another when the cause is the
+	// player walking into a different climate rather than the cycle moving on.
+	private static final float REGION_FADE_SECONDS = 6f;
+
+	// With fog down, the world is clear this many tiles out from the camera and then fades.
+	private static final int FOG_WEATHER_CLEAR_TILES = 8;
+
+	// The game's own set of rolling thunder, used when no particular sound is chosen.
+	private static final int[] THUNDER_SOUNDS = {4364, 4343, 4416, 4353, 4391, 4375, 4379};
+
+	// Automatic weather as it is being shown, which lags what the cycle asks for while one
+	// spell fades out and the next fades in.
+	private WeatherMode autoMode = WeatherMode.OFF;
+	private float autoBase;
+	private float autoFade = 1f;
+	private long lastAutoNanos;
+
+	private int cachedDrawDistance = FALLBACK_DRAW_DISTANCE;
+
+	private long thunderDueNanos;
+	private float thunderSeed;
+
 	private final PostEffects post = new PostEffects();
 	private final FrameStats frameStats;
 
@@ -507,6 +529,10 @@ class EnhancementExtension extends GpuExtension
 	/** Rescans for light sources. Called on the game tick, on the client thread. */
 	void onGameTick()
 	{
+		// Read here rather than per frame: it is a settings lookup, and it changes when the user
+		// moves a slider, not between frames.
+		cachedDrawDistance = stockDrawDistance();
+
 		if (enabled && enhancements())
 		{
 			updateLights();
@@ -521,6 +547,8 @@ class EnhancementExtension extends GpuExtension
 	{
 		lastCameraYawRad = client.getCameraFpYaw();
 		lastCameraPitchRad = client.getCameraFpPitch();
+		updateAutoWeather();
+		playDueThunder();
 		// Advanced once here, then read from the field everywhere else this frame - easing
 		// that stepped on every read would settle at a rate depending on how many callers
 		// happened to ask.
@@ -545,7 +573,20 @@ class EnhancementExtension extends GpuExtension
 
 		final int sky = lastSkyColor;
 		glUniform3f(uniFogColor, (sky >> 16 & 0xFF) / 255f, (sky >> 8 & 0xFF) / 255f, (sky & 0xFF) / 255f);
-		glUniform1f(uniFogDepth, config.fogEnabled() ? config.fogDepth() : 0f);
+		/*
+		 * Fog as weather pulls the haze in close, whatever the fog settings say - it is the
+		 * weather, not the fog slider, that is asking. The renderer measures fog depth in
+		 * from the edge of the drawn world, so the depth that leaves a fixed clear distance
+		 * around the camera depends on how far the world is being drawn.
+		 */
+		final float mist = weatherMist();
+		float fogDepth = config.fogEnabled() ? config.fogDepth() : 0f;
+		if (mist > 0f)
+		{
+			float closedIn = Math.max(fogDepth, cachedDrawDistance - FOG_WEATHER_CLEAR_TILES);
+			fogDepth += (closedIn - fogDepth) * mist;
+		}
+		glUniform1f(uniFogDepth, fogDepth);
 
 		glUniform1f(uniGradeGamma, config.gradeGamma() / 100f);
 		glUniform1f(uniGradeContrast, config.gradeContrast() / 100f);
@@ -575,7 +616,8 @@ class EnhancementExtension extends GpuExtension
 			: 0f;
 		glUniform1f(uniLightningFlash, flash);
 
-		glUniform1f(uniAerial, config.aerialPerspective() / 100f);
+		// Fog thickens the air between here and there as well as at the edge of the world.
+		glUniform1f(uniAerial, Math.min(1f, config.aerialPerspective() / 100f + mist * 0.85f));
 		glUniform1f(uniUnderground, undergroundFactor());
 		setupPointLights();
 		setupLightingUniforms();
@@ -783,7 +825,7 @@ class EnhancementExtension extends GpuExtension
 		{
 			return selected;
 		}
-		return WeatherCycle.modeAt(clockMinutes(), config.autoWeatherPeriod());
+		return autoMode;
 	}
 
 	/**
@@ -797,7 +839,116 @@ class EnhancementExtension extends GpuExtension
 		{
 			return selected.isClear() ? 0f : 1f;
 		}
-		return WeatherCycle.intensityAt(clockMinutes(), config.autoWeatherPeriod());
+		return autoBase * autoFade;
+	}
+
+	/**
+	 * Advances the automatic weather, once per frame.
+	 *
+	 * <p>The cycle and the climate between them say what the weather should be; this is
+	 * what stops it snapping there. When the cycle itself moves on there is nothing to do,
+	 * since each spell already ramps to nothing at its own ends. Walking into another
+	 * climate is different: the desert has no rain to hand over to, so the rain that was
+	 * falling a step ago is faded out and whatever the new place offers is faded in.
+	 */
+	private void updateAutoWeather()
+	{
+		long now = System.nanoTime();
+		float dt = lastAutoNanos == 0 ? 0f : Math.min(0.25f, (now - lastAutoNanos) / 1e9f);
+		lastAutoNanos = now;
+
+		if (!enhancements() || config.weather() != WeatherMode.AUTO)
+		{
+			autoMode = WeatherMode.OFF;
+			autoBase = 0f;
+			autoFade = 1f;
+			return;
+		}
+
+		double minutes = clockMinutes();
+		int period = config.autoWeatherPeriod();
+		WeatherMode wanted;
+		float wantedIntensity;
+		if (config.weatherFollowsRegion())
+		{
+			Climate climate = currentClimate();
+			wanted = WeatherCycle.modeAt(minutes, period, climate);
+			wantedIntensity = WeatherCycle.intensityAt(minutes, period, climate);
+		}
+		else
+		{
+			wanted = WeatherCycle.modeAt(minutes, period);
+			wantedIntensity = WeatherCycle.intensityAt(minutes, period);
+		}
+
+		float step = dt / REGION_FADE_SECONDS;
+		if (wanted == autoMode)
+		{
+			autoBase = wantedIntensity;
+			autoFade = Math.min(1f, autoFade + step);
+			return;
+		}
+
+		// Something else is wanted. Let what is showing go first, then swap with nothing on
+		// screen, so the new weather has to build rather than appear.
+		autoFade = Math.max(0f, autoFade - step);
+		if (autoMode.isClear() || autoBase * autoFade <= 0.01f)
+		{
+			autoMode = wanted;
+			autoBase = wantedIntensity;
+			autoFade = wanted.isClear() ? 1f : 0f;
+		}
+	}
+
+	private Climate currentClimate()
+	{
+		Player player = client.getLocalPlayer();
+		WorldPoint wp = player == null ? null : player.getWorldLocation();
+		return wp == null ? Climate.TEMPERATE : Climate.at(wp.getX(), wp.getY());
+	}
+
+	/** How much fog the weather is putting in the air right now, 0..1. None underground. */
+	private float weatherMist()
+	{
+		return activeWeather().mist() * weatherIntensity() * (1f - skyBlackout);
+	}
+
+	/**
+	 * Queues the thunder for a strike that has just begun. Sound trails light, by longer
+	 * for some strikes than others, which is most of what makes a storm sound like weather
+	 * rather than like an effect firing.
+	 */
+	private void scheduleThunder(float seed)
+	{
+		if (!config.thunderSound() || skyBlackout > 0.5f)
+		{
+			return;
+		}
+
+		thunderSeed = seed;
+		thunderDueNanos = System.nanoTime() + (long) ((0.4f + seed * 1.6f) * 1e9);
+	}
+
+	private void playDueThunder()
+	{
+		if (thunderDueNanos == 0 || System.nanoTime() < thunderDueNanos)
+		{
+			return;
+		}
+		thunderDueNanos = 0;
+
+		if (!config.thunderSound() || !activeWeather().hasLightning())
+		{
+			return;
+		}
+
+		int id = config.thunderSoundId();
+		if (id <= 0)
+		{
+			// A different roll each strike; the same one every few seconds is a loop.
+			id = THUNDER_SOUNDS[(int) (thunderSeed * 7919f) % THUNDER_SOUNDS.length];
+		}
+		client.playSoundEffect(id);
 	}
 
 	/**
@@ -858,6 +1009,8 @@ class EnhancementExtension extends GpuExtension
 		 * inside the mist rather than looking down on a flat sheet.
 		 */
 		float mist = enhancements() && config.fogEnabled() ? config.heightFog() / 100f : 0f;
+		// Fog weather lays its own mist down on top of whatever the slider asks for.
+		mist = Math.max(mist, weatherMist() * 0.9f);
 		glUniform1f(uniHeightFog, mist);
 		glUniform1f(uniHeightFogEye, HEIGHT_FOG_EYE_OFFSET);
 		glUniform1f(uniHeightFogDepth, config.heightFogDepth() * Perspective.LOCAL_TILE_SIZE);
@@ -1601,6 +1754,7 @@ class EnhancementExtension extends GpuExtension
 			if (slot != lastLightningSlot)
 			{
 				lastLightningSlot = slot;
+				scheduleThunder(seed);
 				float spread = (seed - 0.5f) * 2f * BOLT_SPREAD;
 				lightningBearing = -cameraYaw + spread;
 			}

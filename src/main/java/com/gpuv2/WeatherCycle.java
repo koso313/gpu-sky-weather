@@ -97,6 +97,49 @@ final class WeatherCycle
 		return 1f;
 	}
 
+	/**
+	 * Weather for the slot containing {@code minutes}, drawn from a climate's own table.
+	 *
+	 * <p>The draw itself is the same number the plain overload uses, so two climates share
+	 * their timing: a slot that is a storm in one place is whatever that climate offers at
+	 * the same odds in another, and crossing between them never lands mid-slot in a spell
+	 * that has no ramp of its own.
+	 */
+	static WeatherMode modeAt(double minutes, int periodMinutes, Climate climate)
+	{
+		return climate.pick(draw(slotOf(minutes, periodMinutes)));
+	}
+
+	/** As {@link #intensityAt(double, int)}, for a climate's own table. */
+	static float intensityAt(double minutes, int periodMinutes, Climate climate)
+	{
+		if (modeAt(minutes, periodMinutes, climate).isClear())
+		{
+			return 0f;
+		}
+		return envelope(phaseOf(minutes, periodMinutes));
+	}
+
+	// Golden-ratio stride decorrelates consecutive slots, so the sequence doesn't visibly
+	// march through a table in order.
+	private static double draw(long slot)
+	{
+		return frac(slot * 0.6180339887498949);
+	}
+
+	private static float envelope(double phase)
+	{
+		if (phase < RAMP)
+		{
+			return (float) smooth(phase / RAMP);
+		}
+		if (phase > 1 - RAMP)
+		{
+			return (float) smooth((1 - phase) / RAMP);
+		}
+		return 1f;
+	}
+
 	private static long slotOf(double minutes, int periodMinutes)
 	{
 		return (long) Math.floor(minutes / Math.max(1, periodMinutes));

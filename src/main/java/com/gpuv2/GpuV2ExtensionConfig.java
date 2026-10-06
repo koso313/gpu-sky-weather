@@ -68,8 +68,8 @@ public interface GpuV2ExtensionConfig extends Config
 
 	@ConfigSection(
 		name = "Display",
-		description = "Draw distance, anti-aliasing, image quality and what gets left out of "
-			+ "the scene.",
+		description = "Tone mapping and the finishing passes over the image. Draw distance and "
+			+ "anti-aliasing are set in the GPU plugin, which draws the world.",
 		position = 10
 	)
 	String displaySection = "displaySection";
@@ -97,7 +97,7 @@ public interface GpuV2ExtensionConfig extends Config
 		keyName = "fxaa",
 		name = "FXAA",
 		description = "Post-process anti-aliasing. Smooths shader-drawn edges such as the "
-			+ "aurora, clouds and lightning, which MSAA cannot touch since they are not "
+			+ "aurora, clouds and lightning, which the GPU plugin's anti-aliasing cannot touch since they are not "
 			+ "geometry.",
 		position = 151,
 		section = displaySection
@@ -115,8 +115,8 @@ public interface GpuV2ExtensionConfig extends Config
 		name = "Sharpening",
 		description = "Crispens edges and picks detail back out of textures. 0 disables."
 			+ "<br><br>"
-			+ "Pairs well with FXAA and with a render scale below 100, both of which soften "
-			+ "the image - this puts the bite back. Push it too far and edges grow bright "
+			+ "Pairs well with FXAA, which softens the image - this puts the bite back. "
+			+ "Push it too far and edges grow bright "
 			+ "outlines.",
 		position = 152,
 		section = displaySection
@@ -149,7 +149,8 @@ public interface GpuV2ExtensionConfig extends Config
 
 	@ConfigSection(
 		name = "Performance",
-		description = "Frame rate, threading and the quality/cost trade-offs. Also where the "
+		description = "The performance overlay and the quality/cost trade-offs of this plugin's own "
+			+ "effects. Frame rate and threads are set in the GPU plugin. Also where the "
 			+ "performance overlay lives.",
 		position = 20,
 		closedByDefault = true
@@ -804,7 +805,8 @@ public interface GpuV2ExtensionConfig extends Config
 			+ "match - there is no raining out of a clear blue sky."
 			+ "<br><br>"
 			+ "'Off' and 'Sunny' both leave the sky exactly as you configured it. 'Overcast' "
-			+ "seals the deck over without anything falling. Rain, storm, snow and blizzard "
+			+ "seals the deck over without anything falling. 'Fog' does the same and fills the "
+			+ "air with mist, so the distance closes in. Rain, storm, snow and blizzard "
 			+ "each take the sun away and darken the light beneath them."
 			+ "<br><br>"
 			+ "'Automatic' changes it on its own over time, keeping clear skies roughly two "
@@ -834,6 +836,25 @@ public interface GpuV2ExtensionConfig extends Config
 		return 30;
 	}
 
+	@ConfigItem(
+		keyName = "weatherFollowsRegion",
+		name = "Automatic: follow the region",
+		description = "Let 'Automatic' weather suit where you are standing."
+			+ "<br><br>"
+			+ "The desert stays dry, the mountains and the far north get snow where "
+			+ "elsewhere would get rain, Morytania is wet and often foggy, and Karamja "
+			+ "rains hard but never snows. Everywhere else is as before."
+			+ "<br><br>"
+			+ "Crossing between them fades one kind of weather out and the next in. Off "
+			+ "draws from one table everywhere, so it can snow in Al Kharid.",
+		position = 43,
+		section = weatherSection
+	)
+	default boolean weatherFollowsRegion()
+	{
+		return true;
+	}
+
 	@Range(
 		min = 1,
 		max = 100
@@ -846,7 +867,7 @@ public interface GpuV2ExtensionConfig extends Config
 			+ "<br><br>"
 			+ "Storm and blizzard already fall harder than rain and snow, so this scales on "
 			+ "top of whichever condition is running rather than replacing it.",
-		position = 43,
+		position = 44,
 		section = weatherSection
 	)
 	default int weatherAmount()
@@ -862,7 +883,7 @@ public interface GpuV2ExtensionConfig extends Config
 		name = "Wind strength",
 		description = "How hard the wind blows precipitation sideways, and how much it "
 			+ "gusts. 0 makes it fall straight down.",
-		position = 44,
+		position = 45,
 		section = weatherSection
 	)
 	default int weatherWind()
@@ -880,7 +901,7 @@ public interface GpuV2ExtensionConfig extends Config
 			+ "rooftops and the tops of scenery, but not walls. 0 disables."
 			+ "<br><br>"
 			+ "Builds up as the snow falls and melts away again once it stops.",
-		position = 45,
+		position = 46,
 		section = weatherSection
 	)
 	default int groundSnow()
@@ -896,7 +917,7 @@ public interface GpuV2ExtensionConfig extends Config
 		name = "Wet ground and puddles",
 		description = "Darkens the ground and pools reflective puddles while it is "
 			+ "raining. 0 disables.",
-		position = 46,
+		position = 47,
 		section = weatherSection
 	)
 	default int groundWet()
@@ -911,7 +932,7 @@ public interface GpuV2ExtensionConfig extends Config
 			+ "<br><br>"
 			+ "Each strike lights the world as well as the sky, so the ground and everything "
 			+ "on it flares for the instant the bolt is out. Storms only.",
-		position = 47,
+		position = 48,
 		section = weatherSection
 	)
 	default boolean lightning()
@@ -928,12 +949,43 @@ public interface GpuV2ExtensionConfig extends Config
 		name = "Lightning frequency",
 		description = "How often lightning strikes during a storm. 1 is occasional, "
 			+ "2 is frequent, 3 is near-constant.",
-		position = 48,
+		position = 49,
 		section = weatherSection
 	)
 	default int lightningFrequency()
 	{
 		return 3;
+	}
+
+	@ConfigItem(
+		keyName = "thunderSound",
+		name = "Thunder",
+		description = "Play thunder a moment after each lightning strike. Off by default, "
+			+ "since a sound with nothing in the game behind it can be misleading."
+			+ "<br><br>"
+			+ "Uses the game's sound effects, so it follows your sound effect volume and "
+			+ "is silent if that is muted. With lightning set to near-constant this is a "
+			+ "lot of thunder.",
+		position = 50,
+		section = weatherSection
+	)
+	default boolean thunderSound()
+	{
+		return false;
+	}
+
+	@ConfigItem(
+		keyName = "thunderSoundId",
+		name = "Thunder sound id",
+		description = "0 picks from the game's own seven rolls of thunder, a different one "
+			+ "each strike. Any other in-game sound effect id plays that one every time - "
+			+ "3762 is a single heavy crack.",
+		position = 51,
+		section = weatherSection
+	)
+	default int thunderSoundId()
+	{
+		return 0;
 	}
 
 	// ---------------------------------------------------------------- Lighting

@@ -31,6 +31,14 @@ public enum WeatherMode
 	 * behind the cloud is the entire point, by day and by night alike.
 	 */
 	OVERCAST("Overcast", false, false, 0f, 0x8E969E, 0.95f, 1f, 0f, 0.88f),
+	/**
+	 * Fog: nothing falls, but the air itself closes in.
+	 *
+	 * <p>The sky is treated as overcast - pale, sealed and sunless - and the rest is done on
+	 * the ground, where {@link #mist()} thickens the ground mist and pulls the distance
+	 * haze in close. A little gloom, since fog is dim without being dark.
+	 */
+	FOG("Fog", false, false, 0f, 0xA4ABAF, 0.90f, 1f, 0.10f, 0.85f),
 	/*
 	 * Every condition below takes the sun away outright.
 	 *
@@ -153,6 +161,17 @@ public enum WeatherMode
 	public float overcast()
 	{
 		return overcast;
+	}
+
+	/**
+	 * How much this weather fills the air with mist, 0 none to 1 thick fog.
+	 *
+	 * <p>Only fog does. Declared here rather than tested for by name at each place that
+	 * cares, so a second misty condition later needs no hunting for those places.
+	 */
+	public float mist()
+	{
+		return this == FOG ? 1f : 0f;
 	}
 
 	/**
