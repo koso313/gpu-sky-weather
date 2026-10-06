@@ -55,6 +55,9 @@ uniform float gv2_lightStrength;
 uniform vec3 gv2_lightAmbient;
 uniform vec3 gv2_lightSunColor;
 uniform vec3 gv2_lightSunDir;
+// Moonlight. Colour zero by day, under cloud and at new moon.
+uniform vec3 gv2_lightMoonColor;
+uniform vec3 gv2_lightMoonDir;
 
 // Handed over by the vertex stage, which is the only one that has them.
 in vec3 gv2_worldPos;
@@ -312,6 +315,13 @@ vec3 gv2_applyLighting(vec3 c, vec3 n)
 
   float diffuse = max(dot(n, normalize(gv2_lightSunDir)), 0.0);
   vec3 light = gv2_lightAmbient + gv2_lightSunColor * diffuse;
+
+  // Skipped outright when there is no moonlight: the direction is not meaningful then,
+  // and normalising it would not be either.
+  if (gv2_lightMoonColor != vec3(0.0))
+  {
+    light += gv2_lightMoonColor * max(dot(n, normalize(gv2_lightMoonDir)), 0.0);
+  }
 
   return c * mix(vec3(1.0), light, gv2_lightStrength);
 }

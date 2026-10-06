@@ -1088,6 +1088,29 @@ public interface GpuV2ExtensionConfig extends Config
 	}
 
 	@Range(
+		max = 200
+	)
+	@ConfigItem(
+		keyName = "lightMoonStrength",
+		name = "Moon strength",
+		description = "How much light the moon throws at night, from wherever it is in the "
+			+ "sky. 0 disables."
+			+ "<br><br>"
+			+ "Follows the moon itself: brightest under a full moon high in the sky, nothing "
+			+ "at new moon, before it rises, or when the weather has hidden it. A full moon "
+			+ "also lifts the darkest the night gets a little, and a new moon lowers it."
+			+ "<br><br>"
+			+ "Scaled by Lighting strength like the sun, so at a low Lighting strength it is "
+			+ "subtle.",
+		position = 56,
+		section = lightSection
+	)
+	default int lightMoonStrength()
+	{
+		return 100;
+	}
+
+	@Range(
 		max = 10
 	)
 	@ConfigItem(
@@ -1129,7 +1152,7 @@ public interface GpuV2ExtensionConfig extends Config
 			+ "<br><br>"
 			+ "Has no effect unless the sky is set to time of day, since nothing else has a "
 			+ "clock to follow. Underground is always treated as night either way.",
-		position = 557,
+		position = 558,
 		section = lightSection
 	)
 	default boolean daytimeLights()
@@ -1151,6 +1174,22 @@ public interface GpuV2ExtensionConfig extends Config
 		return new Color(0xFF, 0xA5, 0x4A);
 	}
 
+	@ConfigItem(
+		keyName = "lightColourFromSource",
+		name = "Colour from the source",
+		description = "Let a light that is plainly not fire cast its own colour - a blue "
+			+ "flame lights the ground blue, a green lantern green."
+			+ "<br><br>"
+			+ "Ordinary fire, in every shade from red to yellow, still takes the Light colour "
+			+ "above. Off gives every light that one colour.",
+		position = 560,
+		section = lightSection
+	)
+	default boolean lightColourFromSource()
+	{
+		return true;
+	}
+
 	@Range(
 		min = 1,
 		max = 40
@@ -1160,7 +1199,7 @@ public interface GpuV2ExtensionConfig extends Config
 		name = "Light radius",
 		description = "How far a single light reaches, in tiles. Raising this also widens "
 			+ "the area searched for lights, so distant ones keep working.",
-		position = 560,
+		position = 561,
 		section = lightSection
 	)
 	default int lightRadius()
@@ -1179,7 +1218,7 @@ public interface GpuV2ExtensionConfig extends Config
 			+ "limits how far lighting reaches, since only the nearest ones fit - raise it "
 			+ "to light more of the street. Each costs a little performance everywhere on "
 			+ "screen, so raise it only as far as you need.",
-		position = 562,
+		position = 563,
 		section = lightSection
 	)
 	default int maxLights()
@@ -1197,7 +1236,7 @@ public interface GpuV2ExtensionConfig extends Config
 			+ "distance, so anything on screen can light. Raise it only alongside 'Max "
 			+ "lights at once' - finding more lights does nothing if there is no room to "
 			+ "draw them.",
-		position = 563,
+		position = 564,
 		section = lightSection
 	)
 	default int lightSearchDistance()
@@ -1216,7 +1255,7 @@ public interface GpuV2ExtensionConfig extends Config
 			+ "<br><br>"
 			+ "Each light flickers on its own rhythm, so a row of torches does not pulse in "
 			+ "unison.",
-		position = 561,
+		position = 562,
 		section = lightSection
 	)
 	default int lightFlicker()
@@ -1232,7 +1271,7 @@ public interface GpuV2ExtensionConfig extends Config
 		name = "Underground darkening",
 		description = "Darken, cool and desaturate underground areas, where there is no "
 			+ "daylight. 0 disables.",
-		position = 562,
+		position = 565,
 		section = lightSection
 	)
 	default int undergroundDarkening()
@@ -1248,7 +1287,7 @@ public interface GpuV2ExtensionConfig extends Config
 			+ "<br><br>"
 			+ "Only applies when sky colour is set to 'Time of day' - the other modes have no "
 			+ "clock to follow. Off keeps the world lit the same however late it is.",
-		position = 56,
+		position = 57,
 		section = lightSection
 	)
 	default boolean lightFollowsTime()

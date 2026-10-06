@@ -152,6 +152,105 @@ final class FlameDetector
 			+ " warm=" + seenWarm + (seenWarm > 0 ? " [" + warm.toString().trim() + "]" : "");
 	}
 
+	// How saturated and bright a face has to be to count as glowing, for any hue. Looser
+	// than the fire thresholds: those have to tell a flame from a yellow banner, while
+	// these only run on objects already known to be lights.
+	private static final int GLOW_MIN_SATURATION = 4;
+	private static final int GLOW_MIN_LUMINANCE = 60;
+
+	// Red through yellow, and the top of the wheel where it comes back round to red.
+	private static final int FIRE_HUE_MAX = 14;
+	private static final int FIRE_HUE_WRAP = 61;
+
+	/**
+	 * The colour a light source glows, packed 0xRRGGBB, or -1 if it is ordinary fire or
+	 * shows no glow of its own.
+	 *
+	 * <p>Fire is deliberately not given a colour here. Every shade of orange and yellow a
+	 * torch is painted in is still firelight, and that has one colour chosen in settings;
+	 * reporting each model's own orange would only make a row of torches slightly different
+	 * from one another for no reason anyone could see. What this is for is the light that is
+	 * plainly something else - a blue spirit flame, a green lantern - where lighting the
+	 * ground orange is simply wrong.
+	 *
+	 * <p>Textured faces carry a light level in place of a colour and read as hue and
+	 * saturation zero, so the saturation floor leaves them out without a separate check.
+	 */
+	static int glowRgb(int[] faceColors)
+	{
+		if (faceColors == null)
+		{
+			return -1;
+		}
+
+		int[] byHue = new int[HUE_MASK + 1];
+		int fire = 0;
+		int other = 0;
+		for (int c : faceColors)
+		{
+			int hsl = c & 0xFFFF;
+			int hue = (hsl >> HUE_SHIFT) & HUE_MASK;
+			if (((hsl >> SAT_SHIFT) & SAT_MASK) < GLOW_MIN_SATURATION || (hsl & LUM_MASK) < GLOW_MIN_LUMINANCE)
+			{
+				continue;
+			}
+
+			if (hue <= FIRE_HUE_MAX || hue >= FIRE_HUE_WRAP)
+			{
+				++fire;
+			}
+			else
+			{
+				++other;
+				++byHue[hue];
+			}
+		}
+
+		// Something that is mostly flame with a coloured fitting is still a fire.
+		if (other < MIN_FACES || other < fire)
+		{
+			return -1;
+		}
+
+		int peak = 0;
+		for (int h = 0; h < byHue.length; ++h)
+		{
+			if (byHue[h] > byHue[peak])
+			{
+				peak = h;
+			}
+		}
+
+		// Averaged over the faces near the commonest hue, so shading on the model does not
+		// pull the answer about.
+		float hueSum = 0f;
+		float satSum = 0f;
+		int n = 0;
+		for (int c : faceColors)
+		{
+			int hsl = c & 0xFFFF;
+			int hue = (hsl >> HUE_SHIFT) & HUE_MASK;
+			int sat = (hsl >> SAT_SHIFT) & SAT_MASK;
+			if (sat < GLOW_MIN_SATURATION || (hsl & LUM_MASK) < GLOW_MIN_LUMINANCE || Math.abs(hue - peak) > 3)
+			{
+				continue;
+			}
+			hueSum += hue;
+			satSum += sat;
+			++n;
+		}
+		if (n == 0)
+		{
+			return -1;
+		}
+
+		// Full brightness: how bright the light is belongs to the strength setting, and only
+		// the hue and how vivid it is are taken from the model.
+		float h = (hueSum / n + 0.5f) / (HUE_MASK + 1);
+		float s = Math.min(1f, (satSum / n + 0.5f) / (SAT_MASK + 1));
+		return java.awt.Color.HSBtoRGB(h, s * 0.85f, 1f) & 0xFFFFFF;
+	}
+
 	static boolean isFlameColor(int packed)
 	{
 		int hsl = packed & 0xFFFF;

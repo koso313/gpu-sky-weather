@@ -140,6 +140,8 @@ class EnhancementExtension extends GpuExtension
 	private int uniLightAmbient = -1;
 	private int uniLightSunColor = -1;
 	private int uniLightSunDir = -1;
+	private int uniLightMoonColor = -1;
+	private int uniLightMoonDir = -1;
 	private int uniGroundSnow = -1;
 	private int uniGroundWet = -1;
 	private int uniCloudShadow = -1;
@@ -214,6 +216,13 @@ class EnhancementExtension extends GpuExtension
 
 	// The game's own set of rolling thunder, used when no particular sound is chosen.
 	private static final int[] THUNDER_SOUNDS = {4364, 4343, 4416, 4353, 4391, 4375, 4379};
+
+	// Moonlight is cool and far weaker than the sun: enough to give a full moon night a lit
+	// side, not enough to read as a blue day.
+	private static final float MOON_R = 0.62f;
+	private static final float MOON_G = 0.72f;
+	private static final float MOON_B = 1.00f;
+	private static final float MOONLIGHT_SCALE = 0.45f;
 
 	// Automatic weather as it is being shown, which lags what the cycle asks for while one
 	// spell fades out and the next fades in.
@@ -301,6 +310,8 @@ class EnhancementExtension extends GpuExtension
 		uniLightAmbient = glGetUniformLocation(sceneProgram, "gv2_lightAmbient");
 		uniLightSunColor = glGetUniformLocation(sceneProgram, "gv2_lightSunColor");
 		uniLightSunDir = glGetUniformLocation(sceneProgram, "gv2_lightSunDir");
+		uniLightMoonColor = glGetUniformLocation(sceneProgram, "gv2_lightMoonColor");
+		uniLightMoonDir = glGetUniformLocation(sceneProgram, "gv2_lightMoonDir");
 		uniGroundSnow = glGetUniformLocation(sceneProgram, "gv2_groundSnow");
 		uniGroundWet = glGetUniformLocation(sceneProgram, "gv2_groundWet");
 		uniCloudShadow = glGetUniformLocation(sceneProgram, "gv2_cloudShadow");
@@ -1074,8 +1085,15 @@ class EnhancementExtension extends GpuExtension
 		float gloom = activeWeather().gloom() * weatherIntensity();
 
 		// Ambient keeps a floor at night so the world stays playable rather than black.
-		float ambMul = config.lightAmbientStrength() / 100f * (NIGHT_AMBIENT_FLOOR
-			+ (1f - NIGHT_AMBIENT_FLOOR) * day) * (1f - gloom * 0.5f);
+		/*
+		 * How much moon there is to see by: its phase, whether it is up, and whether the
+		 * weather has put it away along with the sun. A full moon lifts the night floor a
+		 * little and a new moon lowers it, so the nights are not all the same night.
+		 */
+		float moon = moonlight(time) * (1f - activeWeather().sunHiding() * weatherIntensity());
+		float floor = NIGHT_AMBIENT_FLOOR - 0.06f + 0.12f * moon;
+		float ambMul = config.lightAmbientStrength() / 100f * (floor
+			+ (1f - floor) * day) * (1f - gloom * 0.5f);
 		float sunMul = config.lightSunStrength() / 100f * day * (1f - gloom);
 
 		Color ambient = config.lightAmbientColor();
@@ -1089,6 +1107,33 @@ class EnhancementExtension extends GpuExtension
 			sun.getRed() / 255f * sunMul,
 			sun.getGreen() / 255f * sunMul,
 			sun.getBlue() / 255f * sunMul);
+
+		// The moon's own light, from where the moon is. Zero by day, under cloud and at
+		// new moon, in which case the shader skips the term.
+		float moonMul = config.lightMoonStrength() / 100f * MOONLIGHT_SCALE * moon * night;
+		computeMoonDirection(time);
+		glUniform3f(uniLightMoonDir, moonDir[0], moonDir[1], moonDir[2]);
+		glUniform3f(uniLightMoonColor, MOON_R * moonMul, MOON_G * moonMul, MOON_B * moonMul);
+	}
+
+	/**
+	 * How much light the moon is giving, 0..1: how much of its face is lit, and how far it
+	 * has risen.
+	 */
+	private float moonlight(LocalTime time)
+	{
+		if (!config.showMoon())
+		{
+			return 0f;
+		}
+
+		// 0 and 1 are new, 0.5 is full.
+		float lit = 0.5f * (1f - (float) Math.cos(2 * Math.PI * moonPhase()));
+
+		computeMoonDirection(time);
+		// World Y is negative-up. Eased in over the first few degrees above the horizon.
+		float up = Math.max(0f, Math.min(1f, -moonDir[1] / 0.12f));
+		return lit * up;
 	}
 
 	/**
@@ -1237,14 +1282,28 @@ class EnhancementExtension extends GpuExtension
 		float strength = config.dynamicLights() / 5f * pointLightTimeFactor();
 		float radius = config.lightRadius() * Perspective.LOCAL_TILE_SIZE;
 
+		final boolean ownColours = config.lightColourFromSource();
 		for (int i = 0; i < count; ++i)
 		{
 			// Dimmed towards the edge of the scan patch, so a light that is about to fall
 			// out of range is already dark when it goes rather than snapping off.
 			float s = strength * lightScanner.fade[i];
-			lightColours[i * 3] = tint.getRed() / 255f * s;
-			lightColours[i * 3 + 1] = tint.getGreen() / 255f * s;
-			lightColours[i * 3 + 2] = tint.getBlue() / 255f * s;
+
+			// A light that plainly is not fire - a blue flame, a green lantern - lights the
+			// ground its own colour. Everything else is firelight and takes the setting.
+			int own = ownColours ? lightScanner.colour[i] : -1;
+			if (own >= 0)
+			{
+				lightColours[i * 3] = (own >> 16 & 0xFF) / 255f * s;
+				lightColours[i * 3 + 1] = (own >> 8 & 0xFF) / 255f * s;
+				lightColours[i * 3 + 2] = (own & 0xFF) / 255f * s;
+			}
+			else
+			{
+				lightColours[i * 3] = tint.getRed() / 255f * s;
+				lightColours[i * 3 + 1] = tint.getGreen() / 255f * s;
+				lightColours[i * 3 + 2] = tint.getBlue() / 255f * s;
+			}
 			lightRadii[i] = radius;
 		}
 

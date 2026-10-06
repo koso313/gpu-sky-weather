@@ -109,12 +109,16 @@ class LightScanner
 	/** Object id to whether it lights, so each id is looked up once. */
 	private final Map<Integer, Boolean> lightCache = new HashMap<>();
 
+	/** Object id to the colour it glows, looked up once per id like the verdict above. */
+	private final Map<Integer, Integer> colourCache = new HashMap<>();
+
 	/**
 	 * Scenery lights, from {@link #scan}. Held separately because the tile walk that finds
 	 * them only runs on the game tick, while the combined list below is rebuilt every frame.
 	 */
 	private final float[] staticPositions = new float[MAX_LIGHTS * 3];
 	private final float[] staticFade = new float[MAX_LIGHTS];
+	private final int[] staticColour = new int[MAX_LIGHTS];
 	private int staticCount;
 
 	/** How many lights may be drawn, and how far out to look, from config at scan time. */
@@ -149,6 +153,9 @@ class LightScanner
 
 	/** Per-light 0..1 multiplier that dims lights approaching the edge of the scan. */
 	final float[] fade = new float[MAX_LIGHTS];
+
+	/** Per-light colour packed 0xRRGGBB, or -1 for ordinary fire, which takes the configured colour. */
+	final int[] colour = new int[MAX_LIGHTS];
 
 	int count;
 
@@ -288,6 +295,7 @@ class LightScanner
 
 			float tilesAway = (float) Math.sqrt(distanceSq(obj, origin)) / TILE;
 			staticFade[staticCount] = fadeAt(tilesAway, edge);
+			staticColour[staticCount] = glowOf(obj);
 			++staticCount;
 		}
 	}
@@ -308,6 +316,7 @@ class LightScanner
 			positions[count * 3 + 1] = staticPositions[i * 3 + 1];
 			positions[count * 3 + 2] = staticPositions[i * 3 + 2];
 			fade[count] = staticFade[i];
+			colour[count] = staticColour[i];
 			++count;
 		}
 	}
@@ -403,6 +412,69 @@ class LightScanner
 		{
 			out.add(dec);
 		}
+	}
+
+	/**
+	 * The colour this light glows, or -1 for firelight.
+	 *
+	 * <p>Only a model that was actually read gets remembered. One that is not there yet -
+	 * a zone still being built - is asked again on the next scan, for the same reason the
+	 * light verdict is: caching the absence would fix the wrong answer for the session.
+	 */
+	private int glowOf(TileObject obj)
+	{
+		Integer cached = colourCache.get(obj.getId());
+		if (cached != null)
+		{
+			return cached;
+		}
+
+		boolean read = false;
+		int rgb = -1;
+		for (Renderable renderable : renderablesOf(obj))
+		{
+			Model model = modelOf(renderable);
+			if (model == null)
+			{
+				continue;
+			}
+
+			read = true;
+			rgb = FlameDetector.glowRgb(model.getFaceColors1());
+			if (rgb >= 0)
+			{
+				break;
+			}
+		}
+
+		if (read)
+		{
+			colourCache.put(obj.getId(), rgb);
+		}
+		return rgb;
+	}
+
+	private static Renderable[] renderablesOf(TileObject obj)
+	{
+		if (obj instanceof GameObject)
+		{
+			return new Renderable[]{((GameObject) obj).getRenderable()};
+		}
+		if (obj instanceof WallObject)
+		{
+			WallObject wall = (WallObject) obj;
+			return new Renderable[]{wall.getRenderable1(), wall.getRenderable2()};
+		}
+		if (obj instanceof DecorativeObject)
+		{
+			DecorativeObject dec = (DecorativeObject) obj;
+			return new Renderable[]{dec.getRenderable(), dec.getRenderable2()};
+		}
+		if (obj instanceof GroundObject)
+		{
+			return new Renderable[]{((GroundObject) obj).getRenderable()};
+		}
+		return new Renderable[0];
 	}
 
 	private boolean isLight(int id, Renderable renderable)
