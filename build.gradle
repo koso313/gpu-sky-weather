@@ -18,7 +18,7 @@ repositories {
 // https://github.com/Adam-/runelite/tree/gpu-api
 // Revert to 'latest.release' to build against the released client instead.
 def runeLiteVersion = '1.13.0-SNAPSHOT'
-def pluginMainClass = 'com.gpuv2.GpuV2PluginTest'
+def pluginMainClass = 'com.gpuskyweather.GpuSkyWeatherPluginTest'
 
 dependencies {
 	compileOnly group: 'net.runelite', name:'client', version: runeLiteVersion
@@ -31,7 +31,7 @@ dependencies {
 	testImplementation group: 'net.runelite', name:'jshell', version: runeLiteVersion
 }
 
-group = 'com.gpuv2'
+group = 'com.gpuskyweather'
 version = '1.0.0'
 
 tasks.withType(JavaCompile).configureEach {

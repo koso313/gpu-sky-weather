@@ -20,7 +20,7 @@ renderer:
 - **Weather particles, bloom, god rays, FXAA, sharpening, vignette** - drawn from
   `onPostDrawToplevel()` into the scene framebuffer that is still bound there.
 
-Code: `EnhancementExtension`, `PostEffects`, `GpuV2ExtensionPlugin`, and the
+Code: `SkyWeatherExtension`, `PostEffects`, `GpuSkyWeatherPlugin`, and the
 `ext_*.glsl` shader fragments.
 
 ## How the uniforms get set
@@ -31,7 +31,7 @@ which runs with the scene program bound just before the scene is drawn. In areas
 skybox model that call does not happen, so they are pushed from `onPostDrawToplevel()`
 instead and take effect a frame later.
 
-Everything injected is prefixed `gv2_` and gated on one uniform that defaults to zero, so
+Everything injected is prefixed `gsw_` and gated on one uniform that defaults to zero, so
 the renderer's output is untouched until values have been pushed.
 
 ## Problems in the branch
