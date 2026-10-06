@@ -2,7 +2,6 @@ package com.gpuv2;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
 import com.gpuv2.config.WeatherMode;
 import org.junit.Test;
@@ -48,7 +47,6 @@ public class ClimateTest
 		{
 			WeatherMode mode = WeatherCycle.modeAt(i * (double) PERIOD, PERIOD, Climate.DESERT);
 			assertFalse("fell in the desert: " + mode, mode.hasPrecipitation());
-			assertNotEquals(WeatherMode.FOG, mode);
 		}
 	}
 

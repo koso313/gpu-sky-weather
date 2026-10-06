@@ -26,7 +26,6 @@ package com.gpuv2;
 
 import static org.lwjgl.opengl.GL33C.*;
 
-import com.gpuv2.config.GraphicsPreset;
 import com.gpuv2.config.SkyMode;
 import com.gpuv2.config.WeatherMode;
 import com.gpuv2.template.Template;
@@ -211,9 +210,6 @@ class EnhancementExtension extends GpuExtension
 	// player walking into a different climate rather than the cycle moving on.
 	private static final float REGION_FADE_SECONDS = 6f;
 
-	// With fog down, the world is clear this many tiles out from the camera and then fades.
-	private static final int FOG_WEATHER_CLEAR_TILES = 8;
-
 	// The game's own set of rolling thunder, used when no particular sound is chosen.
 	private static final int[] THUNDER_SOUNDS = {4364, 4343, 4416, 4353, 4391, 4375, 4379};
 
@@ -230,8 +226,6 @@ class EnhancementExtension extends GpuExtension
 	private float autoBase;
 	private float autoFade = 1f;
 	private long lastAutoNanos;
-
-	private int cachedDrawDistance = FALLBACK_DRAW_DISTANCE;
 
 	private long thunderDueNanos;
 	// No thunder is queued before this. Without it every strike of a busy storm brought its
@@ -568,10 +562,6 @@ class EnhancementExtension extends GpuExtension
 	/** Rescans for light sources. Called on the game tick, on the client thread. */
 	void onGameTick()
 	{
-		// Read here rather than per frame: it is a settings lookup, and it changes when the user
-		// moves a slider, not between frames.
-		cachedDrawDistance = stockDrawDistance();
-
 		if (enabled && enhancements())
 		{
 			updateLights();
@@ -606,26 +596,14 @@ class EnhancementExtension extends GpuExtension
 		glUniform1f(uniEnabled, fx ? 1f : 0f);
 		if (!fx)
 		{
-			// Default preset: the shader hands the renderer's own output straight back.
+			// Not reached now that there is no preset, but kept so the shader always has a
+			// defined off state to fall back to.
 			return;
 		}
 
 		final int sky = lastSkyColor;
 		glUniform3f(uniFogColor, (sky >> 16 & 0xFF) / 255f, (sky >> 8 & 0xFF) / 255f, (sky & 0xFF) / 255f);
-		/*
-		 * Fog as weather pulls the haze in close, whatever the fog settings say - it is the
-		 * weather, not the fog slider, that is asking. The renderer measures fog depth in
-		 * from the edge of the drawn world, so the depth that leaves a fixed clear distance
-		 * around the camera depends on how far the world is being drawn.
-		 */
-		final float mist = weatherMist();
-		float fogDepth = config.fogEnabled() ? config.fogDepth() : 0f;
-		if (mist > 0f)
-		{
-			float closedIn = Math.max(fogDepth, cachedDrawDistance - FOG_WEATHER_CLEAR_TILES);
-			fogDepth += (closedIn - fogDepth) * mist;
-		}
-		glUniform1f(uniFogDepth, fogDepth);
+		glUniform1f(uniFogDepth, config.fogEnabled() ? config.fogDepth() : 0f);
 
 		glUniform1f(uniGradeGamma, config.gradeGamma() / 100f);
 		glUniform1f(uniGradeContrast, config.gradeContrast() / 100f);
@@ -655,8 +633,7 @@ class EnhancementExtension extends GpuExtension
 			: 0f;
 		glUniform1f(uniLightningFlash, flash);
 
-		// Fog thickens the air between here and there as well as at the edge of the world.
-		glUniform1f(uniAerial, Math.min(1f, config.aerialPerspective() / 100f + mist * 0.85f));
+		glUniform1f(uniAerial, config.aerialPerspective() / 100f);
 		glUniform1f(uniUnderground, undergroundFactor());
 		setupPointLights();
 		setupLightingUniforms();
@@ -830,16 +807,11 @@ class EnhancementExtension extends GpuExtension
 		out[2] = (float) (Math.cos(azimuth) * Math.cos(elevation));
 	}
 
-	/**
-	 * Whether the plugin's own effects run at all.
-	 *
-	 * <p>The Default preset gates them here, at read time, instead of writing anything to
-	 * config - so flipping back to Custom restores the user's settings intact rather than
-	 * handing them a pile of overwritten sliders to rebuild.
-	 */
 	private boolean enhancements()
 	{
-		return config.preset() == GraphicsPreset.CUSTOM;
+		// There is no preset to stand the effects down any more: switching the plugin off
+		// unregisters the extension, which hands the picture back to the GPU plugin whole.
+		return true;
 	}
 
 	/**
@@ -850,7 +822,7 @@ class EnhancementExtension extends GpuExtension
 	private SkyMode effectiveSkyMode()
 	{
 		// The time-of-day sky is the plugin; there is no setting to swap it for a flat
-		// colour or the game's own. Only the Default preset stands it down.
+		// colour or the game's own.
 		return enhancements() ? SkyMode.TIME_OF_DAY : SkyMode.GAME;
 	}
 
@@ -946,12 +918,6 @@ class EnhancementExtension extends GpuExtension
 		Player player = client.getLocalPlayer();
 		WorldPoint wp = player == null ? null : player.getWorldLocation();
 		return wp == null ? Climate.TEMPERATE : Climate.at(wp.getX(), wp.getY());
-	}
-
-	/** How much fog the weather is putting in the air right now, 0..1. None underground. */
-	private float weatherMist()
-	{
-		return activeWeather().mist() * weatherIntensity() * (1f - skyBlackout);
 	}
 
 	/**
@@ -1055,8 +1021,6 @@ class EnhancementExtension extends GpuExtension
 		 * inside the mist rather than looking down on a flat sheet.
 		 */
 		float mist = enhancements() && config.fogEnabled() ? config.heightFog() / 100f : 0f;
-		// Fog weather lays its own mist down on top of whatever the slider asks for.
-		mist = Math.max(mist, weatherMist() * 0.9f);
 		glUniform1f(uniHeightFog, mist);
 		glUniform1f(uniHeightFogEye, HEIGHT_FOG_EYE_OFFSET);
 		glUniform1f(uniHeightFogDepth, config.heightFogDepth() * Perspective.LOCAL_TILE_SIZE);

@@ -1,7 +1,7 @@
 # GPU Sky/Weather (extension)
 
-Sky, weather and lighting for RuneLite's GPU plugin — a day/night sky, rain, snow, fog
-and storms, dynamic lighting from fires and torches, and post-processing — built to stay
+Sky, weather and lighting for RuneLite's GPU plugin — a day/night sky, rain, snow and
+storms, dynamic lighting from fires and torches, and post-processing — built to stay
 close to the original art rather than replace it.
 
 It is an extension, not a renderer. The core **GPU** plugin draws the world; this hooks
@@ -10,10 +10,8 @@ anything else built on the same API rather than replacing the renderer.
 
 ![Sunny day with god rays](docs/images/sunny.png)
 
-Everything is optional. The **Preset** dropdown at the top switches between `Default`,
-which leaves the GPU plugin's picture untouched, and `Custom`, which uses your settings.
-Flipping between them changes nothing you have configured, so it is a safe way to
-compare.
+Everything is optional, and switching the plugin off hands the picture straight back to
+the GPU plugin, so that is all it takes to compare the two.
 
 ## Requirements
 
@@ -45,13 +43,12 @@ shots below are the same spot at the same time of day.
 
 Rain darkens the ground and pools puddles. Snow settles on the ground and on scenery as
 it falls and melts once it stops. Storms bring lightning that flashes the world as well
-as the sky, with thunder behind it if you want it. Fog drops nothing at all and closes
-the distance in instead.
+as the sky, with thunder behind it if you want it.
 
 Set to **Automatic**, the weather changes on its own over time, keeping clear skies
 most of the time so that a storm arriving is still worth noticing. It follows the region
 you are in: the desert stays dry, the mountains and the far north get snow where
-elsewhere would get rain, Morytania is wet and often foggy, and Karamja rains hard but
+elsewhere would get rain, Morytania is wet, and Karamja rains hard but
 never snows.
 
 ## Sky and time of day

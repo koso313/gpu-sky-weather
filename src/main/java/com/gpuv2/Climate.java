@@ -17,9 +17,9 @@ import com.gpuv2.config.WeatherMode;
  */
 enum Climate
 {
-	/** Most of the mainland. The original table, with the odd foggy spell. */
+	/** Most of the mainland. The original table. */
 	TEMPERATE(
-		clear(12), of(WeatherMode.OVERCAST, 2), of(WeatherMode.RAIN, 2), of(WeatherMode.FOG, 1),
+		clear(12), of(WeatherMode.OVERCAST, 2), of(WeatherMode.RAIN, 2),
 		of(WeatherMode.SNOW, 1), of(WeatherMode.STORM, 1), of(WeatherMode.BLIZZARD, 1)),
 
 	/** Sand and sun. Cloud is as bad as it gets; nothing ever falls. */
@@ -28,18 +28,15 @@ enum Climate
 
 	/** Mountains and the far north. What would be rain elsewhere arrives as snow. */
 	COLD(
-		clear(8), of(WeatherMode.OVERCAST, 3), of(WeatherMode.SNOW, 5), of(WeatherMode.BLIZZARD, 2),
-		of(WeatherMode.FOG, 2)),
+		clear(8), of(WeatherMode.OVERCAST, 5), of(WeatherMode.SNOW, 5), of(WeatherMode.BLIZZARD, 2)),
 
-	/** Swamp and marsh. Rarely clear for long, and fog comes with the territory. */
+	/** Swamp and marsh. Rarely clear for long. */
 	WET(
-		clear(6), of(WeatherMode.OVERCAST, 4), of(WeatherMode.RAIN, 4), of(WeatherMode.FOG, 4),
-		of(WeatherMode.STORM, 2)),
+		clear(7), of(WeatherMode.OVERCAST, 5), of(WeatherMode.RAIN, 6), of(WeatherMode.STORM, 2)),
 
 	/** Jungle. Hot, so it never snows, but it rains hard and often. */
 	TROPICAL(
-		clear(10), of(WeatherMode.OVERCAST, 2), of(WeatherMode.RAIN, 5), of(WeatherMode.STORM, 2),
-		of(WeatherMode.FOG, 1));
+		clear(10), of(WeatherMode.OVERCAST, 3), of(WeatherMode.RAIN, 5), of(WeatherMode.STORM, 2));
 
 	// Underground starts here; nothing below it has weather, and no region reaches it.
 	private static final int SURFACE_MAX_Y = 6400;

@@ -31,7 +31,6 @@ import net.runelite.client.config.ConfigItem;
 import net.runelite.client.config.ConfigSection;
 import net.runelite.client.config.Range;
 import static com.gpuv2.GpuPlugin.MAX_FOG_DEPTH;
-import com.gpuv2.config.GraphicsPreset;
 import com.gpuv2.config.WeatherMode;
 
 /*
@@ -48,18 +47,6 @@ import com.gpuv2.config.WeatherMode;
 public interface GpuV2ExtensionConfig extends Config
 {
 	String GROUP = "gpuv2";
-
-	@ConfigItem(
-		keyName = "preset",
-		name = "Preset",
-		description = "Default leaves the GPU plugin's picture untouched. Custom applies "
-			+ "everything below. Switching never changes your settings.",
-		position = 0
-	)
-	default GraphicsPreset preset()
-	{
-		return GraphicsPreset.CUSTOM;
-	}
 
 	// ------------------------------------------------------------------ Display
 
@@ -113,7 +100,7 @@ public interface GpuV2ExtensionConfig extends Config
 	)
 	default int sharpen()
 	{
-		return 10;
+		return 50;
 	}
 
 	@Range(
@@ -231,7 +218,7 @@ public interface GpuV2ExtensionConfig extends Config
 	)
 	default boolean postProcessing()
 	{
-		return true;
+		return false;
 	}
 
 	// --------------------------------------------------------------------- Sky
@@ -253,8 +240,7 @@ public interface GpuV2ExtensionConfig extends Config
 	@ConfigItem(
 		keyName = "fogEnabled",
 		name = "Enable fog",
-		description = "Master switch for fog depth and ground mist. Fog weather still brings "
-			+ "its own.",
+		description = "Master switch for fog depth and ground mist.",
 		position = 320,
 		section = fogSection
 	)
@@ -330,7 +316,7 @@ public interface GpuV2ExtensionConfig extends Config
 	)
 	default int fogDepth()
 	{
-		return 24;
+		return 25;
 	}
 
 	@ConfigItem(
@@ -431,7 +417,7 @@ public interface GpuV2ExtensionConfig extends Config
 	)
 	default int moonPhasePreview()
 	{
-		return -1;
+		return 50;
 	}
 
 	@Range(
@@ -535,7 +521,7 @@ public interface GpuV2ExtensionConfig extends Config
 	)
 	default int shootingStars()
 	{
-		return 2;
+		return 1;
 	}
 
 	@Range(
@@ -551,7 +537,7 @@ public interface GpuV2ExtensionConfig extends Config
 	)
 	default int shootingStarSpeed()
 	{
-		return 2;
+		return 1;
 	}
 
 	@ConfigItem(
@@ -588,7 +574,7 @@ public interface GpuV2ExtensionConfig extends Config
 	)
 	default boolean aurora()
 	{
-		return true;
+		return false;
 	}
 
 	@Range(
@@ -674,7 +660,7 @@ public interface GpuV2ExtensionConfig extends Config
 
 	@ConfigSection(
 		name = "Weather",
-		description = "Rain, snow, storms and fog, and what they leave on the ground.",
+		description = "Rain, snow and storms, and what they leave on the ground.",
 		position = 40
 	)
 	String weatherSection = "weatherSection";
@@ -689,7 +675,7 @@ public interface GpuV2ExtensionConfig extends Config
 	)
 	default WeatherMode weather()
 	{
-		return WeatherMode.OFF;
+		return WeatherMode.AUTO;
 	}
 
 	@Range(
@@ -713,7 +699,7 @@ public interface GpuV2ExtensionConfig extends Config
 		keyName = "weatherFollowsRegion",
 		name = "Automatic: follow the region",
 		description = "Makes Automatic weather suit the area: dry desert, snow in the mountains "
-			+ "and far north, wet and foggy Morytania, rain but no snow on Karamja.",
+			+ "and far north, wet Morytania, rain but no snow on Karamja.",
 		position = 43,
 		section = weatherSection
 	)
@@ -810,7 +796,7 @@ public interface GpuV2ExtensionConfig extends Config
 	)
 	default int lightningFrequency()
 	{
-		return 3;
+		return 2;
 	}
 
 	@ConfigItem(
