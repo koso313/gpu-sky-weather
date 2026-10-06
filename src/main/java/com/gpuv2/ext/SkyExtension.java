@@ -54,11 +54,22 @@ public class SkyExtension extends GpuExtension
 		.add(GL_VERTEX_SHADER, "sky_vert.glsl")
 		.add(GL_FRAGMENT_SHADER, "sky_frag.glsl");
 
+	private static final double MAX_ELEVATION = Math.toRadians(22);
+
 	private final Client client;
 	private final SkyExtensionConfig config;
 
 	private int program;
 	private int vao;
+
+	// The renderer's own scene program, handed over by onProgramCreate.
+	private int sceneProgram;
+	private int uniSceneNight = -1;
+	private int uniSceneNightTint = -1;
+
+	// Cleared when the owning plugin stops but the extension could not be unregistered.
+	@lombok.Setter
+	private volatile boolean enabled = true;
 
 	private int uniSkyColor;
 	private int uniZenithColor;
@@ -109,7 +120,60 @@ public class SkyExtension extends GpuExtension
 	@Override
 	public void onContextCreate()
 	{
+		createSkyProgram();
+	}
+
+	/**
+	 * Called with the scene program after the context is created and again after every
+	 * shader recompile, so the uniform locations are looked up afresh each time.
+	 *
+	 * <p>Also builds the sky program if it does not exist yet. An extension registered
+	 * while the GPU plugin is already running gets this call but not onContextCreate.
+	 */
+	@Override
+	public void onProgramCreate(int sceneProgram)
+	{
+		this.sceneProgram = sceneProgram;
+		uniSceneNight = glGetUniformLocation(sceneProgram, "gpuv2Night");
+		uniSceneNightTint = glGetUniformLocation(sceneProgram, "gpuv2NightTint");
+		log.info("gpu-v2 sky extension: scene program {}, night uniform {}, tint uniform {}",
+			sceneProgram, uniSceneNight, uniSceneNightTint);
+
+		createSkyProgram();
+	}
+
+	/**
+	 * Both uniforms default to zero, which mixes to a multiplier of one - so the world is
+	 * drawn untouched until the first values are pushed, and if they never are.
+	 */
+	@Override
+	public String injectShaderExtension(String hook)
+	{
+		if (!enabled)
+		{
+			return null;
+		}
+
+		switch (hook)
+		{
+			case "rlst_frag_definitions":
+				return "uniform float gpuv2Night;\nuniform vec3 gpuv2NightTint;";
+			case "rlst_frag_main_post":
+				return "FragColor.rgb *= mix(vec3(1.0), gpuv2NightTint, gpuv2Night);";
+			default:
+				return null;
+		}
+	}
+
+	private void createSkyProgram()
+	{
+		if (program != 0)
+		{
+			return;
+		}
+
 		try
+
 		{
 			Template template = new Template();
 			template.addInclude(com.gpuv2.GpuPlugin.class);
@@ -163,7 +227,7 @@ public class SkyExtension extends GpuExtension
 		uniBoltSeed = uniform("boltSeed");
 		uniBoltDirXZ = uniform("boltDirXZ");
 
-		log.info("gpu-v2 sky extension: context created, program {}", program);
+		log.info("gpu-v2 sky extension: sky program {} created", program);
 	}
 
 	@Override
@@ -184,7 +248,7 @@ public class SkyExtension extends GpuExtension
 	@Override
 	public boolean drawSkybox()
 	{
-		if (program == 0)
+		if (!enabled || program == 0)
 		{
 			return false;
 		}
@@ -197,14 +261,15 @@ public class SkyExtension extends GpuExtension
 			return false;
 		}
 
-		LocalTime time = LocalTime.now();
+		LocalTime time = skyTime();
 		float night = SkyGradient.nightFactorAt(time);
 		int horizon = SkyGradient.colorAt(time);
 		int zenith = SkyGradient.zenithColorAt(time);
 
-		float dayFraction = (time.toSecondOfDay()) / 86400f;
+		double dayFraction = time.toSecondOfDay() / 86400d;
 		computeBodyDirection(dayFraction, sunDir);
-		computeBodyDirection(dayFraction + 0.5f, moonDir);
+		// Half a day behind the sun, which is a full moon: up through the night.
+		computeBodyDirection(dayFraction + 0.5, moonDir);
 
 		/*
 		 * Saved rather than assumed. The renderer draws the scene straight after this with
@@ -228,8 +293,11 @@ public class SkyExtension extends GpuExtension
 		glUniform1f(uniHalfW, viewportWidth / (2f * scale));
 		glUniform1f(uniHalfH, viewportHeight / (2f * scale));
 
-		float pitch = (float) (client.getCameraPitch() * Math.PI * 2f / 2048f);
-		float yaw = (float) (client.getCameraYaw() * Math.PI * 2f / 2048f);
+		// The floating point accessors are already in radians, and are the same values the
+		// renderer is handed for the scene. The integer ones are in a finer angle unit, and
+		// converting them as 2048 to the turn spun the sky several times faster than the camera.
+		float pitch = client.getCameraFpPitch();
+		float yaw = client.getCameraFpYaw();
 		glUniform1f(uniCosPitch, (float) Math.cos(pitch));
 		glUniform1f(uniSinPitch, (float) Math.sin(pitch));
 		glUniform1f(uniCosYaw, (float) Math.cos(yaw));
@@ -270,6 +338,7 @@ public class SkyExtension extends GpuExtension
 		glDepthMask(true);
 		glEnable(GL_DEPTH_TEST);
 		glEnable(GL_BLEND);
+		pushSceneUniforms(time);
 		glBindVertexArray(prevVao);
 		glUseProgram(prevProgram);
 
@@ -279,8 +348,40 @@ public class SkyExtension extends GpuExtension
 	@Override
 	public void onPostDrawToplevel()
 	{
-		// Nothing yet. Post-processing would go here, but it needs the scene colour
-		// texture, which the API does not hand over - see PORTING.md.
+		// Pushed here as well as from drawSkybox, which is skipped in any area that has a
+		// skybox model. Uniform values persist in the program, so these apply to the next
+		// frame.
+		int prevProgram = glGetInteger(GL_CURRENT_PROGRAM);
+		pushSceneUniforms(skyTime());
+		glUseProgram(prevProgram);
+	}
+
+	/** The time the sky is drawn for: the real clock, or a held minute of the day. */
+	private LocalTime skyTime()
+	{
+		int minute = config.previewMinute();
+		if (minute < 0)
+		{
+			return LocalTime.now();
+		}
+		return LocalTime.ofSecondOfDay(Math.min(1439, minute) * 60L);
+	}
+
+	/**
+	 * Sets the night dimming on the scene program. Leaves the scene program bound; the
+	 * caller restores whatever was bound before.
+	 */
+	private void pushSceneUniforms(LocalTime time)
+	{
+		if (!enabled || sceneProgram == 0 || uniSceneNight < 0)
+		{
+			return;
+		}
+
+		float night = SkyGradient.nightFactorAt(time) * config.nightDimming() / 100f;
+		glUseProgram(sceneProgram);
+		glUniform1f(uniSceneNight, night);
+		glUniform3f(uniSceneNightTint, 0.45f, 0.55f, 0.85f);
 	}
 
 	private int uniform(String name)
@@ -304,22 +405,19 @@ public class SkyExtension extends GpuExtension
 	}
 
 	/**
-	 * Direction toward a body at the given fraction of a day, east at dawn through west at
-	 * dusk. World Y is negative-up, which is why the vertical term is negated.
+	 * Position of a body on its daily arc, written into {@code out} as a unit direction.
+	 * Same arc as the full plugin: east at dawn, west at dusk, and never more than
+	 * MAX_ELEVATION above the horizon, because the game clamps how far up the camera can
+	 * look and a steeper arc carries the sun and moon out of view for most of the day.
 	 */
-	private static void computeBodyDirection(float dayFraction, float[] out)
+	private static void computeBodyDirection(double dayFraction, float[] out)
 	{
-		double angle = (dayFraction - 0.25) * 2.0 * Math.PI;
-		out[0] = (float) Math.cos(angle);
-		out[1] = (float) -Math.sin(angle);
-		out[2] = 0f;
+		double phase = 2 * Math.PI * (dayFraction - 0.25);
+		double elevation = Math.sin(phase) * MAX_ELEVATION;
+		double azimuth = Math.PI / 2 + phase;
 
-		float len = (float) Math.sqrt(out[0] * out[0] + out[1] * out[1] + out[2] * out[2]);
-		if (len > 0f)
-		{
-			out[0] /= len;
-			out[1] /= len;
-			out[2] /= len;
-		}
+		out[0] = (float) (Math.sin(azimuth) * Math.cos(elevation));
+		out[1] = (float) -Math.sin(elevation);
+		out[2] = (float) (Math.cos(azimuth) * Math.cos(elevation));
 	}
 }

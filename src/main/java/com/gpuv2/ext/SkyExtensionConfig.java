@@ -144,4 +144,31 @@ public interface SkyExtensionConfig extends Config
 	{
 		return 100;
 	}
+
+	@Range(max = 100)
+	@ConfigItem(
+		keyName = "nightDimming",
+		name = "Night dimming",
+		description = "How far the world is dimmed and cooled at night, in step with the sky. "
+			+ "0 leaves the world lit the same at every hour.",
+		position = 12
+	)
+	default int nightDimming()
+	{
+		return 60;
+	}
+
+	@Range(min = -1, max = 1439)
+	@ConfigItem(
+		keyName = "previewMinute",
+		name = "Preview time",
+		description = "Hold the sky at a chosen time instead of following your clock, in "
+			+ "minutes past midnight: 360 is 06:00, 720 is midday, 1140 is 19:00. "
+			+ "-1 follows the real time.",
+		position = 13
+	)
+	default int previewMinute()
+	{
+		return -1;
+	}
 }
